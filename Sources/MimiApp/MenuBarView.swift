@@ -1,0 +1,106 @@
+import AppKit
+import MimiCore
+import SwiftUI
+
+struct MenuBarView: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "ear.badge.waveform")
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("mimi")
+                        .font(.headline)
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundStyle(statusColor)
+                        .lineLimit(2)
+                }
+            }
+
+            Divider()
+
+            Button {
+                Task {
+                    if model.isActive {
+                        await model.stop()
+                    } else {
+                        await model.start(using: settings)
+                    }
+                }
+            } label: {
+                Label(model.isActive ? "Stop Listening" : "Start Listening", systemImage: model.isActive ? "stop.fill" : "play.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .keyboardShortcut(.space, modifiers: [.command, .shift])
+
+            Picker("Source Language", selection: $settings.sourceLanguage) {
+                ForEach(SourceLanguage.allCases) { language in
+                    Text(language.displayName).tag(language)
+                }
+            }
+            .onChange(of: settings.sourceLanguage) {
+                settings.persistPreferences()
+            }
+
+            Toggle("Lock Subtitle Position", isOn: $settings.isOverlayLocked)
+                .onChange(of: settings.isOverlayLocked) {
+                    settings.persistPreferences()
+                    model.setOverlayLocked(settings.isOverlayLocked)
+                }
+
+            Button("Show Subtitle Window") {
+                model.showOverlay()
+            }
+
+            Button("Clear Subtitles") {
+                model.clearSubtitles()
+            }
+
+            Divider()
+
+            SettingsLink {
+                Label("Settings…", systemImage: "gearshape")
+            }
+
+            Button("Quit mimi") {
+                NSApplication.shared.terminate(nil)
+            }
+            .keyboardShortcut("q")
+        }
+        .padding(14)
+        .frame(width: 290)
+        .task {
+            model.attachOverlay(settings: settings)
+        }
+    }
+
+    private var statusText: String {
+        switch model.state.status {
+        case .idle:
+            settings.workspaceID.isEmpty || settings.apiKey.isEmpty ? "Setup required" : "Ready"
+        case .connecting:
+            "Connecting…"
+        case .listening:
+            "Listening and translating"
+        case .stopping:
+            "Stopping…"
+        case let .error(message):
+            message
+        }
+    }
+
+    private var statusColor: Color {
+        switch model.state.status {
+        case .listening:
+            .green
+        case .error:
+            .red
+        default:
+            .secondary
+        }
+    }
+}
