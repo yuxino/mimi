@@ -12,6 +12,9 @@ struct MimiApplication: App {
                 .environmentObject(settings)
         } label: {
             Label("mimi", systemImage: menuBarIcon)
+                .task {
+                    model.attachOverlay(settings: settings)
+                }
         }
         .menuBarExtraStyle(.window)
 

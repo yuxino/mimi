@@ -47,7 +47,6 @@ Stopping first halts capture, then sends `session.finish`, waits briefly for `se
 
 ## Testing and verification
 
-Unit tests cover endpoint construction, session configuration encoding, audio event encoding, server-event decoding, subtitle draft/final transitions, and settings validation. The capture layer exposes narrow protocols so the app model can be tested with fakes. `swift test` is the required automated gate.
+Unit tests cover endpoint construction, session configuration encoding, audio event encoding, server-event decoding, subtitle draft/final transitions, and settings validation. The installed standalone Command Line Tools lacks XCTest and Swift Testing, so the repository includes a zero-dependency executable test harness; `swift run mimi-core-tests` is the required automated gate.
 
 The build is packaged into a minimal `.app` bundle by a script that adds `Info.plist`, the system-audio usage description, and an ad-hoc signature. Manual verification checks first-run permission handling, menu commands, overlay dragging/locking, silence behavior, start/stop cleanup, and a real Alibaba session once the user supplies a Workspace ID and API key locally. No credential is committed, logged, or included in the bundle.
-

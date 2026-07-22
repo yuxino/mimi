@@ -52,7 +52,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 360)
+        .frame(width: 540, height: 420)
         .onDisappear {
             settings.persistPreferences()
             model.setOverlayLocked(settings.isOverlayLocked)

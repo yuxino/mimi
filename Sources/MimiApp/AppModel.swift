@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MimiCore
 
@@ -9,6 +10,7 @@ final class AppModel: ObservableObject {
     private let audioCapture = SystemAudioCapture()
     private var client: LiveTranslateClient?
     private var overlayController: OverlayWindowController?
+    private let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
 
     var isActive: Bool { state.status.isActive }
 
@@ -16,6 +18,20 @@ final class AppModel: ObservableObject {
         guard overlayController == nil else { return }
         overlayController = OverlayWindowController(model: self, settings: settings)
         overlayController?.updateLocked(settings.isOverlayLocked)
+
+        if isUITestMode {
+            controller.handle(.sourceFinal(text: "The future is already here.", language: "en"))
+            controller.handle(.translationFinal("未来已在眼前。"))
+            publishState()
+            overlayController?.show()
+            DispatchQueue.main.async {
+                NSApplication.shared.sendAction(
+                    Selector(("showSettingsWindow:")),
+                    to: nil,
+                    from: nil
+                )
+            }
+        }
     }
 
     func start(using settings: AppSettings) async {

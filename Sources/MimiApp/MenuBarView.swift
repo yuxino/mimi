@@ -73,9 +73,6 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 290)
-        .task {
-            model.attachOverlay(settings: settings)
-        }
     }
 
     private var statusText: String {
