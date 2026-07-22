@@ -10,6 +10,7 @@ Live translated subtitles for macOS.
 - ScreenCaptureKit system-audio capture
 - English, Japanese, or Korean to Simplified Chinese
 - Draft and confirmed bilingual subtitles
+- Automatic session recovery when audible playback resumes but subtitles stall
 - Movable or click-through floating subtitle window
 - API key stored in macOS Keychain
 - No analytics, accounts, recording, or cloud transcript storage in the app
