@@ -6,29 +6,46 @@ struct SubtitleOverlayView: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        VStack(spacing: 8) {
-            if !model.state.subtitles.source.text.isEmpty {
-                Text(model.state.subtitles.source.text)
-                    .font(.system(size: max(14, settings.fontSize * 0.6), weight: .medium))
-                    .foregroundStyle(
-                        model.state.subtitles.source.isFinal
-                            ? Color.white.opacity(0.82)
-                            : Color.white.opacity(0.48)
-                    )
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
+        ZStack {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.black.opacity(0.76))
 
-            Text(translationText)
-                .font(.system(size: settings.fontSize, weight: .semibold))
-                .foregroundStyle(translationColor)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+            GeometryReader { geometry in
+                let availableHeight = max(1, geometry.size.height - 36)
+                let hasSource = !model.state.subtitles.source.text.isEmpty
+                let sourceHeight = hasSource ? max(30, availableHeight * 0.38) : 0
+                let translationHeight = hasSource
+                    ? max(30, availableHeight - sourceHeight - 8)
+                    : availableHeight
+
+                VStack(spacing: hasSource ? 8 : 0) {
+                    if hasSource {
+                        ScrollingSubtitleText(
+                            text: model.state.subtitles.source.text,
+                            font: .system(
+                                size: max(14, settings.fontSize * 0.6),
+                                weight: .medium
+                            ),
+                            color: model.state.subtitles.source.isFinal
+                                ? Color.white.opacity(0.82)
+                                : Color.white.opacity(0.48),
+                            anchorID: "source-bottom"
+                        )
+                        .frame(height: sourceHeight)
+                    }
+
+                    ScrollingSubtitleText(
+                        text: translationText,
+                        font: .system(size: settings.fontSize, weight: .semibold),
+                        color: translationColor,
+                        anchorID: "translation-bottom"
+                    )
+                    .frame(height: translationHeight)
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 18)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 28)
-        .padding(.vertical, 18)
-        .background(.black.opacity(0.76), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(.white.opacity(0.1), lineWidth: 1)
@@ -71,7 +88,7 @@ struct SubtitleOverlayView: View {
         case .connecting:
             return "正在连接阿里云"
         case .listening:
-            return "正在聆听"
+            return model.state.subtitles.source.text.isEmpty ? "正在聆听" : ""
         case .stopping:
             return "正在结束"
         case let .error(message):
@@ -88,5 +105,40 @@ struct SubtitleOverlayView: View {
         return model.state.subtitles.translation.isFinal
             ? .white
             : .white.opacity(0.62)
+    }
+}
+
+private struct ScrollingSubtitleText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    let anchorID: String
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    Text(text)
+                        .font(font)
+                        .foregroundStyle(color)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 20)
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(anchorID)
+                }
+            }
+            .scrollIndicators(.hidden)
+            .allowsHitTesting(false)
+            .onAppear {
+                proxy.scrollTo(anchorID, anchor: .bottom)
+            }
+            .onChange(of: text) {
+                proxy.scrollTo(anchorID, anchor: .bottom)
+            }
+        }
     }
 }

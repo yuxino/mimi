@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 final class OverlayWindowController {
     private static let frameAutosaveName = "mimi.subtitle-overlay"
-    private static let defaultSize = NSSize(width: 820, height: 170)
+    private static let defaultSize = NSSize(width: 820, height: 210)
 
     private let panel: NSPanel
 
@@ -21,7 +21,7 @@ final class OverlayWindowController {
             backing: .buffered,
             defer: false
         )
-        panel.minSize = NSSize(width: 420, height: 100)
+        panel.minSize = NSSize(width: 420, height: 190)
         panel.contentMinSize = panel.minSize
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
