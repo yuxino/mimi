@@ -38,6 +38,17 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(json["stream"] as? Bool, true)
     }
 
+    runner.run("Qwen-MT automatically detects the source language") {
+        let data = try QwenMTRequestEncoder.request(
+            text: "Hello, world.",
+            sourceLanguage: .automatic
+        )
+        let json = try mtJSONObject(data)
+        let options = try mtRequiredObject(json["translation_options"])
+
+        try expectEqual(options["source_lang"] as? String, "auto")
+    }
+
     runner.run("Qwen-MT response decodes and trims translated content") {
         let translation = try QwenMTResponseDecoder.decode(
             Data(

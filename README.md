@@ -8,7 +8,7 @@ Live translated subtitles for macOS.
 
 - Native SwiftUI menu-bar app with a Dock fallback
 - ScreenCaptureKit system-audio capture
-- English, Japanese, or Korean to Simplified Chinese
+- Automatic language detection, or explicit English, Japanese, and Korean hints, to Simplified Chinese
 - Low Latency mode with continuously updated recognition and translation drafts
 - Optional High Quality end-to-end LiveTranslate mode
 - Draft and confirmed bilingual subtitles
@@ -42,7 +42,7 @@ The packaging script uses the `mimi Local Development` identity when it exists i
 1. Launch `mimi.app`, then use either its Dock icon or the ear icon in the menu bar.
 2. Open **Settings…**.
 3. Enter the Workspace ID and DashScope API key from Alibaba Cloud Model Studio.
-4. Select the video's source language and translation mode, then save. Low Latency is recommended for live video.
+4. Select **自动识别** to switch languages intelligently within one session, or choose an explicit source-language hint for a single-language video. Automatic detection uses Low Latency mode.
 5. Click **Start Listening** and approve Screen & System Audio Recording access.
 6. If macOS asks you to restart the app after granting permission, quit and reopen mimi.
 

@@ -25,12 +25,16 @@ final class AppSettings: ObservableObject {
         self.defaults = defaults
         self.keychain = keychain
         self.workspaceID = defaults.string(forKey: Keys.workspaceID) ?? ""
-        self.sourceLanguage = SourceLanguage(
-            rawValue: defaults.string(forKey: Keys.sourceLanguage) ?? "en"
-        ) ?? .english
-        self.translationMode = TranslationMode(
+        let storedSourceLanguage = SourceLanguage(
+            rawValue: defaults.string(forKey: Keys.sourceLanguage) ?? "auto"
+        ) ?? .automatic
+        self.sourceLanguage = storedSourceLanguage
+        let storedTranslationMode = TranslationMode(
             rawValue: defaults.string(forKey: Keys.translationMode) ?? "lowLatency"
         ) ?? .lowLatency
+        self.translationMode = storedSourceLanguage == .automatic
+            ? .lowLatency
+            : storedTranslationMode
 
         let storedFontSize = defaults.double(forKey: Keys.fontSize)
         self.fontSize = storedFontSize > 0 ? storedFontSize : 30
@@ -51,6 +55,7 @@ final class AppSettings: ObservableObject {
         let configuration = try configuration()
         workspaceID = configuration.workspaceID
         apiKey = configuration.apiKey
+        translationMode = configuration.effectiveTranslationMode
         try keychain.saveAPIKey(configuration.apiKey)
         persistPreferences()
     }

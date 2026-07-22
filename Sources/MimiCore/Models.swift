@@ -1,6 +1,7 @@
 import Foundation
 
 public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
+    case automatic = "auto"
     case english = "en"
     case japanese = "ja"
     case korean = "ko"
@@ -9,6 +10,8 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
 
     public var displayName: String {
         switch self {
+        case .automatic:
+            "自动识别"
         case .english:
             "English"
         case .japanese:

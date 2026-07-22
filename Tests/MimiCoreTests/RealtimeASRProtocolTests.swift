@@ -29,6 +29,18 @@ func runRealtimeASRProtocolTests(using runner: inout TestRunner) {
         try expectEqual(turnDetection["silence_duration_ms"] as? Int, 400)
     }
 
+    runner.run("automatic ASR omits the language hint") {
+        let data = try RealtimeASRRequestEncoder.sessionUpdate(
+            sourceLanguage: .automatic,
+            eventID: "event-auto"
+        )
+        let json = try asrJSONObject(data)
+        let session = try asrRequiredObject(json["session"])
+        let transcription = try asrRequiredObject(session["input_audio_transcription"])
+
+        try expect(transcription["language"] == nil, "automatic ASR must not lock a language")
+    }
+
     runner.run("ASR audio and finish requests use realtime event types") {
         let audio = try asrJSONObject(
             try RealtimeASRRequestEncoder.audioAppend(Data([0x00, 0x7F, 0xFF]), eventID: "event-audio")

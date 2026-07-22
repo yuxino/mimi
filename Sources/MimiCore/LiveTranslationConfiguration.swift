@@ -23,6 +23,10 @@ public struct LiveTranslationConfiguration: Equatable, Sendable {
     public var sourceLanguage: SourceLanguage
     public var translationMode: TranslationMode
 
+    public var effectiveTranslationMode: TranslationMode {
+        sourceLanguage == .automatic ? .lowLatency : translationMode
+    }
+
     public init(
         workspaceID: String,
         apiKey: String,

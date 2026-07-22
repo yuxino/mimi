@@ -14,7 +14,7 @@ public actor TranslationClient {
         configuration: LiveTranslationConfiguration,
         session: URLSession = .shared
     ) throws {
-        switch configuration.translationMode {
+        switch configuration.effectiveTranslationMode {
         case .lowLatency:
             self.backend = .lowLatency(
                 try LowLatencyTranslationClient(

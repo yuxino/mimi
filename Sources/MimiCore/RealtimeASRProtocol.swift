@@ -35,7 +35,9 @@ public enum RealtimeASRRequestEncoder {
                 session: .init(
                     inputAudioFormat: "pcm",
                     sampleRate: 16_000,
-                    inputAudioTranscription: .init(language: sourceLanguage.rawValue),
+                    inputAudioTranscription: .init(
+                        language: sourceLanguage == .automatic ? nil : sourceLanguage.rawValue
+                    ),
                     turnDetection: .init(
                         type: "server_vad",
                         threshold: 0.0,
@@ -105,7 +107,7 @@ private struct ASRSessionUpdateRequest: Encodable {
     }
 
     struct Transcription: Encodable {
-        let language: String
+        let language: String?
     }
 
     struct TurnDetection: Encodable {

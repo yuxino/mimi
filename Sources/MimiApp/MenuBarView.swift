@@ -42,7 +42,11 @@ struct MenuBarView: View {
                     Text(language.displayName).tag(language)
                 }
             }
+            .disabled(model.isActive)
             .onChange(of: settings.sourceLanguage) {
+                if settings.sourceLanguage == .automatic {
+                    settings.translationMode = .lowLatency
+                }
                 settings.persistPreferences()
             }
 
@@ -51,7 +55,7 @@ struct MenuBarView: View {
                     Text(mode.displayName).tag(mode)
                 }
             }
-            .disabled(model.isActive)
+            .disabled(model.isActive || settings.sourceLanguage == .automatic)
             .onChange(of: settings.translationMode) {
                 settings.persistPreferences()
             }

@@ -149,6 +149,8 @@ private struct QwenMTStreamResponse: Decodable {
 private extension SourceLanguage {
     var qwenMTName: String {
         switch self {
+        case .automatic:
+            "auto"
         case .english:
             "English"
         case .japanese:

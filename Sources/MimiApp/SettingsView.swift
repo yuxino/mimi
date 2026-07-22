@@ -25,7 +25,7 @@ struct SettingsView: View {
                         Text(mode.displayName).tag(mode)
                     }
                 }
-                .disabled(model.isActive)
+                .disabled(model.isActive || settings.sourceLanguage == .automatic)
 
                 Text(translationModeHelp)
                     .font(.caption)
@@ -34,6 +34,12 @@ struct SettingsView: View {
                 Picker("Source language", selection: $settings.sourceLanguage) {
                     ForEach(SourceLanguage.allCases) { language in
                         Text(language.displayName).tag(language)
+                    }
+                }
+                .disabled(model.isActive)
+                .onChange(of: settings.sourceLanguage) {
+                    if settings.sourceLanguage == .automatic {
+                        settings.translationMode = .lowLatency
                     }
                 }
 
@@ -121,7 +127,11 @@ struct SettingsView: View {
     }
 
     private var translationModeHelp: String {
-        switch settings.translationMode {
+        if settings.sourceLanguage == .automatic {
+            return "自动判断每段语音的语言，并使用低延迟模式翻译成中文。"
+        }
+
+        return switch settings.translationMode {
         case .lowLatency:
             "实时识别并持续翻译，字幕出现更快。"
         case .highQuality:

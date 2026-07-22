@@ -1,6 +1,21 @@
 import MimiCore
 
 func runConfigurationTests(using runner: inout TestRunner) {
+    runner.run("automatic language has a clear display name") {
+        try expectEqual(SourceLanguage.automatic.displayName, "自动识别")
+    }
+
+    runner.run("automatic language resolves high quality to low latency") {
+        let configuration = LiveTranslationConfiguration(
+            workspaceID: "ws-abc123",
+            apiKey: "sk-test",
+            sourceLanguage: .automatic,
+            translationMode: .highQuality
+        )
+
+        try expectEqual(configuration.effectiveTranslationMode, .lowLatency)
+    }
+
     runner.run("configuration defaults to low-latency translation") {
         let configuration = LiveTranslationConfiguration(
             workspaceID: "ws-abc123",
