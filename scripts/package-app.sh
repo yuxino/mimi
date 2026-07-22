@@ -6,6 +6,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="$PROJECT_DIR/dist/mimi.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+LOCAL_SIGNING_IDENTITY="mimi Local Development"
 
 cd "$PROJECT_DIR"
 swift build -c release --product mimi
@@ -17,7 +18,17 @@ cp "$PROJECT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 chmod 755 "$MACOS_DIR/mimi"
 
 plutil -lint "$CONTENTS_DIR/Info.plist" >/dev/null
-codesign --force --deep --sign - "$APP_DIR"
+SIGNING_IDENTITY="${MIMI_CODESIGN_IDENTITY:-}"
+if [[ -z "$SIGNING_IDENTITY" ]]; then
+    if security find-identity -v -p codesigning | /usr/bin/grep -Fq "\"$LOCAL_SIGNING_IDENTITY\""; then
+        SIGNING_IDENTITY="$LOCAL_SIGNING_IDENTITY"
+    else
+        SIGNING_IDENTITY="-"
+    fi
+fi
+
+codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_DIR"
 codesign --verify --deep --strict "$APP_DIR"
 
+echo "Signed with: $SIGNING_IDENTITY"
 echo "$APP_DIR"

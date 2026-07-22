@@ -33,6 +33,8 @@ open dist/mimi.app
 
 The executable test suite is intentionally dependency-free so it also works with Apple's standalone Command Line Tools installation, where XCTest may be unavailable.
 
+The packaging script uses the `mimi Local Development` identity when it exists in the login Keychain. You can override it with `MIMI_CODESIGN_IDENTITY`; when no stable identity is available, the script falls back to ad-hoc signing. macOS may request Screen & System Audio Recording permission again after each ad-hoc rebuild because its code identity changes.
+
 ## Configure
 
 1. Launch `mimi.app`, then use either its Dock icon or the ear icon in the menu bar.
