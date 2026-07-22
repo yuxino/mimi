@@ -43,11 +43,30 @@ struct SettingsView: View {
                 }
                 .keyboardShortcut(.defaultAction)
 
+                Button {
+                    Task {
+                        if model.isActive {
+                            await model.stop()
+                        } else {
+                            await model.start(using: settings)
+                        }
+                    }
+                } label: {
+                    Label(
+                        model.isActive ? "Stop Listening" : "Start Listening",
+                        systemImage: model.isActive ? "stop.fill" : "play.fill"
+                    )
+                }
+
                 if !message.isEmpty {
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(isError ? .red : .green)
                 }
+
+                Text(sessionStatusText)
+                    .font(.caption)
+                    .foregroundStyle(sessionStatusColor)
                 Spacer()
             }
         }
@@ -68,6 +87,32 @@ struct SettingsView: View {
         } catch {
             isError = true
             message = error.localizedDescription
+        }
+    }
+
+    private var sessionStatusText: String {
+        switch model.state.status {
+        case .idle:
+            "Ready"
+        case .connecting:
+            "Connecting…"
+        case .listening:
+            "Listening and translating"
+        case .stopping:
+            "Stopping…"
+        case let .error(message):
+            message
+        }
+    }
+
+    private var sessionStatusColor: Color {
+        switch model.state.status {
+        case .listening:
+            .green
+        case .error:
+            .red
+        default:
+            .secondary
         }
     }
 }
