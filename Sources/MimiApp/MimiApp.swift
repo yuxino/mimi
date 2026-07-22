@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MimiApplication: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
     @StateObject private var settings = AppSettings()
 
@@ -14,16 +15,21 @@ struct MimiApplication: App {
             Label("mimi", systemImage: menuBarIcon)
                 .task {
                     model.attachOverlay(settings: settings)
+                    appDelegate.installShowSettingsHandler { [weak model] in
+                        model?.showSettings()
+                    }
                 }
         }
         .menuBarExtraStyle(.window)
 
-        Settings {
-            SettingsView()
-                .environmentObject(model)
-                .environmentObject(settings)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    model.showSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
-        .windowResizability(.contentSize)
     }
 
     private var menuBarIcon: String {

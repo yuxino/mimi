@@ -62,7 +62,9 @@ struct MenuBarView: View {
 
             Divider()
 
-            SettingsLink {
+            Button {
+                model.showSettings()
+            } label: {
                 Label("Settings…", systemImage: "gearshape")
             }
 

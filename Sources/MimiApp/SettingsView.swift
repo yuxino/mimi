@@ -35,6 +35,10 @@ struct SettingsView: View {
                 }
 
                 Toggle("Lock subtitle position", isOn: $settings.isOverlayLocked)
+
+                Text("Drag the subtitle background to move it. Drag an edge to resize it; mimi remembers both after restart.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             HStack {
@@ -71,7 +75,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 420)
+        .frame(width: 560, height: 460)
         .onDisappear {
             settings.persistPreferences()
             model.setOverlayLocked(settings.isOverlayLocked)

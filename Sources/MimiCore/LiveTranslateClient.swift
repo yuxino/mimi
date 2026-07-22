@@ -3,6 +3,7 @@ import Foundation
 public enum LiveTranslateClientError: Error, LocalizedError, Equatable, Sendable {
     case missingAPIKey
     case notConnected
+    case healthCheckTimedOut
     case unsupportedMessage
 
     public var errorDescription: String? {
@@ -11,6 +12,8 @@ public enum LiveTranslateClientError: Error, LocalizedError, Equatable, Sendable
             "Add an Alibaba Cloud Model Studio API key in Settings."
         case .notConnected:
             "The live translation session is not connected."
+        case .healthCheckTimedOut:
+            "The live translation connection stopped responding."
         case .unsupportedMessage:
             "The live translation service returned an unsupported WebSocket message."
         }
@@ -84,6 +87,31 @@ public actor LiveTranslateClient {
         try await send(message, on: socket)
     }
 
+    public func ping(timeout: Duration = .seconds(4)) async throws {
+        guard let socket else {
+            throw LiveTranslateClientError.notConnected
+        }
+
+        let completion = PingCompletion()
+        try await withCheckedThrowingContinuation { continuation in
+            socket.sendPing { error in
+                if let error {
+                    completion.resume(throwing: error, continuation: continuation)
+                } else {
+                    completion.resume(returning: (), continuation: continuation)
+                }
+            }
+
+            Task {
+                try? await Task.sleep(for: timeout)
+                completion.resume(
+                    throwing: LiveTranslateClientError.healthCheckTimedOut,
+                    continuation: continuation
+                )
+            }
+        }
+    }
+
     public func finish(timeout: Duration = .seconds(2)) async {
         guard let socket else { return }
 
@@ -147,5 +175,34 @@ public actor LiveTranslateClient {
 
     private func emit(_ event: LiveTranslateServerEvent) async {
         await eventHandler?(event)
+    }
+}
+
+private final class PingCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didResume = false
+
+    func resume(
+        returning value: Void,
+        continuation: CheckedContinuation<Void, any Error>
+    ) {
+        guard claimContinuation() else { return }
+        continuation.resume(returning: value)
+    }
+
+    func resume(
+        throwing error: any Error,
+        continuation: CheckedContinuation<Void, any Error>
+    ) {
+        guard claimContinuation() else { return }
+        continuation.resume(throwing: error)
+    }
+
+    private func claimContinuation() -> Bool {
+        lock.withLock {
+            guard !didResume else { return false }
+            didResume = true
+            return true
+        }
     }
 }

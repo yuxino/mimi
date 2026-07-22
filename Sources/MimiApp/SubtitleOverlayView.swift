@@ -33,6 +33,33 @@ struct SubtitleOverlayView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(.white.opacity(0.1), lineWidth: 1)
         }
+        .overlay(alignment: .topTrailing) {
+            if !settings.isOverlayLocked {
+                Button {
+                    model.showSettings()
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .padding(7)
+                        .background(.black.opacity(0.34), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Open mimi Settings")
+                .accessibilityLabel("Open mimi Settings")
+                .padding(14)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if !settings.isOverlayLocked {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .padding(14)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         .padding(8)
     }
 
@@ -42,11 +69,11 @@ struct SubtitleOverlayView: View {
         }
         switch model.state.status {
         case .connecting:
-            return "正在连接阿里云…"
+            return "正在连接阿里云"
         case .listening:
-            return "正在聆听…"
+            return "正在聆听"
         case .stopping:
-            return "正在结束…"
+            return "正在结束"
         case let .error(message):
             return message
         case .idle:

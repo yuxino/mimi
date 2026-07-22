@@ -6,12 +6,12 @@ Live translated subtitles for macOS.
 
 ## Current MVP
 
-- Native SwiftUI menu-bar app
+- Native SwiftUI menu-bar app with a Dock fallback
 - ScreenCaptureKit system-audio capture
 - English, Japanese, or Korean to Simplified Chinese
 - Draft and confirmed bilingual subtitles
-- Automatic session recovery when audible playback resumes but subtitles stall
-- Movable or click-through floating subtitle window
+- WebSocket health checks with bounded automatic reconnects
+- Movable, resizable, click-through floating subtitle window with remembered placement
 - API key stored in macOS Keychain
 - No analytics, accounts, recording, or cloud transcript storage in the app
 
@@ -35,12 +35,14 @@ The executable test suite is intentionally dependency-free so it also works with
 
 ## Configure
 
-1. Launch `mimi.app` and click the ear icon in the menu bar.
+1. Launch `mimi.app`, then use either its Dock icon or the ear icon in the menu bar.
 2. Open **Settings…**.
 3. Enter the Workspace ID and DashScope API key from Alibaba Cloud Model Studio.
 4. Select the video's source language and save.
 5. Click **Start Listening** and approve Screen & System Audio Recording access.
 6. If macOS asks you to restart the app after granting permission, quit and reopen mimi.
+
+While the subtitle position is unlocked, drag the panel background to move it and drag any edge to resize it. mimi restores the last position and size after restart. The gear button inside the subtitle panel opens Settings without requiring the menu-bar icon. Locking the subtitle position makes the panel click-through and hides its controls.
 
 The API key is stored as a generic password in macOS Keychain under service `app.yuxino.mimi.translation`. It is never committed to the repository or included in the app bundle.
 

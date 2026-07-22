@@ -10,9 +10,9 @@ final class AppModel: ObservableObject {
     private let audioCapture = SystemAudioCapture()
     private var client: LiveTranslateClient?
     private var overlayController: OverlayWindowController?
+    private var settingsController: SettingsWindowController?
     private weak var activeSettings: AppSettings?
-    private var recoveryMonitor = TranslationRecoveryMonitor()
-    private var recoveryTask: Task<Void, Never>?
+    private var healthCheckTask: Task<Void, Never>?
     private var isRecovering = false
     private let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
 
@@ -21,20 +21,11 @@ final class AppModel: ObservableObject {
     func attachOverlay(settings: AppSettings) {
         guard overlayController == nil else { return }
         overlayController = OverlayWindowController(model: self, settings: settings)
+        settingsController = SettingsWindowController(model: self, settings: settings)
         overlayController?.updateLocked(settings.isOverlayLocked)
 
         if isUITestMode {
-            controller.handle(.sourceFinal(text: "The future is already here.", language: "en"))
-            controller.handle(.translationFinal("未来已在眼前。"))
-            publishState()
             overlayController?.show()
-            DispatchQueue.main.async {
-                NSApplication.shared.sendAction(
-                    Selector(("showSettingsWindow:")),
-                    to: nil,
-                    from: nil
-                )
-            }
         }
     }
 
@@ -42,7 +33,6 @@ final class AppModel: ObservableObject {
         guard !state.status.isActive else { return }
 
         activeSettings = settings
-        recoveryMonitor = TranslationRecoveryMonitor()
         _ = await establishSession(using: settings, clearSubtitles: true)
     }
 
@@ -51,7 +41,7 @@ final class AppModel: ObservableObject {
         using settings: AppSettings,
         clearSubtitles: Bool
     ) async -> Bool {
-        stopRecoveryWatchdog()
+        stopHealthChecks()
 
         do {
             let configuration = try settings.configuration()
@@ -78,11 +68,6 @@ final class AppModel: ObservableObject {
                         try? await newClient?.sendAudio(data)
                     }
                 },
-                onActivity: { [weak self] in
-                    Task { @MainActor in
-                        self?.noteActiveAudio()
-                    }
-                },
                 onError: { [weak self] error in
                     Task { @MainActor in
                         await self?.handleCaptureFailure(error)
@@ -92,10 +77,9 @@ final class AppModel: ObservableObject {
 
             controller.didConnect()
             activeSettings = settings
-            recoveryMonitor.reset(at: currentTimestamp)
             publishState()
             overlayController?.show()
-            startRecoveryWatchdog()
+            startHealthChecks()
             return true
         } catch {
             await audioCapture.stop()
@@ -113,7 +97,7 @@ final class AppModel: ObservableObject {
     func stop() async {
         guard state.status.isActive || client != nil else { return }
 
-        stopRecoveryWatchdog()
+        stopHealthChecks()
         activeSettings = nil
         isRecovering = false
         controller.beginStopping()
@@ -138,13 +122,25 @@ final class AppModel: ObservableObject {
         overlayController?.show()
     }
 
+    func showSettings() {
+        settingsController?.show()
+    }
+
     private func receive(_ event: LiveTranslateServerEvent) async {
-        recoveryMonitor.noteServerActivity(at: currentTimestamp)
+        if case let .error(code, message) = event, code == "transport_error" {
+            controller.beginConnecting()
+            publishState()
+            Task { @MainActor [weak self] in
+                await self?.recoverConnection(after: message)
+            }
+            return
+        }
+
         controller.handle(event)
         publishState()
 
         if case .error = event {
-            stopRecoveryWatchdog()
+            stopHealthChecks()
             await audioCapture.stop()
             await client?.disconnect()
             client = nil
@@ -153,7 +149,7 @@ final class AppModel: ObservableObject {
     }
 
     private func handleCaptureFailure(_ error: Error) async {
-        stopRecoveryWatchdog()
+        stopHealthChecks()
         await audioCapture.stop()
         await client?.disconnect()
         client = nil
@@ -162,42 +158,44 @@ final class AppModel: ObservableObject {
         publishState()
     }
 
-    private func noteActiveAudio() {
-        guard state.status.isActive else { return }
-        recoveryMonitor.noteActiveAudio(at: currentTimestamp)
-    }
-
-    private func startRecoveryWatchdog() {
-        stopRecoveryWatchdog()
-        recoveryTask = Task { [weak self] in
+    private func startHealthChecks() {
+        stopHealthChecks()
+        healthCheckTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .seconds(10))
                 guard !Task.isCancelled else { return }
-                if await self?.recoverIfNeeded() == true {
+                if await self?.checkConnectionHealth() == false {
                     return
                 }
             }
         }
     }
 
-    private func stopRecoveryWatchdog() {
-        recoveryTask?.cancel()
-        recoveryTask = nil
+    private func stopHealthChecks() {
+        healthCheckTask?.cancel()
+        healthCheckTask = nil
     }
 
-    private func recoverIfNeeded() async -> Bool {
-        let now = currentTimestamp
-        guard
-            !isRecovering,
-            recoveryMonitor.shouldRecover(at: now),
-            let settings = activeSettings
-        else {
+    private func checkConnectionHealth() async -> Bool {
+        guard !isRecovering, let client else { return false }
+
+        do {
+            try await client.ping()
+            return true
+        } catch {
+            healthCheckTask = nil
+            await recoverConnection(after: error.localizedDescription)
             return false
         }
+    }
+
+    private func recoverConnection(after failureMessage: String) async {
+        guard !isRecovering, let settings = activeSettings else { return }
 
         isRecovering = true
-        recoveryMonitor.markRecovery(at: now)
-        recoveryTask = nil
+        stopHealthChecks()
+        controller.beginConnecting()
+        publishState()
         await audioCapture.stop()
         await client?.disconnect()
         client = nil
@@ -213,13 +211,10 @@ final class AppModel: ObservableObject {
 
         if !recovered {
             activeSettings = nil
+            controller.didFail(failureMessage)
+            publishState()
         }
         isRecovering = false
-        return true
-    }
-
-    private var currentTimestamp: TimeInterval {
-        ProcessInfo.processInfo.systemUptime
     }
 
     private func publishState() {

@@ -23,7 +23,6 @@ enum SystemAudioCaptureError: LocalizedError {
 
 final class SystemAudioCapture: NSObject, @unchecked Sendable {
     typealias AudioHandler = @Sendable (Data) -> Void
-    typealias ActivityHandler = @Sendable () -> Void
     typealias ErrorHandler = @Sendable (Error) -> Void
 
     private let audioQueue = DispatchQueue(label: "app.yuxino.mimi.system-audio")
@@ -31,13 +30,10 @@ final class SystemAudioCapture: NSObject, @unchecked Sendable {
 
     private var stream: SCStream?
     private var audioHandler: AudioHandler?
-    private var activityHandler: ActivityHandler?
     private var errorHandler: ErrorHandler?
-    private var lastActivityNotification = 0.0
 
     func start(
         onAudio: @escaping AudioHandler,
-        onActivity: @escaping ActivityHandler,
         onError: @escaping ErrorHandler
     ) async throws {
         guard stream == nil else {
@@ -80,9 +76,7 @@ final class SystemAudioCapture: NSObject, @unchecked Sendable {
 
         lock.withLock {
             audioHandler = onAudio
-            activityHandler = onActivity
             errorHandler = onError
-            lastActivityNotification = 0
             stream = newStream
         }
 
@@ -99,9 +93,7 @@ final class SystemAudioCapture: NSObject, @unchecked Sendable {
             let activeStream = stream
             stream = nil
             audioHandler = nil
-            activityHandler = nil
             errorHandler = nil
-            lastActivityNotification = 0
             return activeStream
         }
 
@@ -114,9 +106,7 @@ final class SystemAudioCapture: NSObject, @unchecked Sendable {
         lock.withLock {
             stream = nil
             audioHandler = nil
-            activityHandler = nil
             errorHandler = nil
-            lastActivityNotification = 0
         }
     }
 
@@ -128,17 +118,6 @@ final class SystemAudioCapture: NSObject, @unchecked Sendable {
         lock.withLock { errorHandler }
     }
 
-    private func notifyActivityIfNeeded(for data: Data) {
-        guard PCM16AudioActivityDetector.isActive(data) else { return }
-
-        let now = ProcessInfo.processInfo.systemUptime
-        let handler = lock.withLock { () -> ActivityHandler? in
-            guard now - lastActivityNotification >= 0.5 else { return nil }
-            lastActivityNotification = now
-            return activityHandler
-        }
-        handler?()
-    }
 }
 
 extension SystemAudioCapture: SCStreamOutput {
@@ -151,7 +130,6 @@ extension SystemAudioCapture: SCStreamOutput {
 
         do {
             if let data = try Self.makePCM16Data(from: sampleBuffer), !data.isEmpty {
-                notifyActivityIfNeeded(for: data)
                 currentAudioHandler()?(data)
             }
         } catch {

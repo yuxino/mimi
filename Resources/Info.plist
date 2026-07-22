@@ -22,8 +22,6 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
     <key>NSAudioCaptureUsageDescription</key>
     <string>mimi captures system audio to create live translated subtitles.</string>
     <key>NSScreenCaptureUsageDescription</key>
