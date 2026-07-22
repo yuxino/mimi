@@ -1,6 +1,28 @@
 import MimiCore
 
 func runConfigurationTests(using runner: inout TestRunner) {
+    runner.run("configuration defaults to low-latency translation") {
+        let configuration = LiveTranslationConfiguration(
+            workspaceID: "ws-abc123",
+            apiKey: "sk-test",
+            sourceLanguage: .japanese
+        )
+
+        try expectEqual(configuration.translationMode, .lowLatency)
+    }
+
+    runner.run("configuration preserves an explicit translation mode") {
+        let configuration = LiveTranslationConfiguration(
+            workspaceID: "ws-abc123",
+            apiKey: "sk-test",
+            sourceLanguage: .japanese,
+            translationMode: .highQuality
+        )
+        let validated = try configuration.validated()
+
+        try expectEqual(validated.translationMode, .highQuality)
+    }
+
     runner.run("configuration requires an API key") {
         let configuration = LiveTranslationConfiguration(
             workspaceID: "ws-abc123",

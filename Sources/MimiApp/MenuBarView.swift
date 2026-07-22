@@ -46,6 +46,16 @@ struct MenuBarView: View {
                 settings.persistPreferences()
             }
 
+            Picker("Translation Mode", selection: $settings.translationMode) {
+                ForEach(TranslationMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .disabled(model.isActive)
+            .onChange(of: settings.translationMode) {
+                settings.persistPreferences()
+            }
+
             Toggle("Lock Subtitle Position", isOn: $settings.isOverlayLocked)
                 .onChange(of: settings.isOverlayLocked) {
                     settings.persistPreferences()

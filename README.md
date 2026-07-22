@@ -2,13 +2,15 @@
 
 Live translated subtitles for macOS.
 
-`mimi` listens to audio playing on your Mac, sends 16 kHz PCM audio to Alibaba Cloud Model Studio's realtime LiveTranslate API, and displays the original speech plus Simplified Chinese in a floating subtitle panel. It does not require a browser extension and does not capture the microphone.
+`mimi` listens to audio playing on your Mac and displays the original speech plus Simplified Chinese in a floating subtitle panel. Its default low-latency mode combines Alibaba Cloud Model Studio's Qwen realtime ASR with Qwen-MT-Lite; the original end-to-end LiveTranslate service remains available as a higher-quality mode. It does not require a browser extension and does not capture the microphone.
 
 ## Current MVP
 
 - Native SwiftUI menu-bar app with a Dock fallback
 - ScreenCaptureKit system-audio capture
 - English, Japanese, or Korean to Simplified Chinese
+- Low Latency mode with continuously updated recognition and translation drafts
+- Optional High Quality end-to-end LiveTranslate mode
 - Draft and confirmed bilingual subtitles
 - WebSocket health checks with bounded automatic reconnects
 - Movable, resizable, click-through floating subtitle window with remembered placement
@@ -40,7 +42,7 @@ The packaging script uses the `mimi Local Development` identity when it exists i
 1. Launch `mimi.app`, then use either its Dock icon or the ear icon in the menu bar.
 2. Open **Settings…**.
 3. Enter the Workspace ID and DashScope API key from Alibaba Cloud Model Studio.
-4. Select the video's source language and save.
+4. Select the video's source language and translation mode, then save. Low Latency is recommended for live video.
 5. Click **Start Listening** and approve Screen & System Audio Recording access.
 6. If macOS asks you to restart the app after granting permission, quit and reopen mimi.
 
@@ -55,4 +57,4 @@ The API key is stored as a generic password in macOS Keychain under service `app
 - `Tests/MimiCoreTests`: executable unit-test harness and deterministic core tests
 - `docs/plans`: validated product design and implementation plan
 
-The realtime API integration follows Alibaba Cloud's [Qwen LiveTranslate documentation](https://help.aliyun.com/en/model-studio/qwen3-5-livetranslate-flash-realtime). System audio capture follows Apple's [ScreenCaptureKit guidance](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos).
+The realtime integrations follow Alibaba Cloud's [Qwen-ASR-Realtime](https://help.aliyun.com/en/model-studio/qwen-asr-realtime), [Qwen-MT](https://help.aliyun.com/en/model-studio/machine-translation), and [Qwen LiveTranslate](https://help.aliyun.com/en/model-studio/qwen3-5-livetranslate-flash-realtime) documentation. System audio capture follows Apple's [ScreenCaptureKit guidance](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos).

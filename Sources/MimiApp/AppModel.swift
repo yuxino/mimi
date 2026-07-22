@@ -8,7 +8,7 @@ final class AppModel: ObservableObject {
 
     private var controller = TranslationSessionController()
     private let audioCapture = SystemAudioCapture()
-    private var client: LiveTranslateClient?
+    private var client: TranslationClient?
     private var overlayController: OverlayWindowController?
     private var settingsController: SettingsWindowController?
     private weak var activeSettings: AppSettings?
@@ -51,11 +51,7 @@ final class AppModel: ObservableObject {
             controller.beginConnecting()
             publishState()
 
-            let newClient = try LiveTranslateClient(
-                workspaceID: configuration.workspaceID,
-                apiKey: configuration.apiKey,
-                sourceLanguage: configuration.sourceLanguage
-            )
+            let newClient = try TranslationClient(configuration: configuration)
             client = newClient
 
             try await newClient.connect { [weak self] event in

@@ -3,6 +3,8 @@ import Foundation
 var runner = TestRunner()
 runSubtitleReducerTests(using: &runner)
 runLiveTranslateProtocolTests(using: &runner)
+runRealtimeASRProtocolTests(using: &runner)
+runQwenMTProtocolTests(using: &runner)
 runSessionControllerTests(using: &runner)
 runPCMConversionTests(using: &runner)
 runConnectionHealthTests(using: &runner)

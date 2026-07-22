@@ -20,6 +20,17 @@ struct SettingsView: View {
             }
 
             Section("Subtitles") {
+                Picker("Translation mode", selection: $settings.translationMode) {
+                    ForEach(TranslationMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .disabled(model.isActive)
+
+                Text(translationModeHelp)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Picker("Source language", selection: $settings.sourceLanguage) {
                     ForEach(SourceLanguage.allCases) { language in
                         Text(language.displayName).tag(language)
@@ -106,6 +117,15 @@ struct SettingsView: View {
             "Stopping…"
         case let .error(message):
             message
+        }
+    }
+
+    private var translationModeHelp: String {
+        switch settings.translationMode {
+        case .lowLatency:
+            "实时识别并持续翻译，字幕出现更快。"
+        case .highQuality:
+            "整句翻译更稳，但通常会多等几秒。"
         }
     }
 

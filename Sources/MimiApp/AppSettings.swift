@@ -6,12 +6,14 @@ final class AppSettings: ObservableObject {
     @Published var workspaceID: String
     @Published var apiKey: String
     @Published var sourceLanguage: SourceLanguage
+    @Published var translationMode: TranslationMode
     @Published var fontSize: Double
     @Published var isOverlayLocked: Bool
 
     private enum Keys {
         static let workspaceID = "workspaceID"
         static let sourceLanguage = "sourceLanguage"
+        static let translationMode = "translationMode"
         static let fontSize = "fontSize"
         static let overlayLocked = "overlayLocked"
     }
@@ -26,6 +28,9 @@ final class AppSettings: ObservableObject {
         self.sourceLanguage = SourceLanguage(
             rawValue: defaults.string(forKey: Keys.sourceLanguage) ?? "en"
         ) ?? .english
+        self.translationMode = TranslationMode(
+            rawValue: defaults.string(forKey: Keys.translationMode) ?? "lowLatency"
+        ) ?? .lowLatency
 
         let storedFontSize = defaults.double(forKey: Keys.fontSize)
         self.fontSize = storedFontSize > 0 ? storedFontSize : 30
@@ -37,7 +42,8 @@ final class AppSettings: ObservableObject {
         try LiveTranslationConfiguration(
             workspaceID: workspaceID,
             apiKey: apiKey,
-            sourceLanguage: sourceLanguage
+            sourceLanguage: sourceLanguage,
+            translationMode: translationMode
         ).validated()
     }
 
@@ -52,6 +58,7 @@ final class AppSettings: ObservableObject {
     func persistPreferences() {
         defaults.set(workspaceID, forKey: Keys.workspaceID)
         defaults.set(sourceLanguage.rawValue, forKey: Keys.sourceLanguage)
+        defaults.set(translationMode.rawValue, forKey: Keys.translationMode)
         defaults.set(fontSize, forKey: Keys.fontSize)
         defaults.set(isOverlayLocked, forKey: Keys.overlayLocked)
     }

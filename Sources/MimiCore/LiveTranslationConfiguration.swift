@@ -21,11 +21,18 @@ public struct LiveTranslationConfiguration: Equatable, Sendable {
     public var workspaceID: String
     public var apiKey: String
     public var sourceLanguage: SourceLanguage
+    public var translationMode: TranslationMode
 
-    public init(workspaceID: String, apiKey: String, sourceLanguage: SourceLanguage) {
+    public init(
+        workspaceID: String,
+        apiKey: String,
+        sourceLanguage: SourceLanguage,
+        translationMode: TranslationMode = .lowLatency
+    ) {
         self.workspaceID = workspaceID
         self.apiKey = apiKey
         self.sourceLanguage = sourceLanguage
+        self.translationMode = translationMode
     }
 
     public func validate() throws {
@@ -51,7 +58,8 @@ public struct LiveTranslationConfiguration: Equatable, Sendable {
         return Self(
             workspaceID: workspaceID,
             apiKey: apiKey,
-            sourceLanguage: sourceLanguage
+            sourceLanguage: sourceLanguage,
+            translationMode: translationMode
         )
     }
 }

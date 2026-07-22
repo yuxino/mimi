@@ -19,6 +19,22 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
     }
 }
 
+public enum TranslationMode: String, CaseIterable, Codable, Identifiable, Sendable {
+    case lowLatency
+    case highQuality
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .lowLatency:
+            "低延迟（推荐）"
+        case .highQuality:
+            "高质量"
+        }
+    }
+}
+
 public enum SessionStatus: Equatable, Sendable {
     case idle
     case connecting
