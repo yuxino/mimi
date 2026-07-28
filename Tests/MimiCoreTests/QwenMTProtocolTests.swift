@@ -39,18 +39,22 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
     }
 
     runner.run("Qwen-MT final request selects Flash with natural-dialogue guidance") {
+        let guidance = """
+        Natural spoken dialogue. Preserve meaningful interjections and hesitation \
+        as natural Chinese particles such as 嗯、啊、呢、吧、嘛.
+        """
         let data = try QwenMTRequestEncoder.request(
             text: "今日は晴れです。",
             sourceLanguage: .japanese,
             model: .flash,
             stream: true,
-            domainHint: "Natural spoken dialogue."
+            domainHint: guidance
         )
         let json = try mtJSONObject(data)
         let options = try mtRequiredObject(json["translation_options"])
 
         try expectEqual(json["model"] as? String, "qwen-mt-flash")
-        try expectEqual(options["domains"] as? String, "Natural spoken dialogue.")
+        try expectEqual(options["domains"] as? String, guidance)
     }
 
     runner.run("Qwen-MT request includes bounded translation memory pairs") {

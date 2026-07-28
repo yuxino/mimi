@@ -24,6 +24,11 @@ preceding confirmed source/translation pairs through Qwen-MT's `tm_list`.
 Translation memory is isolated by source language, bounded, and cleared with the
 session so unrelated content cannot accumulate or bias later translations.
 
+Meaningful interjections, hesitation, and sentence-final tone are retained as
+natural Chinese particles. Accidental ASR repetition is collapsed, while
+Japanese fillers and sentence-final particles are translated selectively rather
+than word for word.
+
 Drafts never wait for final translations. Final requests stay ordered, and only
 completed final translations enter translation memory. Existing cancellation,
 preemption, and authentication error behavior remains unchanged.
