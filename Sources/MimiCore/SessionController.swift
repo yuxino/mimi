@@ -46,6 +46,11 @@ public struct TranslationSessionController: Sendable {
     }
 
     public mutating func handle(_ event: LiveTranslateServerEvent) {
+        // Finishing a realtime session can flush synthetic tail events after
+        // audio capture has already stopped. Keep the last real subtitle on
+        // screen instead of presenting that service-generated cleanup text.
+        guard state.status != .stopping else { return }
+
         switch event {
         case .sessionCreated:
             break
