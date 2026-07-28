@@ -1,8 +1,8 @@
 <div align="center">
   <img src="Resources/Assets/mimi-cat.png" width="112" alt="mimi">
   <h1>mimi</h1>
-  <p><strong>Chinese subtitles for whatever is playing on your Mac.</strong></p>
-  <p>Films, livestreams, and courses—ready when you press play.</p>
+  <p><strong>Watch it now. Don't wait for subtitles.</strong></p>
+  <p>mimi adds live Chinese subtitles to foreign-language video playing on your Mac.</p>
   <p>
     <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
     · <a href="README.md">简体中文</a>
@@ -11,15 +11,15 @@
 
 ![mimi translating dialogue over a video](docs/images/mimi-product-hero.png)
 
-## Subtitles that belong in the picture
+## Press play. The subtitles follow.
 
-mimi listens to the sound playing on your Mac. Whether it comes from a browser, a media player, or a desktop app, the Chinese subtitles sit quietly over the picture.
+No subtitle files. No translation window. No pausing every time a line gets away from you.
 
-It starts before the speaker finishes, then quietly refines the line as more of it becomes clear. Pauses, tone, and recent context remain part of the translation.
+mimi moves with the dialogue. A line appears as it is spoken, then settles into place as the sentence becomes clear. Pauses and tone stay part of it.
 
-The current line stays clear while earlier dialogue gently recedes. Place the subtitle window where it feels right, resize it, and lock it. Once locked, it stays out of the way of your mouse.
+The current line stays clear while earlier dialogue fades back. Put the subtitles where they feel right, lock the window, and keep watching.
 
-## Play what you want
+## The next episode starts now
 
 <table>
   <tr>
@@ -28,7 +28,7 @@ The current line stays clear while earlier dialogue gently recedes. Place the su
   </tr>
 </table>
 
-Anime, films, interviews, or courses—mimi works with the player you already use and needs no browser extension.
+Anime, films, and interviews work in the browser or player you already use.
 
 ![mimi translating a film interview](docs/images/mimi-interview.png)
 
@@ -42,11 +42,9 @@ mimi translates English, Japanese, and Korean into Simplified Chinese. Let it de
 
 > mimi is not yet notarized by Apple. If macOS blocks the first launch, open System Settings → Privacy & Security and select **Open Anyway**.
 
-## Your subtitles stay yours
+## Just subtitles. Nothing extra.
 
-mimi captures system playback only. It never uses your microphone. Audio goes directly to the Alibaba Cloud Model Studio workspace you configure, without passing through a mimi server.
-
-Your API key stays in macOS Keychain. There are no mimi accounts, analytics, saved recordings, or transcript history.
+mimi never uses your microphone, asks for an account, or saves recordings and subtitle history. Your API key stays in macOS Keychain.
 
 [Create an API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Find your Workspace ID](https://help.aliyun.com/en/model-studio/obtain-the-app-id-and-workspace-id)
 
