@@ -41,22 +41,40 @@ public struct QwenMTEndpoint: Equatable, Sendable {
     }
 }
 
-public enum QwenMTRequestEncoder {
-    public static let model = "qwen-mt-lite"
+public enum QwenMTModel: String, Sendable {
+    case lite = "qwen-mt-lite"
+    case flash = "qwen-mt-flash"
+}
 
+public struct QwenMTMemoryPair: Equatable, Sendable, Encodable {
+    public let source: String
+    public let target: String
+
+    public init(source: String, target: String) {
+        self.source = source
+        self.target = target
+    }
+}
+
+public enum QwenMTRequestEncoder {
     public static func request(
         text: String,
         sourceLanguage: SourceLanguage,
         targetLanguage: String = "Chinese",
-        stream: Bool = false
+        model: QwenMTModel = .lite,
+        stream: Bool = false,
+        domainHint: String? = nil,
+        translationMemory: [QwenMTMemoryPair] = []
     ) throws -> Data {
         let request = QwenMTRequest(
-            model: model,
+            model: model.rawValue,
             messages: [.init(role: "user", content: text)],
             stream: stream,
             translationOptions: .init(
                 sourceLanguage: sourceLanguage.qwenMTName,
-                targetLanguage: targetLanguage
+                targetLanguage: targetLanguage,
+                domains: domainHint,
+                translationMemory: translationMemory.isEmpty ? nil : translationMemory
             )
         )
         let encoder = JSONEncoder()
@@ -114,10 +132,14 @@ private struct QwenMTRequest: Encodable {
     struct TranslationOptions: Encodable {
         let sourceLanguage: String
         let targetLanguage: String
+        let domains: String?
+        let translationMemory: [QwenMTMemoryPair]?
 
         enum CodingKeys: String, CodingKey {
             case sourceLanguage = "source_lang"
             case targetLanguage = "target_lang"
+            case domains
+            case translationMemory = "tm_list"
         }
     }
 }
