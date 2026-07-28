@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     private let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
 
     var isActive: Bool { state.status.isActive }
+    var showsOverlayControlsForUITesting: Bool { isUITestMode }
 
     func attachOverlay(settings: AppSettings) {
         guard overlayController == nil else { return }
