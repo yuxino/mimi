@@ -1,12 +1,18 @@
 <div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="96" alt="mimi">
+  <img src="Resources/Assets/mimi-cat.png" width="88" alt="mimi">
   <h1>mimi</h1>
   <p>Live Chinese subtitles on Mac</p>
-  <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
-  · <a href="README.md">简体中文</a>
+  <p>
+    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
+    · <a href="README.md">简体中文</a>
+  </p>
 </div>
 
+<br>
+
 ![mimi showing live Chinese subtitles over anime](docs/images/mimi-anime-train.png)
+
+<br>
 
 mimi listens to audio playing on your Mac and translates Japanese, English, or Korean into Simplified Chinese. It works with browsers, media players, and desktop apps.
 
