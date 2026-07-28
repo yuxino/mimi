@@ -8,6 +8,23 @@ struct SubtitleOverlayView: View {
     @State private var isHovering = false
 
     var body: some View {
+        GeometryReader { geometry in
+            let referenceSize = SubtitleOverlayMetrics.referenceSize
+            let scale = min(
+                geometry.size.width / referenceSize.width,
+                geometry.size.height / referenceSize.height
+            )
+
+            ZStack {
+                overlayCanvas
+                    .frame(width: referenceSize.width, height: referenceSize.height)
+                    .scaleEffect(scale)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+    }
+
+    private var overlayCanvas: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.black.opacity(0.62))
