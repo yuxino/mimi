@@ -12,7 +12,7 @@
 
 `mimi` listens to system audio playing on your Mac, translates English, Japanese, or Korean speech into Simplified Chinese in real time, and keeps the result in an always-on-top subtitle window. No browser extension or microphone is required. Paste an Alibaba Cloud Model Studio Workspace ID and API key, then start listening.
 
-> mimi is currently an early release. The app is not Apple-notarized yet and must be built from source.
+> mimi is currently an early release and is not Apple-notarized yet. macOS requires a manual confirmation on first launch.
 
 ## Why mimi
 
@@ -26,13 +26,10 @@
 
 ## Start in three minutes
 
-### 1. Requirements
+### 1. Prepare credentials
 
 - macOS 14 or newer
-- Xcode 16, or Xcode Command Line Tools with Swift 6
 - A Workspace ID and API key from Alibaba Cloud Model Studio, China (Beijing)
-
-### 2. Get Alibaba Cloud credentials
 
 1. Select **China (Beijing)** in the Model Studio console.
 2. [Create an API key](https://help.aliyun.com/en/model-studio/get-api-key), preferably in the default workspace.
@@ -40,7 +37,25 @@
 
 The Workspace ID and API key must belong to the same workspace. Model calls may incur charges. Never paste an API key into an issue, log, or screenshot.
 
-### 3. Build and open
+### 2. Download and open
+
+1. Download `mimi-v0.1.0-macos.zip` from the [latest release](https://github.com/yuxino/mimi/releases/latest).
+2. Unzip it and move `mimi.app` into Applications.
+3. If macOS blocks the first launch, open System Settings → Privacy & Security and click **Open Anyway**.
+
+On first launch:
+
+1. Paste the Workspace ID and DashScope API key into Settings.
+2. Click **Save**, then **Start Listening**.
+3. Allow Screen & System Audio Recording in macOS.
+4. If macOS asks for a restart, quit and reopen mimi.
+
+![mimi settings](docs/images/mimi-settings.png)
+
+<details>
+<summary>Build from source</summary>
+
+This requires Xcode 16 or Xcode Command Line Tools with Swift 6.
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
@@ -49,14 +64,7 @@ cd mimi
 open dist/mimi.app
 ```
 
-On first launch:
-
-1. Paste the Workspace ID and DashScope API key into Settings.
-2. Click **Save**, then **Start Listening**.
-3. Allow Screen & System Audio Recording in macOS.
-4. If macOS asks for a restart, quit and reopen `dist/mimi.app`.
-
-![mimi settings](docs/images/mimi-settings.png)
+</details>
 
 ## Everyday use
 
