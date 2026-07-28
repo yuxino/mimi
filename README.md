@@ -1,136 +1,126 @@
 <div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="168" alt="mimi 猫耳字幕图标">
+  <img src="Resources/Assets/mimi-cat.png" width="112" alt="mimi 猫耳字幕图标">
   <h1>mimi</h1>
-  <p><strong>听见声音，马上翻译。macOS 原生实时双语字幕。</strong></p>
+  <p><strong>看懂正在播放的每一句话。</strong></p>
+  <p>macOS 原生实时翻译字幕 · 英语 / 日语 / 韩语 → 简体中文</p>
   <p>
-    <a href="README.md">简体中文</a> ·
-    <a href="README_EN.md">English</a>
+    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
+    · <a href="README_EN.md">English</a>
+  </p>
+  <p>
+    <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-111111?logo=apple">
+    <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
+    <img alt="MIT License" src="https://img.shields.io/badge/License-MIT-6FE0C1">
   </p>
 </div>
 
-![mimi 实时翻译字幕](docs/images/mimi-subtitles.png)
+![mimi 在视频上显示实时中文字幕](docs/images/mimi-product-hero.png)
 
-`mimi` 会听取 Mac 正在播放的系统音频，把英语、日语或韩语实时翻译成简体中文，并显示在始终置顶的字幕窗口中。它不需要浏览器扩展，不使用麦克风；安装后填入阿里云百炼的 Workspace ID 和 API Key 就能开始。
+## 视频继续放，字幕自己来
 
-> 当前为早期版本，应用尚未经过 Apple 公证。首次打开时需要在 macOS 中手动确认。
+追剧、看课程、刷直播，不用暂停，不用复制台词，也不用安装浏览器插件。
 
-## 为什么是 mimi
+mimi 直接听取 Mac 正在播放的声音，把译文放在视频上方。
 
-- **足够快**：识别草稿优先显示，定稿使用更自然的翻译模型。
-- **更像人话**：保留有意义的语气词，并参考最近几句改善上下文衔接。
-- **自动判断语言**：同一场视频中可自动识别英语、日语和韩语。
-- **原生字幕窗**：可移动、缩放、锁定、穿透点击，并记住位置。
-- **字幕不会闪没**：保留最近译文，也可随时从字幕窗手动清空。
-- **隐私清楚**：不注册账号、不做分析、不录音、不在本地保存字幕。
-- **凭证留在 Mac**：API Key 存在 macOS 钥匙串，不写入项目或应用包。
+| ⚡ 边听边出 | 💬 不是机翻腔 | 🪟 不打扰画面 |
+| --- | --- | --- |
+| 草稿先出现，不必等一句话说完 | 定稿参考前文，保留“嗯、啊、吧、呢”这些语气 | 字幕窗可移动、缩放、锁定并穿透鼠标 |
 
-## 三分钟开始
+## 打开就能用
 
-### 1. 准备配置
+1. **下载** — 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 获取 `mimi-v0.1.0-macos.zip`
+2. **填配置** — 粘贴阿里云百炼的 Workspace ID 和 API Key
+3. **开始听** — 播放视频，点击 **Start Listening**
 
-- macOS 14 或更新版本
-- 阿里云百炼华北 2（北京）地域的 Workspace ID 和 API Key
+就这些。mimi 会自动判断英语、日语或韩语，并持续翻译成简体中文。
 
-1. 在阿里云百炼控制台选择 **华北 2（北京）**。
-2. 按[官方说明创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)，建议使用默认业务空间。
-3. 在控制台右上角复制 Workspace ID，具体位置见[官方 Workspace ID 说明](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)。
+> 当前版本尚未经过 Apple 公证。首次打开如果被 macOS 拦截，请前往“系统设置 → 隐私与安全性”，点击“仍要打开”。
 
-Workspace ID 与 API Key 必须属于同一业务空间。API Key 会产生模型调用费用，请勿提交到 Issue、日志或截图中。
+## 用起来是什么感觉
 
-### 2. 下载并打开
+### 字幕跟得上
 
-1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载 `mimi-v0.1.0-macos.zip`。
-2. 解压并把 `mimi.app` 移到“应用程序”文件夹。
-3. 首次打开如果被 macOS 拦截，前往“系统设置 → 隐私与安全性”，点击“仍要打开”。
+识别和翻译分开工作：正在说的内容快速给出草稿，确认后的句子再换成更自然的定稿。视频节奏不会被翻译拖住。
 
-首次打开后：
+### 连续对话不再句句失忆
 
-1. 在设置中粘贴 Workspace ID 和 DashScope API Key。
-2. 点击 **Save**，再点击 **Start Listening**。
-3. 允许 macOS 的“屏幕与系统音频录制”权限。
-4. 如果系统要求重启应用，退出后重新打开 mimi。
+mimi 会参考最近几句已经确认的字幕，补回对话里省略的主语和语气。不是把每个词硬拼成中文。
 
-![mimi 配置界面](docs/images/mimi-settings.png)
+### 长句、短句都留得住
+
+最近的译文会保留在字幕窗中，不再一闪而过。想重新开始时，点右上角橡皮擦即可清空。
+
+## 适合这些时候
+
+- **追海外剧和动画**：对白不断，字幕始终跟在画面下方
+- **看课程与发布会**：长句自动换行，前文还能回看
+- **直播和访谈**：语言变化时自动识别，不必来回切换
+- **任何播放器**：浏览器、桌面客户端或本地视频都可以
+
+## 配置阿里云百炼
+
+mimi 当前使用阿里云百炼 **华北 2（北京）**地域：
+
+1. 按[官方说明创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)
+2. 在控制台右上角复制 [Workspace ID](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)
+3. 确认 Workspace ID 与 API Key 属于同一个业务空间
+
+API Key 保存在 macOS 钥匙串中，不会写入项目或应用包。模型调用可能产生费用，请不要把 Key 发到 Issue、日志或截图里。
+
+## 你的声音去了哪里
+
+- 只采集 Mac 正在播放的**系统音频**，不请求麦克风
+- 音频直接发送到你配置的阿里云百炼工作空间
+- mimi 没有中转服务器、用户账号或分析统计
+- 应用不会在本地保存音频和字幕记录
+
+## 使用小贴士
+
+- 自动识别适合语言会变化的视频；单一语言也可以手动指定
+- 拖动字幕背景可移动，拖动边缘可调整大小
+- 锁定位置后字幕窗会穿透鼠标，不影响视频操作
+- 如果出现第二块“正在翻译”字幕，关闭 Chrome 的“实时字幕 / 实时翻译”
 
 <details>
-<summary>从源码构建</summary>
+<summary><strong>从源码构建与开发</strong></summary>
 
-需要 Xcode 16，或安装了 Swift 6 的 Xcode Command Line Tools。
+需要 macOS 14+，以及 Xcode 16 或带 Swift 6 的 Xcode Command Line Tools。
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
 cd mimi
+
+swift run mimi-core-tests
+swift build -c release -Xswiftc -warnings-as-errors
 ./scripts/package-app.sh
 open dist/mimi.app
 ```
 
-</details>
-
-## 日常使用
-
-- 默认的“自动识别”适合语言会变化的视频。
-- 单一语言内容可手动选择 English、日本語或한국어。
-- 拖动字幕背景可移动窗口，拖动边缘可调整大小。
-- 锁定位置后字幕窗会穿透鼠标，不影响视频操作。
-- 鼠标移到字幕窗右上角，可清空字幕或打开设置。
-- 菜单栏也提供显示字幕窗、清空字幕和退出等操作。
-
-如果同时看到另一块写着“正在翻译”的字幕框，那通常是 Chrome 自带的实时字幕。前往 Chrome 的“设置 → 无障碍”，关闭“实时字幕/实时翻译”即可。
-
-## 工作方式
-
-低延迟模式把任务拆成两个互不阻塞的通道：
-
-1. Qwen 实时 ASR 持续输出原文草稿。
-2. 草稿使用 Qwen-MT-Lite 快速翻译。
-3. 确认后的句子使用 Qwen-MT-Flash 生成更自然的定稿。
-4. 最近三组确认字幕作为有限翻译记忆，改善连续对话。
-
-系统音频由 Apple ScreenCaptureKit 在本机采集；音频会发送到用户自己配置的阿里云百炼工作空间。mimi 不提供中转服务器。
-
-## 开发与测试
-
-```bash
-# 运行无第三方依赖的核心测试
-swift run mimi-core-tests
-
-# 严格 Release 构建
-swift build -c release -Xswiftc -warnings-as-errors
-
-# 打包、签名并验证应用
-./scripts/package-app.sh
-```
-
 项目结构：
 
-- `Sources/MimiCore`：实时协议、翻译队列、字幕状态与 PCM 编码。
-- `Sources/MimiApp`：SwiftUI/AppKit 界面、系统音频、钥匙串和悬浮窗。
-- `Sources/MimiReplay`：真实音频回放与延迟指标工具。
-- `Tests/MimiCoreTests`：确定性的可执行测试套件。
-- `docs/plans`：已验证的产品设计与实现记录。
+- `Sources/MimiCore`：实时协议、翻译队列、字幕状态与 PCM 编码
+- `Sources/MimiApp`：SwiftUI / AppKit 界面、系统音频、钥匙串和悬浮窗
+- `Sources/MimiReplay`：真实音频回放与延迟指标
+- `Tests/MimiCoreTests`：确定性核心测试
+
+</details>
 
 ## 常见问题
 
-**为什么听不到视频？**
+**没有字幕？**
 
-确认已经授予“屏幕与系统音频录制”权限，并在授权后重新启动 mimi。
+确认已经允许“屏幕与系统音频录制”，并在授权后重启 mimi。
 
-**为什么提示 401 或 403？**
+**提示 401 或 403？**
 
-确认 Workspace ID 与 API Key 都来自华北 2（北京）的同一个业务空间，并且 Key 有权调用相关模型。
+Workspace ID 与 API Key 必须来自华北 2（北京）的同一个业务空间。
 
-**会上传麦克风或保存字幕吗？**
+**每次构建都重新申请权限？**
 
-不会。mimi 只采集 Mac 正在播放的系统音频，不请求麦克风；应用本身不保存音频或字幕历史。
+没有稳定签名证书时，macOS 可能把新构建识别成另一个应用。下载 Release 版本或配置稳定的本地签名可以减少这种情况。
 
-**为什么每次重新构建都可能再次请求权限？**
+## 一起让 mimi 更好
 
-没有本地稳定签名证书时，脚本会使用临时签名。macOS 可能把新构建识别成另一个应用。详见[开发说明](CONTRIBUTING.md)。
-
-## 参与贡献
-
-欢迎提交 Issue 和 Pull Request。开始前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要公开任何 API Key。
-
-## 许可证
+欢迎提交 [Issue](https://github.com/yuxino/mimi/issues) 和 Pull Request。开始前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 
 [MIT](LICENSE) © 2026 yuxino
