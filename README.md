@@ -1,12 +1,18 @@
 <div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="96" alt="mimi">
+  <img src="Resources/Assets/mimi-cat.png" width="88" alt="mimi">
   <h1>mimi</h1>
   <p>Mac 上的实时中文字幕</p>
-  <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
-  · <a href="README_EN.md">English</a>
+  <p>
+    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
+    · <a href="README_EN.md">English</a>
+  </p>
 </div>
 
+<br>
+
 ![mimi 为番剧显示实时中文字幕](docs/images/mimi-anime-train.png)
+
+<br>
 
 mimi 听取 Mac 正在播放的声音，把日语、英语或韩语实时翻译成简体中文字幕。浏览器、播放器和桌面应用都可以使用。
 
