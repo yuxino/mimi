@@ -1,36 +1,16 @@
 <div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="112" alt="mimi">
+  <img src="Resources/Assets/mimi-cat.png" width="96" alt="mimi">
   <h1>mimi</h1>
-  <p><strong>想看的内容，不必再等字幕。</strong></p>
-  <p>mimi 为 Mac 上正在播放的外语视频，实时加上中文字幕。</p>
-  <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
-    · <a href="README_EN.md">English</a>
-  </p>
+  <p>Mac 上的实时中文字幕</p>
+  <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
+  · <a href="README_EN.md">English</a>
 </div>
 
-![mimi 实时翻译视频中的对话](docs/images/mimi-product-hero.png)
+![mimi 为番剧显示实时中文字幕](docs/images/mimi-anime-train.png)
 
-## 打开视频，就有字幕
+mimi 听取 Mac 正在播放的声音，把日语、英语或韩语实时翻译成简体中文字幕。浏览器、播放器和桌面应用都可以使用。
 
-不用找字幕文件，不用切到翻译软件，也不用为了看懂一句话反复暂停。
-
-mimi 跟着对白往前走。正在说的内容先出现，听清之后再补完整；人物的停顿和语气，也留在字幕里。
-
-当前一句始终清楚，刚刚说过的话慢慢淡去。把字幕放到顺眼的位置，锁住，然后继续看。
-
-## 下一集，现在就看
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/mimi-anime-city.png" alt="mimi 翻译都市日常番"></td>
-    <td width="50%"><img src="docs/images/mimi-anime-fantasy.png" alt="mimi 翻译幻想动画"></td>
-  </tr>
-</table>
-
-日语番剧、动画电影、海外访谈，浏览器和播放器里的内容都能看。
-
-![mimi 翻译电影访谈](docs/images/mimi-interview.png)
+字幕窗可以移动、缩放和锁定。当前对白保持清楚，刚刚说过的内容会慢慢淡去。
 
 ## 开始使用
 
