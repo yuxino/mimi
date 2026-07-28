@@ -23,17 +23,11 @@ struct MenuBarView: View {
 
             Divider()
 
-            Button {
-                Task {
-                    if model.isActive {
-                        await model.stop()
-                    } else {
-                        await model.start(using: settings)
-                    }
-                }
-            } label: {
-                Label(model.isActive ? "Stop Listening" : "Start Listening", systemImage: model.isActive ? "stop.fill" : "play.fill")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(isOn: listeningBinding) {
+                Label(
+                    "Live Subtitles",
+                    systemImage: model.isActive ? "waveform" : "waveform.slash"
+                )
             }
             .keyboardShortcut(.space, modifiers: [.command, .shift])
 
@@ -104,6 +98,21 @@ struct MenuBarView: View {
         case let .error(message):
             message
         }
+    }
+
+    private var listeningBinding: Binding<Bool> {
+        Binding(
+            get: { model.isActive },
+            set: { shouldListen in
+                Task {
+                    if shouldListen {
+                        await model.start(using: settings)
+                    } else {
+                        await model.stop()
+                    }
+                }
+            }
+        )
     }
 
     private var statusColor: Color {
