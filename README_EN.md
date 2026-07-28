@@ -11,13 +11,13 @@
 
 ![mimi translating dialogue over a video](docs/images/mimi-product-hero.png)
 
-## Stay with the video
+## Subtitles that belong in the picture
 
-mimi listens to the sound playing on your Mac. Whether it comes from a browser, a media player, or a desktop app, the Chinese subtitles stay with the picture.
+mimi listens to the sound playing on your Mac. Whether it comes from a browser, a media player, or a desktop app, the Chinese subtitles sit quietly over the picture.
 
 It starts before the speaker finishes, then quietly refines the line as more of it becomes clear. Pauses, tone, and recent context remain part of the translation.
 
-Place the subtitle window where it feels right, resize it, and lock it. Once locked, it stays out of the way of your mouse.
+The current line stays clear while earlier dialogue gently recedes. Place the subtitle window where it feels right, resize it, and lock it. Once locked, it stays out of the way of your mouse.
 
 ## Get started
 

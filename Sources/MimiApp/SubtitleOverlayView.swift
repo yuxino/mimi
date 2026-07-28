@@ -10,16 +10,26 @@ struct SubtitleOverlayView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.black.opacity(0.72))
+                .fill(.black.opacity(0.62))
+
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [.white.opacity(0.035), .clear],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                )
 
             VStack(spacing: 0) {
                 WindowDragArea()
-                    .frame(height: 24)
+                    .frame(height: 18)
+                    .opacity(isHovering || model.showsOverlayControlsForUITesting ? 1 : 0)
 
                 if visibleRows.isEmpty {
                     Spacer(minLength: 0)
                     Text(emptyStateText)
-                        .font(.system(size: max(16, settings.fontSize * 0.72), weight: .medium))
+                        .font(.system(size: max(15, settings.fontSize * 0.68), weight: .medium))
                         .foregroundStyle(emptyStateColor)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
@@ -31,16 +41,16 @@ struct SubtitleOverlayView: View {
                     )
                 }
             }
-            .padding(8)
+            .padding(7)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.09), lineWidth: 1)
+                .stroke(.white.opacity(0.12), lineWidth: 0.75)
         }
         .overlay(alignment: .topTrailing) {
             if !settings.isOverlayLocked
                 && (isHovering || model.showsOverlayControlsForUITesting) {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     if hasSubtitleContent {
                         OverlayControlButton(
                             systemImage: "eraser.fill",
@@ -57,7 +67,7 @@ struct SubtitleOverlayView: View {
                         model.showSettings()
                     }
                 }
-                .padding(12)
+                .padding(10)
             }
         }
         .onHover { isHovering = $0 }
@@ -66,7 +76,7 @@ struct SubtitleOverlayView: View {
 
     private var visibleRows: [SubtitleRow] {
         let subtitles = model.state.subtitles
-        var rows = subtitles.history.suffix(4).map {
+        var rows = subtitles.history.suffix(2).map {
             SubtitleRow(text: $0.translation)
         }
         let current = subtitles.translation.text
@@ -74,7 +84,7 @@ struct SubtitleOverlayView: View {
         if !current.isEmpty, rows.last?.text != current {
             rows.append(SubtitleRow(text: current))
         }
-        return Array(rows.suffix(5))
+        return Array(rows.suffix(3))
     }
 
     private var hasSubtitleContent: Bool {
@@ -113,10 +123,10 @@ private struct OverlayControlButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.58))
-                .frame(width: 26, height: 26)
-                .background(.black.opacity(0.34), in: Circle())
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.68))
+                .frame(width: 24, height: 24)
+                .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(label)
@@ -141,21 +151,16 @@ private struct SubtitleTimeline: View {
                     ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                         Text(row.text)
                             .font(.system(
-                                size: fontSize,
-                                weight: index == rows.count - 1 ? .semibold : .regular
+                                size: rowFontSize(at: index),
+                                weight: index == rows.count - 1 ? .medium : .regular
                             ))
                             .foregroundStyle(.white.opacity(rowOpacity(at: index)))
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 8)
-
-                        if index < rows.count - 1 {
-                            Color.white.opacity(0.06)
-                                .frame(height: 1)
-                                .padding(.horizontal, 20)
-                        }
+                            .lineSpacing(2)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, index == rows.count - 1 ? 7 : 5)
                     }
 
                     Color.clear
@@ -173,13 +178,16 @@ private struct SubtitleTimeline: View {
         }
     }
 
+    private func rowFontSize(at index: Int) -> Double {
+        index == rows.count - 1 ? fontSize : max(15, fontSize * 0.82)
+    }
+
     private func rowOpacity(at index: Int) -> Double {
         let distance = rows.count - 1 - index
         return switch distance {
         case 0: 1
-        case 1: 0.72
-        case 2: 0.54
-        default: 0.38
+        case 1: 0.58
+        default: 0.34
         }
     }
 }
@@ -200,7 +208,7 @@ private struct WindowDragArea: NSViewRepresentable {
             super.init(frame: frameRect)
             wantsLayer = true
             handle.wantsLayer = true
-            handle.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.22).cgColor
+            handle.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.28).cgColor
             handle.layer?.cornerRadius = 1.5
             addSubview(handle)
         }
@@ -212,9 +220,9 @@ private struct WindowDragArea: NSViewRepresentable {
         override func layout() {
             super.layout()
             handle.frame = NSRect(
-                x: (bounds.width - 36) / 2,
+                x: (bounds.width - 32) / 2,
                 y: (bounds.height - 3) / 2,
-                width: 36,
+                width: 32,
                 height: 3
             )
         }
