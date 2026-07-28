@@ -31,6 +31,17 @@ func runSessionControllerTests(using runner: inout TestRunner) {
 
         try expectEqual(controller.state.subtitles.history.count, 1)
         try expectEqual(controller.state.subtitles.translation.isFinal, true)
+        try expectEqual(controller.state.detectedLanguage?.displayName, "English")
+    }
+
+    runner.run("a new connection clears the previously detected language") {
+        var controller = TranslationSessionController()
+        controller.handle(.sourceDraft(text: "こんにちは", language: "ja"))
+        try expectEqual(controller.state.detectedLanguage?.displayName, "日本語")
+
+        controller.beginConnecting()
+
+        try expectEqual(controller.state.detectedLanguage, nil)
     }
 
     runner.run("service errors move the session to error") {

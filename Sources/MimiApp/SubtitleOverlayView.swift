@@ -47,6 +47,27 @@ struct SubtitleOverlayView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(.white.opacity(0.12), lineWidth: 0.75)
         }
+        .overlay(alignment: .topLeading) {
+            if model.isActive, let languageStatusText {
+                Text(languageStatusText)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(isHovering ? 0.66 : 0.46))
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
+                    .background(
+                        .black.opacity(0.24),
+                        in: Capsule()
+                    )
+                    .overlay {
+                        Capsule()
+                            .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                    }
+                    .padding(.leading, 12)
+                    .padding(.top, 10)
+                    .accessibilityLabel("Current languages: \(languageStatusText)")
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if !settings.isOverlayLocked
                 && (isHovering || model.showsOverlayControlsForUITesting) {
@@ -92,6 +113,22 @@ struct SubtitleOverlayView: View {
         return !subtitles.source.text.isEmpty
             || !subtitles.translation.text.isEmpty
             || !subtitles.history.isEmpty
+    }
+
+    private var languageStatusText: String? {
+        let sourceName: String
+        if let detected = model.state.detectedLanguage {
+            sourceName = detected.displayName
+        } else if settings.sourceLanguage != .automatic {
+            sourceName = settings.sourceLanguage.displayName
+        } else {
+            sourceName = "识别中"
+        }
+
+        if settings.targetLanguage == .original {
+            return "\(sourceName) · 原文"
+        }
+        return "\(sourceName) → \(settings.targetLanguage.displayName)"
     }
 
     private var emptyStateText: String {
