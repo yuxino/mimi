@@ -52,7 +52,7 @@ mimi never uses your microphone, asks for an account, or saves recordings and su
 
 ## A few useful details
 
-- Drag the panel background to move it; drag an edge to resize it
+- Drag the panel background to move it; drag a corner to scale the entire subtitle interface
 - The top-left label shows the detected and subtitle languages
 - Lock the panel to click through it
 - Use the eraser in the top-right corner to clear the current subtitles

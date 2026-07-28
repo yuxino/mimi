@@ -1,14 +1,42 @@
 import AppKit
 import SwiftUI
 
+enum SubtitleOverlayMetrics {
+    static let referenceSize = NSSize(width: 640, height: 136)
+    static let minimumScale: CGFloat = 0.75
+    static let maximumScale: CGFloat = 1.5
+
+    static var minimumSize: NSSize {
+        scaledSize(minimumScale)
+    }
+
+    static var maximumSize: NSSize {
+        scaledSize(maximumScale)
+    }
+
+    static func normalizedSize(_ size: NSSize) -> NSSize {
+        let widthScale = size.width / referenceSize.width
+        let heightScale = size.height / referenceSize.height
+        let scale = min(max(min(widthScale, heightScale), minimumScale), maximumScale)
+        return scaledSize(scale)
+    }
+
+    private static func scaledSize(_ scale: CGFloat) -> NSSize {
+        NSSize(
+            width: referenceSize.width * scale,
+            height: referenceSize.height * scale
+        )
+    }
+}
+
 @MainActor
 final class OverlayWindowController {
     private static let frameAutosaveName = "mimi.subtitle-overlay"
     private static let frameLayoutVersionKey = "subtitleOverlayFrameLayoutVersion"
-    private static let frameLayoutVersion = 2
-    private static let defaultSize = NSSize(width: 640, height: 136)
-    private static let minimumSize = NSSize(width: 460, height: 112)
-    private static let maximumSize = NSSize(width: 960, height: 360)
+    private static let frameLayoutVersion = 3
+    private static let defaultSize = SubtitleOverlayMetrics.referenceSize
+    private static let minimumSize = SubtitleOverlayMetrics.minimumSize
+    private static let maximumSize = SubtitleOverlayMetrics.maximumSize
 
     private let panel: NSPanel
 
@@ -29,6 +57,7 @@ final class OverlayWindowController {
         panel.maxSize = Self.maximumSize
         panel.contentMinSize = panel.minSize
         panel.contentMaxSize = panel.maxSize
+        panel.contentAspectRatio = SubtitleOverlayMetrics.referenceSize
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.title = "mimi Subtitles"
@@ -50,6 +79,9 @@ final class OverlayWindowController {
         if defaults.integer(forKey: Self.frameLayoutVersionKey) < Self.frameLayoutVersion,
            restoredFrame.height <= 220 {
             restoredFrame.size.height = Self.defaultSize.height
+        }
+        if defaults.integer(forKey: Self.frameLayoutVersionKey) < Self.frameLayoutVersion {
+            restoredFrame.size = SubtitleOverlayMetrics.normalizedSize(restoredFrame.size)
         }
         restoredFrame.size.width = restoredFrame.width > panel.maxSize.width
             ? Self.defaultSize.width
