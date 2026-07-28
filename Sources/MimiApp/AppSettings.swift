@@ -41,7 +41,9 @@ final class AppSettings: ObservableObject {
             : storedTranslationMode
 
         let storedFontSize = defaults.double(forKey: Keys.fontSize)
-        self.fontSize = storedFontSize > 0 ? storedFontSize : 30
+        // 30 was the original default. Move existing installs to the quieter
+        // product default while preserving every explicitly chosen size.
+        self.fontSize = storedFontSize == 30 || storedFontSize == 0 ? 26 : storedFontSize
         self.isOverlayLocked = defaults.object(forKey: Keys.overlayLocked) as? Bool ?? false
         if isUITestMode {
             self.apiKey = "sk-demo-not-a-real-key"
