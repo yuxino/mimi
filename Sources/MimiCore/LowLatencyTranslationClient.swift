@@ -190,7 +190,12 @@ public actor LowLatencyTranslationClient {
                 let translation = try await draftMTClient.translateStreaming(
                     request.text,
                     sourceLanguageOverride: request.detectedLanguage
-                ) { _ in }
+                ) { [weak self] partialTranslation in
+                    await self?.emitStreamingDraft(
+                        partialTranslation,
+                        generation: generation
+                    )
+                }
                 guard !Task.isCancelled else { break }
                 await emitStreamingDraft(translation, generation: generation)
             } catch is CancellationError {
