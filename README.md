@@ -1,8 +1,8 @@
 <div align="center">
   <img src="Resources/Assets/mimi-cat.png" width="112" alt="mimi">
   <h1>mimi</h1>
-  <p><strong>给 Mac 上正在播放的声音，加上中文字幕。</strong></p>
-  <p>电影、直播、课程，打开就能看懂。</p>
+  <p><strong>想看的内容，不必再等字幕。</strong></p>
+  <p>mimi 为 Mac 上正在播放的外语视频，实时加上中文字幕。</p>
   <p>
     <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
     · <a href="README_EN.md">English</a>
@@ -11,15 +11,15 @@
 
 ![mimi 实时翻译视频中的对话](docs/images/mimi-product-hero.png)
 
-## 字幕留在画面里
+## 打开视频，就有字幕
 
-mimi 听的是 Mac 正在播放的声音。无论内容来自浏览器、播放器还是桌面应用，中文字幕都会安静地待在画面上。
+不用找字幕文件，不用切到翻译软件，也不用为了看懂一句话反复暂停。
 
-它不会等整句话结束才开始工作。正在说的内容先出现，听清之后再自然地补完整。人物说话的停顿、语气和前后文，也会尽量留在译文里。
+mimi 跟着对白往前走。正在说的内容先出现，听清之后再补完整；人物的停顿和语气，也留在字幕里。
 
-当前一句始终清楚，刚刚说过的话逐渐淡去。字幕窗可以放在顺眼的位置；调好大小，锁住，它就不再挡住鼠标。
+当前一句始终清楚，刚刚说过的话慢慢淡去。把字幕放到顺眼的位置，锁住，然后继续看。
 
-## 想看的，尽管打开
+## 下一集，现在就看
 
 <table>
   <tr>
@@ -28,7 +28,7 @@ mimi 听的是 Mac 正在播放的声音。无论内容来自浏览器、播放�
   </tr>
 </table>
 
-番剧、动画电影、访谈或课程，mimi 不挑播放器，也不要求浏览器插件。
+日语番剧、动画电影、海外访谈，浏览器和播放器里的内容都能看。
 
 ![mimi 翻译电影访谈](docs/images/mimi-interview.png)
 
@@ -42,11 +42,9 @@ mimi 支持英语、日语和韩语，并将它们翻译成简体中文。你可
 
 > mimi 目前尚未经过 Apple 公证。如果首次打开被 macOS 拦截，请前往“系统设置 → 隐私与安全性”，点击“仍要打开”。
 
-## 这是你的字幕
+## 只做字幕，不多打扰
 
-mimi 只采集系统正在播放的音频，不使用麦克风。音频直接发送到你配置的阿里云百炼工作空间，不经过 mimi 的服务器。
-
-API Key 保存在 macOS 钥匙串中。应用没有账号系统，不做使用统计，也不会保存你的音频和字幕记录。
+mimi 不使用麦克风，不需要注册账号，也不会保存音频和字幕记录。API Key 保存在 macOS 钥匙串中。
 
 [创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key) · [查找 Workspace ID](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)
 
