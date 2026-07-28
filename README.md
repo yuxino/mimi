@@ -1,10 +1,11 @@
 <div align="center">
   <img src="Resources/Assets/mimi-cat.png" width="88" alt="mimi">
   <h1>mimi</h1>
-  <p>Mac 上的实时中文字幕</p>
+  <p>Mac 上的实时翻译字幕</p>
   <p>
     <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
     · <a href="README_EN.md">English</a>
+    · <a href="README_JA.md">日本語</a>
   </p>
 </div>
 
@@ -14,7 +15,9 @@
 
 <br>
 
-mimi 听取 Mac 正在播放的声音，把日语、英语或韩语实时翻译成简体中文字幕。浏览器、播放器和桌面应用都可以使用。
+mimi，日语里“耳朵”的意思。
+
+它听取 Mac 正在播放的声音，把日语、英语或韩语实时翻译成简体中文、英语或日语字幕。浏览器、播放器和桌面应用都可以使用。
 
 字幕窗可以移动、缩放和锁定。当前对白保持清楚，刚刚说过的内容会慢慢淡去。
 
@@ -24,7 +27,7 @@ mimi 听取 Mac 正在播放的声音，把日语、英语或韩语实时翻译�
 2. 填入阿里云百炼的 Workspace ID 和 API Key
 3. 播放视频，点击 **Start Listening**
 
-mimi 支持英语、日语和韩语，并将它们翻译成简体中文。你可以让它自动判断，也可以指定一种语言。
+mimi 支持英语、日语和韩语。你可以让它自动判断正在播放的语言，再选择简体中文、英语或日语作为字幕语言。
 
 > mimi 目前尚未经过 Apple 公证。如果首次打开被 macOS 拦截，请前往“系统设置 → 隐私与安全性”，点击“仍要打开”。
 

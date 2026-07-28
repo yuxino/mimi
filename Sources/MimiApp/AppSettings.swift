@@ -6,6 +6,7 @@ final class AppSettings: ObservableObject {
     @Published var workspaceID: String
     @Published var apiKey: String
     @Published var sourceLanguage: SourceLanguage
+    @Published var targetLanguage: TargetLanguage
     @Published var translationMode: TranslationMode
     @Published var fontSize: Double
     @Published var isOverlayLocked: Bool
@@ -14,6 +15,7 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let workspaceID = "workspaceID"
         static let sourceLanguage = "sourceLanguage"
+        static let targetLanguage = "targetLanguage"
         static let translationMode = "translationMode"
         static let fontSize = "fontSize"
         static let overlayLocked = "overlayLocked"
@@ -33,6 +35,9 @@ final class AppSettings: ObservableObject {
             rawValue: defaults.string(forKey: Keys.sourceLanguage) ?? "auto"
         ) ?? .automatic
         self.sourceLanguage = storedSourceLanguage
+        self.targetLanguage = TargetLanguage(
+            rawValue: defaults.string(forKey: Keys.targetLanguage) ?? "zh"
+        ) ?? .simplifiedChinese
         let storedTranslationMode = TranslationMode(
             rawValue: defaults.string(forKey: Keys.translationMode) ?? "lowLatency"
         ) ?? .lowLatency
@@ -64,6 +69,7 @@ final class AppSettings: ObservableObject {
             workspaceID: workspaceID,
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             translationMode: translationMode
         ).validated()
     }
@@ -72,6 +78,7 @@ final class AppSettings: ObservableObject {
         let configuration = try configuration()
         workspaceID = configuration.workspaceID
         apiKey = configuration.apiKey
+        targetLanguage = configuration.targetLanguage
         translationMode = configuration.effectiveTranslationMode
         try keychain.saveAPIKey(configuration.apiKey)
         credentialLoadError = nil
@@ -97,6 +104,7 @@ final class AppSettings: ObservableObject {
     func persistPreferences() {
         defaults.set(workspaceID, forKey: Keys.workspaceID)
         defaults.set(sourceLanguage.rawValue, forKey: Keys.sourceLanguage)
+        defaults.set(targetLanguage.rawValue, forKey: Keys.targetLanguage)
         defaults.set(translationMode.rawValue, forKey: Keys.translationMode)
         defaults.set(fontSize, forKey: Keys.fontSize)
         defaults.set(isOverlayLocked, forKey: Keys.overlayLocked)

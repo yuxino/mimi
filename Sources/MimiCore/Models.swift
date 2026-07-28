@@ -41,6 +41,36 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
     }
 }
 
+public enum TargetLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
+    case simplifiedChinese = "zh"
+    case english = "en"
+    case japanese = "ja"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .simplifiedChinese:
+            "简体中文"
+        case .english:
+            "English"
+        case .japanese:
+            "日本語"
+        }
+    }
+
+    public var qwenMTName: String {
+        switch self {
+        case .simplifiedChinese:
+            "Chinese"
+        case .english:
+            "English"
+        case .japanese:
+            "Japanese"
+        }
+    }
+}
+
 public enum TranslationMode: String, CaseIterable, Codable, Identifiable, Sendable {
     case lowLatency
     case highQuality

@@ -13,15 +13,6 @@ public actor LowLatencyTranslationClient {
         let pair: QwenMTMemoryPair
     }
 
-    private static let finalDomainHint = """
-    Natural spoken dialogue. Translate into concise, idiomatic Simplified Chinese. \
-    Preserve the speaker's tone and implied subjects from context. Avoid literal, \
-    explanatory, or translation-like wording. Preserve meaningful interjections, \
-    hesitation, and sentence-final tone as natural Chinese particles such as 嗯、啊、\
-    呢、吧、嘛. Collapse accidental ASR repetition, and do not mechanically translate \
-    every Japanese filler or sentence-final particle.
-    """
-
     private let asrClient: RealtimeASRClient
     private let draftMTClient: QwenMTClient
     private let finalMTClient: QwenMTClient
@@ -41,6 +32,7 @@ public actor LowLatencyTranslationClient {
         workspaceID: String,
         apiKey: String,
         sourceLanguage: SourceLanguage,
+        targetLanguage: TargetLanguage = .simplifiedChinese,
         session: URLSession = .shared
     ) throws {
         self.asrClient = try RealtimeASRClient(
@@ -54,6 +46,7 @@ public actor LowLatencyTranslationClient {
             workspaceID: workspaceID,
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             model: .lite,
             session: session
         )
@@ -61,10 +54,28 @@ public actor LowLatencyTranslationClient {
             workspaceID: workspaceID,
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             model: .flash,
-            domainHint: Self.finalDomainHint,
+            domainHint: Self.finalDomainHint(for: targetLanguage),
             session: session
         )
+    }
+
+    private static func finalDomainHint(for targetLanguage: TargetLanguage) -> String {
+        let languageGuidance = switch targetLanguage {
+        case .simplifiedChinese:
+            "Use concise, idiomatic Simplified Chinese and preserve natural particles such as 嗯、啊、呢、吧、嘛."
+        case .english:
+            "Use concise, idiomatic conversational English with natural contractions and interjections."
+        case .japanese:
+            "Use natural conversational Japanese with appropriate register, particles, and sentence endings."
+        }
+        return """
+        Natural spoken dialogue. \(languageGuidance) Preserve the speaker's tone and \
+        implied subjects from context. Avoid literal, explanatory, or translation-like \
+        wording. Preserve meaningful interjections and hesitation. Collapse accidental \
+        ASR repetition, and do not mechanically translate every filler.
+        """
     }
 
     public func connect(onEvent: @escaping EventHandler) async throws {

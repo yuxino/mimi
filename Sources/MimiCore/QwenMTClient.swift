@@ -32,6 +32,7 @@ public actor QwenMTClient {
     private let endpoint: QwenMTEndpoint
     private let apiKey: String
     private let sourceLanguage: SourceLanguage
+    private let targetLanguage: TargetLanguage
     private let model: QwenMTModel
     private let domainHint: String?
     private let session: URLSession
@@ -40,6 +41,7 @@ public actor QwenMTClient {
         workspaceID: String,
         apiKey: String,
         sourceLanguage: SourceLanguage,
+        targetLanguage: TargetLanguage = .simplifiedChinese,
         model: QwenMTModel = .lite,
         domainHint: String? = nil,
         session: URLSession = .shared
@@ -52,6 +54,7 @@ public actor QwenMTClient {
         self.endpoint = try QwenMTEndpoint(workspaceID: workspaceID)
         self.apiKey = trimmedKey
         self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
         self.model = model
         self.domainHint = domainHint
         self.session = session
@@ -139,6 +142,7 @@ public actor QwenMTClient {
         request.httpBody = try QwenMTRequestEncoder.request(
             text: trimmedText,
             sourceLanguage: sourceLanguageOverride ?? sourceLanguage,
+            targetLanguage: targetLanguage,
             model: model,
             stream: stream,
             domainHint: domainHint,

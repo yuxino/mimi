@@ -38,6 +38,18 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(json["stream"] as? Bool, true)
     }
 
+    runner.run("Qwen-MT request selects an explicit target language") {
+        let data = try QwenMTRequestEncoder.request(
+            text: "今日は晴れです。",
+            sourceLanguage: .japanese,
+            targetLanguage: .english
+        )
+        let json = try mtJSONObject(data)
+        let options = try mtRequiredObject(json["translation_options"])
+
+        try expectEqual(options["target_lang"] as? String, "English")
+    }
+
     runner.run("Qwen-MT final request selects Flash with natural-dialogue guidance") {
         let guidance = """
         Natural spoken dialogue. Preserve meaningful interjections and hesitation \

@@ -26,6 +26,7 @@ public actor LiveTranslateClient {
     private let endpoint: LiveTranslateEndpoint
     private let apiKey: String
     private let sourceLanguage: SourceLanguage
+    private let targetLanguage: TargetLanguage
     private let hotwords: [String: String]
     private let session: URLSession
 
@@ -38,6 +39,7 @@ public actor LiveTranslateClient {
         workspaceID: String,
         apiKey: String,
         sourceLanguage: SourceLanguage,
+        targetLanguage: TargetLanguage = .simplifiedChinese,
         hotwords: [String: String] = [:],
         session: URLSession = .shared
     ) throws {
@@ -49,6 +51,7 @@ public actor LiveTranslateClient {
         self.endpoint = try LiveTranslateEndpoint(workspaceID: workspaceID)
         self.apiKey = trimmedKey
         self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
         self.hotwords = hotwords
         self.session = session
     }
@@ -68,6 +71,7 @@ public actor LiveTranslateClient {
 
         let configuration = try LiveTranslateRequestEncoder.sessionUpdate(
             sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             hotwords: hotwords
         )
         try await send(configuration, on: socket)
