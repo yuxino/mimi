@@ -49,7 +49,8 @@ public actor LowLatencyTranslationClient {
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
-            model: .lite,
+            model: .flash,
+            streamingTimeout: .seconds(5),
             session: session
         )
         self.finalMTClient = try QwenMTClient(
@@ -195,7 +196,10 @@ public actor LowLatencyTranslationClient {
             } catch is CancellationError {
                 break
             } catch {
-                await handleTranslationFailure(error)
+                if await handleTranslationFailure(error) {
+                    break
+                }
+                await emitStreamingDraft(request.text, generation: generation)
             }
         }
 
@@ -255,7 +259,10 @@ public actor LowLatencyTranslationClient {
             } catch is CancellationError {
                 return
             } catch {
-                await handleTranslationFailure(error)
+                if await handleTranslationFailure(error) {
+                    return
+                }
+                await emit(.translationFinal(request.text))
             }
         }
 
@@ -282,12 +289,12 @@ public actor LowLatencyTranslationClient {
         await emit(.translationDraft(translation))
     }
 
-    private func handleTranslationFailure(_ error: Error) async {
+    private func handleTranslationFailure(_ error: Error) async -> Bool {
         guard
             let clientError = error as? QwenMTClientError,
             clientError.isAuthenticationFailure
         else {
-            return
+            return false
         }
 
         await emit(
@@ -296,6 +303,7 @@ public actor LowLatencyTranslationClient {
                 message: clientError.localizedDescription
             )
         )
+        return true
     }
 
     private func cancelPendingTranslation() {
