@@ -16,7 +16,10 @@ public actor LowLatencyTranslationClient {
     private static let finalDomainHint = """
     Natural spoken dialogue. Translate into concise, idiomatic Simplified Chinese. \
     Preserve the speaker's tone and implied subjects from context. Avoid literal, \
-    explanatory, or translation-like wording.
+    explanatory, or translation-like wording. Preserve meaningful interjections, \
+    hesitation, and sentence-final tone as natural Chinese particles such as 嗯、啊、\
+    呢、吧、嘛. Collapse accidental ASR repetition, and do not mechanically translate \
+    every Japanese filler or sentence-final particle.
     """
 
     private let asrClient: RealtimeASRClient
