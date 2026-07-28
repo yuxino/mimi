@@ -23,7 +23,7 @@ struct SubtitleOverlayView: View {
 
             VStack(spacing: 0) {
                 WindowDragArea()
-                    .frame(height: 18)
+                    .frame(height: 14)
                     .opacity(isHovering || model.showsOverlayControlsForUITesting ? 1 : 0)
 
                 if visibleRows.isEmpty {
@@ -41,7 +41,7 @@ struct SubtitleOverlayView: View {
                     )
                 }
             }
-            .padding(7)
+            .padding(5)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -71,7 +71,7 @@ struct SubtitleOverlayView: View {
             }
         }
         .onHover { isHovering = $0 }
-        .padding(8)
+        .padding(6)
     }
 
     private var visibleRows: [SubtitleRow] {
