@@ -3,6 +3,7 @@ import Foundation
 public enum QwenMTClientError: Error, LocalizedError, Equatable, Sendable {
     case missingAPIKey
     case invalidHTTPResponse
+    case requestTimedOut
     case requestFailed(statusCode: Int, message: String)
 
     public var errorDescription: String? {
@@ -11,6 +12,8 @@ public enum QwenMTClientError: Error, LocalizedError, Equatable, Sendable {
             "Add an Alibaba Cloud Model Studio API key in Settings."
         case .invalidHTTPResponse:
             "Qwen-MT returned an invalid HTTP response."
+        case .requestTimedOut:
+            "Qwen-MT took too long to respond."
         case let .requestFailed(statusCode, message):
             message.isEmpty ? "Qwen-MT request failed with HTTP \(statusCode)." : message
         }
@@ -22,7 +25,7 @@ public enum QwenMTClientError: Error, LocalizedError, Equatable, Sendable {
             statusCode == 401 || statusCode == 403
         case .missingAPIKey:
             true
-        case .invalidHTTPResponse:
+        case .invalidHTTPResponse, .requestTimedOut:
             false
         }
     }
@@ -36,6 +39,7 @@ public actor QwenMTClient {
     private let model: QwenMTModel
     private let domainHint: String?
     private let session: URLSession
+    private let streamingTimeout: Duration
 
     public init(
         workspaceID: String,
@@ -44,6 +48,7 @@ public actor QwenMTClient {
         targetLanguage: TargetLanguage = .simplifiedChinese,
         model: QwenMTModel = .lite,
         domainHint: String? = nil,
+        streamingTimeout: Duration = .seconds(8),
         session: URLSession = .shared
     ) throws {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -57,6 +62,7 @@ public actor QwenMTClient {
         self.targetLanguage = targetLanguage
         self.model = model
         self.domainHint = domainHint
+        self.streamingTimeout = streamingTimeout
         self.session = session
     }
 
@@ -91,7 +97,24 @@ public actor QwenMTClient {
             translationMemory: translationMemory
         )
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        let streamingRequest = request
+        let streamingSession = session
+        let timeout = streamingTimeout
 
+        return try await Self.withTimeout(timeout) {
+            try await Self.stream(
+                request: streamingRequest,
+                session: streamingSession,
+                onPartial: onPartial
+            )
+        }
+    }
+
+    private static func stream(
+        request: URLRequest,
+        session: URLSession,
+        onPartial: @escaping @Sendable (String) async -> Void
+    ) async throws -> String {
         let (bytes, response) = try await session.bytes(for: request)
         try Self.validate(response: response, errorData: Data())
 
@@ -121,6 +144,27 @@ public actor QwenMTClient {
             throw QwenMTProtocolError.missingTranslation
         }
         return trimmedTranslation
+    }
+
+    private static func withTimeout<T: Sendable>(
+        _ timeout: Duration,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw QwenMTClientError.requestTimedOut
+            }
+
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else {
+                throw CancellationError()
+            }
+            return result
+        }
     }
 
     private func makeRequest(
