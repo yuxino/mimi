@@ -96,10 +96,14 @@ private struct MimiReplay {
             let source = SourceLanguage(
                 rawValue: environment["MIMI_SOURCE_LANGUAGE"] ?? "auto"
             ) ?? .automatic
+            let target = TargetLanguage(
+                rawValue: environment["MIMI_TARGET_LANGUAGE"] ?? "zh"
+            ) ?? .simplifiedChinese
             let configuration = try LiveTranslationConfiguration(
                 workspaceID: workspaceID,
                 apiKey: apiKey,
                 sourceLanguage: source,
+                targetLanguage: target,
                 translationMode: .lowLatency
             ).validated()
             let pcm = try loadPCM16Mono16k(

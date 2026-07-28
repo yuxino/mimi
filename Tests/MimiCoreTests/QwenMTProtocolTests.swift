@@ -134,6 +134,13 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(content, "今天")
         try expectEqual(terminalContent, nil)
     }
+
+    runner.run("Qwen-MT timeout has a useful error message") {
+        try expectEqual(
+            QwenMTClientError.requestTimedOut.localizedDescription,
+            "Qwen-MT took too long to respond."
+        )
+    }
 }
 
 private func mtJSONObject(_ data: Data) throws -> [String: Any] {
