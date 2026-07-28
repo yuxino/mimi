@@ -21,6 +21,17 @@ Macで再生中の音声を聞き取り、英語・日本語・韓国語を、�
 
 字幕ウィンドウは、移動・サイズ変更・固定ができます。いま話している言葉ははっきりと、少し前の会話は静かに薄く表示されます。
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/mimi-game-ja.png" alt="ストーリーゲームにリアルタイム字幕を表示するmimi"></td>
+    <td width="50%"><img src="docs/images/mimi-live-ja.png" alt="ライブ配信にリアルタイム字幕を表示するmimi"></td>
+  </tr>
+  <tr>
+    <td align="center">外国語のストーリーゲームを楽しむ</td>
+    <td align="center">ライブ配信をリアルタイムで楽しむ</td>
+  </tr>
+</table>
+
 ## はじめる
 
 1. [Releases](https://github.com/yuxino/mimi/releases/latest)から最新版をダウンロード

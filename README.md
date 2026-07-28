@@ -21,6 +21,17 @@ mimi，日语里“耳朵”的意思。
 
 字幕窗可以移动、缩放和锁定。当前对白保持清楚，刚刚说过的内容会慢慢淡去。
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/mimi-game.png" alt="mimi 为剧情游戏显示实时字幕"></td>
+    <td width="50%"><img src="docs/images/mimi-live.png" alt="mimi 为直播显示实时字幕"></td>
+  </tr>
+  <tr>
+    <td align="center">玩没有中文字幕的游戏</td>
+    <td align="center">听懂正在发生的直播</td>
+  </tr>
+</table>
+
 ## 开始使用
 
 1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载最新版
