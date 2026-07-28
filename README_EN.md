@@ -27,7 +27,7 @@ Move, resize, or lock the subtitle window. The current line stays clear while ea
 2. Add your Alibaba Cloud Model Studio Workspace ID and API key
 3. Play a video and select **Start Listening**
 
-mimi understands English, Japanese, and Korean. Let it detect what is playing, then choose Simplified Chinese, English, or Japanese for your subtitles.
+mimi understands English, Japanese, and Korean. Let it detect what is playing, then show the original words or translate them into Simplified Chinese, English, or Japanese.
 
 > mimi is not yet notarized by Apple. If macOS blocks the first launch, open System Settings → Privacy & Security and select **Open Anyway**.
 

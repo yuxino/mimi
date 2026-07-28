@@ -42,6 +42,7 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
 }
 
 public enum TargetLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
+    case original = "original"
     case simplifiedChinese = "zh"
     case english = "en"
     case japanese = "ja"
@@ -50,6 +51,8 @@ public enum TargetLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
 
     public var displayName: String {
         switch self {
+        case .original:
+            "原文（不翻译）"
         case .simplifiedChinese:
             "简体中文"
         case .english:
@@ -61,6 +64,8 @@ public enum TargetLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
 
     public var qwenMTName: String {
         switch self {
+        case .original:
+            ""
         case .simplifiedChinese:
             "Chinese"
         case .english:
@@ -68,6 +73,10 @@ public enum TargetLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
         case .japanese:
             "Japanese"
         }
+    }
+
+    public var translatesAudio: Bool {
+        self != .original
     }
 }
 

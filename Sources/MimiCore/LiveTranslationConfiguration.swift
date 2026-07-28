@@ -25,7 +25,9 @@ public struct LiveTranslationConfiguration: Equatable, Sendable {
     public var translationMode: TranslationMode
 
     public var effectiveTranslationMode: TranslationMode {
-        sourceLanguage == .automatic ? .lowLatency : translationMode
+        sourceLanguage == .automatic || !targetLanguage.translatesAudio
+            ? .lowLatency
+            : translationMode
     }
 
     public init(
