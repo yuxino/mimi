@@ -19,6 +19,19 @@ mimi 听的是 Mac 正在播放的声音。无论内容来自浏览器、播放�
 
 当前一句始终清楚，刚刚说过的话逐渐淡去。字幕窗可以放在顺眼的位置；调好大小，锁住，它就不再挡住鼠标。
 
+## 想看的，尽管打开
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/mimi-anime-city.png" alt="mimi 翻译都市日常番"></td>
+    <td width="50%"><img src="docs/images/mimi-anime-fantasy.png" alt="mimi 翻译幻想动画"></td>
+  </tr>
+</table>
+
+番剧、动画电影、访谈或课程，mimi 不挑播放器，也不要求浏览器插件。
+
+![mimi 翻译电影访谈](docs/images/mimi-interview.png)
+
 ## 开始使用
 
 1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载最新版
