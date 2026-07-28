@@ -1,32 +1,16 @@
-![mimi: Watch it now. Don't wait for subtitles.](docs/images/mimi-product-header-en.png)
-
 <div align="center">
+  <img src="Resources/Assets/mimi-cat.png" width="96" alt="mimi">
+  <h1>mimi</h1>
+  <p>Live Chinese subtitles on Mac</p>
   <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
   · <a href="README.md">简体中文</a>
 </div>
 
-## Press play. The subtitles follow.
+![mimi showing live Chinese subtitles over anime](docs/images/mimi-anime-train.png)
 
-No subtitle files. No translation window. No pausing every time a line gets away from you.
+mimi listens to audio playing on your Mac and translates Japanese, English, or Korean into Simplified Chinese. It works with browsers, media players, and desktop apps.
 
-mimi moves with the dialogue. A line appears as it is spoken, then settles into place as the sentence becomes clear. Pauses and tone stay part of it.
-
-The current line stays clear while earlier dialogue fades back. Put the subtitles where they feel right, lock the window, and keep watching.
-
-![The mimi subtitle experience](docs/images/mimi-experience-board-en.png)
-
-## The next episode starts now
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/mimi-anime-city.png" alt="mimi translating a slice-of-life anime"></td>
-    <td width="50%"><img src="docs/images/mimi-anime-fantasy.png" alt="mimi translating a fantasy anime"></td>
-  </tr>
-</table>
-
-Anime, films, and interviews work in the browser or player you already use.
-
-![mimi translating a film interview](docs/images/mimi-interview.png)
+Move, resize, or lock the subtitle window. The current line stays clear while earlier dialogue gently fades back.
 
 ## Get started
 
