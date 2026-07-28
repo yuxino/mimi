@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 import MimiCore
 
@@ -11,6 +11,8 @@ private struct Metrics: Encodable {
     let translationDrafts: Int
     let translationFinals: Int
     let longestEventGap: Double
+    let sourceFinalTexts: [String]
+    let translationFinalTexts: [String]
 }
 
 private actor Recorder {
@@ -24,6 +26,8 @@ private actor Recorder {
     private var finalCount = 0
     private var previous: Double?
     private var longestGap = 0.0
+    private var sourceFinalTexts: [String] = []
+    private var translationFinalTexts: [String] = []
 
     init() {
         start = clock.now
@@ -40,12 +44,15 @@ private actor Recorder {
         case .sourceDraft:
             sourceCount += 1
             firstSource = firstSource ?? now
+        case let .sourceFinal(text, _):
+            sourceFinalTexts.append(text)
         case let .translationDraft(text) where !text.isEmpty:
             draftCount += 1
             firstDraft = firstDraft ?? now
-        case .translationFinal:
+        case let .translationFinal(text):
             finalCount += 1
             firstFinal = firstFinal ?? now
+            translationFinalTexts.append(text)
         default:
             break
         }
@@ -60,7 +67,9 @@ private actor Recorder {
             sourceDrafts: sourceCount,
             translationDrafts: draftCount,
             translationFinals: finalCount,
-            longestEventGap: longestGap
+            longestEventGap: longestGap,
+            sourceFinalTexts: sourceFinalTexts,
+            translationFinalTexts: translationFinalTexts
         )
     }
 
@@ -148,16 +157,15 @@ private struct MimiReplay {
             throw ReplayError.audioConversionFailed
         }
 
-        var provided = false
+        let inputProvider = ReplayAudioInputProvider(buffer: input)
         var conversionError: NSError?
         _ = converter.convert(to: output, error: &conversionError) { _, status in
-            guard !provided else {
+            guard let buffer = inputProvider.take() else {
                 status.pointee = .endOfStream
                 return nil
             }
-            provided = true
             status.pointee = .haveData
-            return input
+            return buffer
         }
         if let conversionError {
             throw conversionError
@@ -168,6 +176,22 @@ private struct MimiReplay {
         return PCM16Encoder.encode(
             channels: [Array(UnsafeBufferPointer(start: channel, count: Int(output.frameLength)))]
         )
+    }
+}
+
+private final class ReplayAudioInputProvider: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffer: AVAudioPCMBuffer?
+
+    init(buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+    }
+
+    func take() -> AVAudioPCMBuffer? {
+        lock.lock()
+        defer { lock.unlock() }
+        defer { buffer = nil }
+        return buffer
     }
 }
 
