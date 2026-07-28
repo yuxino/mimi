@@ -38,19 +38,25 @@ struct SubtitleOverlayView: View {
                 .stroke(.white.opacity(0.09), lineWidth: 1)
         }
         .overlay(alignment: .topTrailing) {
-            if !settings.isOverlayLocked && isHovering {
-                Button {
-                    model.showSettings()
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.52))
-                        .padding(7)
-                        .background(.black.opacity(0.3), in: Circle())
+            if !settings.isOverlayLocked
+                && (isHovering || model.showsOverlayControlsForUITesting) {
+                HStack(spacing: 6) {
+                    if hasSubtitleContent {
+                        OverlayControlButton(
+                            systemImage: "eraser.fill",
+                            label: "Clear subtitles"
+                        ) {
+                            model.clearSubtitles()
+                        }
+                    }
+
+                    OverlayControlButton(
+                        systemImage: "gearshape.fill",
+                        label: "Open mimi Settings"
+                    ) {
+                        model.showSettings()
+                    }
                 }
-                .buttonStyle(.plain)
-                .help("Open mimi Settings")
-                .accessibilityLabel("Open mimi Settings")
                 .padding(12)
             }
         }
@@ -71,6 +77,13 @@ struct SubtitleOverlayView: View {
         return Array(rows.suffix(5))
     }
 
+    private var hasSubtitleContent: Bool {
+        let subtitles = model.state.subtitles
+        return !subtitles.source.text.isEmpty
+            || !subtitles.translation.text.isEmpty
+            || !subtitles.history.isEmpty
+    }
+
     private var emptyStateText: String {
         switch model.state.status {
         case .connecting:
@@ -89,6 +102,25 @@ struct SubtitleOverlayView: View {
     private var emptyStateColor: Color {
         if case .error = model.state.status { return .red.opacity(0.9) }
         return .white.opacity(0.5)
+    }
+}
+
+private struct OverlayControlButton: View {
+    let systemImage: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.58))
+                .frame(width: 26, height: 26)
+                .background(.black.opacity(0.34), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .accessibilityLabel(label)
     }
 }
 

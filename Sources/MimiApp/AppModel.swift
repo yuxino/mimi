@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     private let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
 
     var isActive: Bool { state.status.isActive }
+    var showsOverlayControlsForUITesting: Bool { isUITestMode }
 
     func attachOverlay(settings: AppSettings) {
         guard overlayController == nil else { return }
@@ -275,12 +276,14 @@ final class AppModel: ObservableObject {
 
     private func seedUITestSubtitles() {
         controller.didConnect()
-        controller.handle(.sourceFinal(text: "The subtitles should stay readable.", language: "en"))
-        controller.handle(.translationFinal("字幕应该一直清楚、稳定。"))
-        controller.handle(.sourceFinal(text: "Short lines should not disappear.", language: "en"))
-        controller.handle(.translationFinal("短句不会一闪而过。"))
-        controller.handle(.sourceDraft(text: "The newest line stays at the bottom.", language: "en"))
-        controller.handle(.translationDraft("最新一句会留在底部，继续说话时也不会乱跳。"))
+        controller.handle(.sourceFinal(text: "今日は映画について話しましょう。", language: "ja"))
+        controller.handle(.translationFinal("今天咱们聊聊电影吧。"))
+        controller.handle(.sourceFinal(text: "主人公は駅で友達を待っています。", language: "ja"))
+        controller.handle(.translationFinal("主人公正在车站等朋友呢。"))
+        controller.handle(.sourceFinal(text: "電車が遅れているので少し心配になりました。", language: "ja"))
+        controller.handle(.translationFinal("因为电车晚点了，我有点担心。"))
+        controller.handle(.sourceDraft(text: "でも、もうすぐ来るでしょう。", language: "ja"))
+        controller.handle(.translationDraft("嗯……不过应该很快就到了吧。"))
         publishState()
     }
 }
