@@ -8,7 +8,11 @@ enum KeychainStoreError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .unexpectedStatus(status):
-            "Keychain operation failed (\(status))."
+            if let message = SecCopyErrorMessageString(status, nil) as String? {
+                "Keychain: \(message)"
+            } else {
+                "Keychain operation failed (\(status))."
+            }
         case .invalidData:
             "The saved API key could not be read from Keychain."
         }
@@ -16,11 +20,24 @@ enum KeychainStoreError: LocalizedError {
 }
 
 struct KeychainStore {
-    private let service = "app.yuxino.mimi.translation"
+    private let service = "app.yuxino.mimi.credentials.v2"
+    private let legacyService = "app.yuxino.mimi.translation"
     private let account = "dashscope-api-key"
 
     func loadAPIKey() throws -> String? {
-        var query = baseQuery
+        if let value = try loadAPIKey(service: service) {
+            return value
+        }
+
+        guard let legacyValue = try loadAPIKey(service: legacyService) else {
+            return nil
+        }
+        try saveAPIKey(legacyValue)
+        return legacyValue
+    }
+
+    private func loadAPIKey(service: String) throws -> String? {
+        var query = baseQuery(service: service)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -45,7 +62,7 @@ struct KeychainStore {
         let data = Data(apiKey.utf8)
         let attributes = [kSecValueData as String: data]
         let updateStatus = SecItemUpdate(
-            baseQuery as CFDictionary,
+            baseQuery(service: service) as CFDictionary,
             attributes as CFDictionary
         )
 
@@ -56,7 +73,7 @@ struct KeychainStore {
             throw KeychainStoreError.unexpectedStatus(updateStatus)
         }
 
-        var addQuery = baseQuery
+        var addQuery = baseQuery(service: service)
         addQuery[kSecValueData as String] = data
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
@@ -64,7 +81,7 @@ struct KeychainStore {
         }
     }
 
-    private var baseQuery: [String: Any] {
+    private func baseQuery(service: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

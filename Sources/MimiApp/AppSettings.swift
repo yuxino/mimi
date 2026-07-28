@@ -9,6 +9,7 @@ final class AppSettings: ObservableObject {
     @Published var translationMode: TranslationMode
     @Published var fontSize: Double
     @Published var isOverlayLocked: Bool
+    @Published private(set) var credentialLoadError: String?
 
     private enum Keys {
         static let workspaceID = "workspaceID"
@@ -22,6 +23,7 @@ final class AppSettings: ObservableObject {
     private let keychain: KeychainStore
 
     init(defaults: UserDefaults = .standard, keychain: KeychainStore = KeychainStore()) {
+        let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
         self.defaults = defaults
         self.keychain = keychain
         self.workspaceID = defaults.string(forKey: Keys.workspaceID) ?? ""
@@ -39,7 +41,18 @@ final class AppSettings: ObservableObject {
         let storedFontSize = defaults.double(forKey: Keys.fontSize)
         self.fontSize = storedFontSize > 0 ? storedFontSize : 30
         self.isOverlayLocked = defaults.object(forKey: Keys.overlayLocked) as? Bool ?? false
-        self.apiKey = (try? keychain.loadAPIKey()) ?? ""
+        if isUITestMode {
+            self.apiKey = ""
+            self.credentialLoadError = nil
+        } else {
+            do {
+                self.apiKey = try keychain.loadAPIKey() ?? ""
+                self.credentialLoadError = nil
+            } catch {
+                self.apiKey = ""
+                self.credentialLoadError = error.localizedDescription
+            }
+        }
     }
 
     func configuration() throws -> LiveTranslationConfiguration {
@@ -57,7 +70,24 @@ final class AppSettings: ObservableObject {
         apiKey = configuration.apiKey
         translationMode = configuration.effectiveTranslationMode
         try keychain.saveAPIKey(configuration.apiKey)
+        credentialLoadError = nil
         persistPreferences()
+    }
+
+    @discardableResult
+    func reloadAPIKey() throws -> Bool {
+        do {
+            guard let storedKey = try keychain.loadAPIKey(), !storedKey.isEmpty else {
+                credentialLoadError = nil
+                return false
+            }
+            apiKey = storedKey
+            credentialLoadError = nil
+            return true
+        } catch {
+            credentialLoadError = error.localizedDescription
+            throw error
+        }
     }
 
     func persistPreferences() {

@@ -28,6 +28,39 @@ func runSubtitleReducerTests(using runner: inout TestRunner) {
         )
     }
 
+    runner.run("a new draft keeps confirmed history available") {
+        var reducer = SubtitleReducer()
+        reducer.apply(.sourceFinal("Hello."))
+        reducer.apply(.translationFinal("你好。"))
+        reducer.apply(.sourceDraft("How are"))
+        reducer.apply(.translationDraft("你最近"))
+
+        try expectEqual(
+            reducer.snapshot.history,
+            [SubtitlePair(source: "Hello.", translation: "你好。")]
+        )
+        try expectEqual(
+            reducer.snapshot.translation,
+            SubtitleLine(text: "你最近", isFinal: false)
+        )
+    }
+
+    runner.run("a delayed final translation stays paired with its original source") {
+        var reducer = SubtitleReducer()
+        reducer.apply(.sourceFinal("First sentence."))
+        reducer.apply(.sourceDraft("Second sentence"))
+        reducer.apply(.translationFinal("第一句。"))
+
+        try expectEqual(
+            reducer.snapshot.history,
+            [SubtitlePair(source: "First sentence.", translation: "第一句。")]
+        )
+        try expectEqual(
+            reducer.snapshot.source,
+            SubtitleLine(text: "Second sentence", isFinal: false)
+        )
+    }
+
     runner.run("duplicate finals do not duplicate history") {
         var reducer = SubtitleReducer()
         reducer.apply(.sourceFinal("Hello."))

@@ -9,10 +9,12 @@ final class AppModel: ObservableObject {
     private var controller = TranslationSessionController()
     private let audioCapture = SystemAudioCapture()
     private var client: TranslationClient?
+    private var audioSender: AudioSendPipeline?
     private var overlayController: OverlayWindowController?
     private var settingsController: SettingsWindowController?
     private weak var activeSettings: AppSettings?
     private var healthCheckTask: Task<Void, Never>?
+    private var recoveryTask: Task<Void, Never>?
     private var isRecovering = false
     private let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
 
@@ -25,12 +27,21 @@ final class AppModel: ObservableObject {
         overlayController?.updateLocked(settings.isOverlayLocked)
 
         if isUITestMode {
+            seedUITestSubtitles()
             overlayController?.show()
         }
     }
 
     func start(using settings: AppSettings) async {
         guard !state.status.isActive else { return }
+
+        do {
+            try settings.save()
+        } catch {
+            controller.didFail(error.localizedDescription)
+            publishState()
+            return
+        }
 
         activeSettings = settings
         _ = await establishSession(using: settings, clearSubtitles: true)
@@ -58,11 +69,18 @@ final class AppModel: ObservableObject {
                 await self?.receive(event)
             }
 
-            try await audioCapture.start(
-                onAudio: { [weak newClient] data in
-                    Task {
-                        try? await newClient?.sendAudio(data)
+            let newAudioSender = AudioSendPipeline(
+                client: newClient,
+                onError: { [weak self] error in
+                    Task { @MainActor in
+                        await self?.handleAudioTransportFailure(error)
                     }
+                }
+            )
+            audioSender = newAudioSender
+            try await audioCapture.start(
+                onAudio: { [weak newAudioSender] data in
+                    newAudioSender?.enqueue(data)
                 },
                 onError: { [weak self] error in
                     Task { @MainActor in
@@ -78,6 +96,8 @@ final class AppModel: ObservableObject {
             startHealthChecks()
             return true
         } catch {
+            audioSender?.stop()
+            audioSender = nil
             await audioCapture.stop()
             await client?.disconnect()
             client = nil
@@ -94,10 +114,14 @@ final class AppModel: ObservableObject {
         guard state.status.isActive || client != nil else { return }
 
         stopHealthChecks()
+        recoveryTask?.cancel()
+        recoveryTask = nil
         activeSettings = nil
         isRecovering = false
         controller.beginStopping()
         publishState()
+        audioSender?.stop()
+        audioSender = nil
         await audioCapture.stop()
         await client?.finish()
         client = nil
@@ -126,9 +150,7 @@ final class AppModel: ObservableObject {
         if case let .error(code, message) = event, code == "transport_error" {
             controller.beginConnecting()
             publishState()
-            Task { @MainActor [weak self] in
-                await self?.recoverConnection(after: message)
-            }
+            queueRecovery(after: message)
             return
         }
 
@@ -137,6 +159,10 @@ final class AppModel: ObservableObject {
 
         if case .error = event {
             stopHealthChecks()
+            recoveryTask?.cancel()
+            recoveryTask = nil
+            audioSender?.stop()
+            audioSender = nil
             await audioCapture.stop()
             await client?.disconnect()
             client = nil
@@ -146,12 +172,19 @@ final class AppModel: ObservableObject {
 
     private func handleCaptureFailure(_ error: Error) async {
         stopHealthChecks()
+        audioSender?.stop()
+        audioSender = nil
         await audioCapture.stop()
         await client?.disconnect()
         client = nil
         activeSettings = nil
         controller.didFail(error.localizedDescription)
         publishState()
+    }
+
+    private func handleAudioTransportFailure(_ error: Error) async {
+        guard !isRecovering, activeSettings != nil else { return }
+        queueRecovery(after: error.localizedDescription)
     }
 
     private func startHealthChecks() {
@@ -180,8 +213,16 @@ final class AppModel: ObservableObject {
             return true
         } catch {
             healthCheckTask = nil
-            await recoverConnection(after: error.localizedDescription)
+            queueRecovery(after: error.localizedDescription)
             return false
+        }
+    }
+
+    private func queueRecovery(after failureMessage: String) {
+        guard recoveryTask == nil, activeSettings != nil else { return }
+        recoveryTask = Task { @MainActor [weak self] in
+            await self?.recoverConnection(after: failureMessage)
+            self?.recoveryTask = nil
         }
     }
 
@@ -192,19 +233,34 @@ final class AppModel: ObservableObject {
         stopHealthChecks()
         controller.beginConnecting()
         publishState()
+        audioSender?.stop()
+        audioSender = nil
         await audioCapture.stop()
         await client?.disconnect()
         client = nil
 
         var recovered = false
         for delay in [1, 2] {
-            try? await Task.sleep(for: .seconds(delay))
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                isRecovering = false
+                return
+            }
+            guard !Task.isCancelled, activeSettings != nil else {
+                isRecovering = false
+                return
+            }
             recovered = await establishSession(using: settings, clearSubtitles: false)
             if recovered {
                 break
             }
         }
 
+        guard !Task.isCancelled, activeSettings != nil else {
+            isRecovering = false
+            return
+        }
         if !recovered {
             activeSettings = nil
             controller.didFail(failureMessage)
@@ -215,5 +271,88 @@ final class AppModel: ObservableObject {
 
     private func publishState() {
         state = controller.state
+    }
+
+    private func seedUITestSubtitles() {
+        controller.didConnect()
+        controller.handle(.sourceFinal(text: "The subtitles should stay readable.", language: "en"))
+        controller.handle(.translationFinal("字幕应该一直清楚、稳定。"))
+        controller.handle(.sourceFinal(text: "Short lines should not disappear.", language: "en"))
+        controller.handle(.translationFinal("短句不会一闪而过。"))
+        controller.handle(.sourceDraft(text: "The newest line stays at the bottom.", language: "en"))
+        controller.handle(.translationDraft("最新一句会留在底部，继续说话时也不会乱跳。"))
+        publishState()
+    }
+}
+
+private enum AudioSendPipelineError: LocalizedError {
+    case fellBehind
+
+    var errorDescription: String? {
+        "Audio streaming fell behind. mimi is reconnecting."
+    }
+}
+
+private final class AudioSendPipeline: @unchecked Sendable {
+    private let continuation: AsyncStream<Data>.Continuation
+    private let onError: @Sendable (Error) -> Void
+    private let lock = NSLock()
+    private var worker: Task<Void, Never>?
+    private var hasFailed = false
+
+    init(
+        client: TranslationClient,
+        onError: @escaping @Sendable (Error) -> Void
+    ) {
+        let pair = AsyncStream<Data>.makeStream(
+            bufferingPolicy: .bufferingNewest(20)
+        )
+        self.continuation = pair.continuation
+        self.onError = onError
+        self.worker = Task {
+            do {
+                for await data in pair.stream {
+                    try Task.checkCancellation()
+                    try await client.sendAudio(data)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                self.failOnce(with: error)
+            }
+        }
+    }
+
+    func enqueue(_ data: Data) {
+        switch continuation.yield(data) {
+        case .enqueued:
+            break
+        case .dropped:
+            failOnce(with: AudioSendPipelineError.fellBehind)
+        case .terminated:
+            break
+        @unknown default:
+            failOnce(with: AudioSendPipelineError.fellBehind)
+        }
+    }
+
+    func stop() {
+        lock.withLock {
+            hasFailed = true
+        }
+        continuation.finish()
+        worker?.cancel()
+        worker = nil
+    }
+
+    private func failOnce(with error: Error) {
+        let shouldReport = lock.withLock {
+            guard !hasFailed else { return false }
+            hasFailed = true
+            return true
+        }
+        guard shouldReport else { return }
+        continuation.finish()
+        onError(error)
     }
 }

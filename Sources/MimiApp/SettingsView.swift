@@ -17,6 +17,18 @@ struct SettingsView: View {
                 Text("Credentials stay on this Mac. The API key is stored in Keychain.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if let credentialError = settings.credentialLoadError {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Couldn’t read the saved API key: \(credentialError)")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        Button("Try Again") {
+                            reloadAPIKey()
+                        }
+                        .buttonStyle(.link)
+                    }
+                }
             }
 
             Section("Subtitles") {
@@ -69,7 +81,7 @@ struct SettingsView: View {
                         if model.isActive {
                             await model.stop()
                         } else {
-                            await model.start(using: settings)
+                            startListening()
                         }
                     }
                 } label: {
@@ -97,6 +109,11 @@ struct SettingsView: View {
             settings.persistPreferences()
             model.setOverlayLocked(settings.isOverlayLocked)
         }
+        .onAppear {
+            if settings.apiKey.isEmpty, settings.credentialLoadError != nil {
+                reloadAPIKey()
+            }
+        }
     }
 
     private func save() {
@@ -105,6 +122,33 @@ struct SettingsView: View {
             model.setOverlayLocked(settings.isOverlayLocked)
             isError = false
             message = "Saved"
+        } catch {
+            isError = true
+            message = error.localizedDescription
+        }
+    }
+
+    private func startListening() {
+        model.setOverlayLocked(settings.isOverlayLocked)
+        isError = false
+        message = "Starting…"
+        Task {
+            await model.start(using: settings)
+            if case let .error(errorMessage) = model.state.status {
+                isError = true
+                message = errorMessage
+            } else {
+                message = "Saved"
+            }
+        }
+    }
+
+    private func reloadAPIKey() {
+        do {
+            if try settings.reloadAPIKey() {
+                isError = false
+                message = "API key restored"
+            }
         } catch {
             isError = true
             message = error.localizedDescription

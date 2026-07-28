@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .library(name: "MimiCore", targets: ["MimiCore"]),
         .executable(name: "mimi", targets: ["MimiApp"]),
+        .executable(name: "mimi-replay", targets: ["MimiReplay"]),
         .executable(name: "mimi-core-tests", targets: ["MimiCoreTests"])
     ],
     targets: [
@@ -29,6 +30,13 @@ let package = Package(
             name: "MimiCoreTests",
             dependencies: ["MimiCore"],
             path: "Tests/MimiCoreTests"
+        ),
+        .executableTarget(
+            name: "MimiReplay",
+            dependencies: ["MimiCore"],
+            linkerSettings: [
+                .linkedFramework("AVFoundation")
+            ]
         )
     ]
 )

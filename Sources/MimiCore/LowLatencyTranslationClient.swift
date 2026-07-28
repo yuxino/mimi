@@ -6,8 +6,13 @@ public actor LowLatencyTranslationClient {
     private let asrClient: RealtimeASRClient
     private let mtClient: QwenMTClient
     private var eventHandler: EventHandler?
-    private var translationTask: Task<Void, Never>?
-    private var translationGeneration = 0
+    private var draftWorker: Task<Void, Never>?
+    private var preemptionTask: Task<Void, Never>?
+    private var pendingDraft: String?
+    private var finalQueue: [String] = []
+    private var finalWorker: Task<Void, Never>?
+    private var draftTranslationGeneration = 0
+    private var draftWorkerGeneration = 0
     private var lastDraftText = ""
 
     public init(
@@ -32,6 +37,7 @@ public actor LowLatencyTranslationClient {
 
     public func connect(onEvent: @escaping EventHandler) async throws {
         cancelPendingTranslation()
+        cancelFinalTranslations()
         eventHandler = onEvent
 
         try await asrClient.connect { [weak self] event in
@@ -48,15 +54,15 @@ public actor LowLatencyTranslationClient {
     }
 
     public func finish() async {
-        translationTask?.cancel()
-        translationTask = nil
+        cancelPendingTranslation()
+        cancelFinalTranslations()
         await asrClient.finish()
         eventHandler = nil
-        lastDraftText = ""
     }
 
     public func disconnect() async {
         cancelPendingTranslation()
+        cancelFinalTranslations()
         eventHandler = nil
         await asrClient.disconnect()
     }
@@ -70,7 +76,7 @@ public actor LowLatencyTranslationClient {
                 await emit(.translationDraft(""))
             }
             await emit(.sourceDraft(text: text, language: language))
-            scheduleDraftTranslation(for: text)
+            enqueueDraftTranslation(text)
 
         case let .sourceFinal(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,67 +85,120 @@ public actor LowLatencyTranslationClient {
                 await emit(.translationDraft(""))
             }
             await emit(.sourceFinal(text: text, language: language))
-            await translateFinal(text)
+            enqueueFinalTranslation(text)
 
         default:
             await emit(event)
         }
     }
 
-    private func scheduleDraftTranslation(for text: String) {
+    private func enqueueDraftTranslation(_ text: String) {
         guard text != lastDraftText else { return }
         lastDraftText = text
-        translationGeneration += 1
-        let generation = translationGeneration
+        pendingDraft = text
 
-        translationTask?.cancel()
-        translationTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(200))
-            } catch {
-                return
-            }
+        guard draftWorker != nil else {
+            startDraftWorker()
+            return
+        }
+
+        guard preemptionTask == nil else { return }
+        preemptionTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }
-            await self?.translateDraft(text, generation: generation)
+            await self?.preemptStaleDraft()
         }
     }
 
-    private func translateDraft(_ text: String, generation: Int) async {
-        do {
-            let translation = try await mtClient.translateStreaming(text) { [weak self] partial in
-                await self?.emitStreamingDraft(partial, generation: generation)
-            }
-            guard generation == translationGeneration, !Task.isCancelled else { return }
-            await emit(.translationDraft(translation))
-        } catch is CancellationError {
-            return
-        } catch {
-            await handleTranslationFailure(error)
+    private func startDraftWorker() {
+        draftWorkerGeneration += 1
+        let workerGeneration = draftWorkerGeneration
+        draftWorker = Task { [weak self] in
+            await self?.runDraftWorker(workerGeneration: workerGeneration)
         }
     }
 
-    private func translateFinal(_ text: String) async {
-        translationGeneration += 1
-        let generation = translationGeneration
-        translationTask?.cancel()
-        translationTask = nil
-        lastDraftText = ""
+    private func runDraftWorker(workerGeneration: Int) async {
+        while !Task.isCancelled, let text = pendingDraft {
+            pendingDraft = nil
+            preemptionTask?.cancel()
+            preemptionTask = nil
+            draftTranslationGeneration += 1
+            let generation = draftTranslationGeneration
 
-        do {
-            let translation = try await mtClient.translateStreaming(text) { [weak self] partial in
-                await self?.emitStreamingDraft(partial, generation: generation)
+            do {
+                let translation = try await mtClient.translateStreaming(text) { _ in }
+                guard !Task.isCancelled else { break }
+                await emitStreamingDraft(translation, generation: generation)
+            } catch is CancellationError {
+                break
+            } catch {
+                await handleTranslationFailure(error)
             }
-            guard generation == translationGeneration else { return }
-            await emit(.translationFinal(translation))
-        } catch is CancellationError {
-            return
-        } catch {
-            await handleTranslationFailure(error)
+        }
+
+        guard workerGeneration == draftWorkerGeneration else { return }
+        draftWorker = nil
+        preemptionTask?.cancel()
+        preemptionTask = nil
+
+        if pendingDraft != nil {
+            startDraftWorker()
+        }
+    }
+
+    private func preemptStaleDraft() {
+        preemptionTask = nil
+        guard pendingDraft != nil else { return }
+        draftTranslationGeneration += 1
+        draftWorker?.cancel()
+        startDraftWorker()
+    }
+
+    private func enqueueFinalTranslation(_ text: String) {
+        cancelPendingTranslation()
+        finalQueue.append(text)
+        guard finalWorker == nil else { return }
+
+        finalWorker = Task { [weak self] in
+            await self?.runFinalWorker()
+        }
+    }
+
+    private func runFinalWorker() async {
+        while !Task.isCancelled, !finalQueue.isEmpty {
+            let text = finalQueue.removeFirst()
+            do {
+                let translation = try await mtClient.translateStreaming(text) { _ in }
+                guard !Task.isCancelled else { return }
+                await emit(.translationFinal(translation))
+            } catch is CancellationError {
+                return
+            } catch {
+                await handleTranslationFailure(error)
+            }
+        }
+
+        finalWorker = nil
+        if !finalQueue.isEmpty {
+            enqueueFinalTranslationWorker()
+        }
+    }
+
+    private func enqueueFinalTranslationWorker() {
+        guard finalWorker == nil else { return }
+        finalWorker = Task { [weak self] in
+            await self?.runFinalWorker()
         }
     }
 
     private func emitStreamingDraft(_ translation: String, generation: Int) async {
-        guard generation == translationGeneration else { return }
+        guard
+            generation == draftTranslationGeneration,
+            pendingDraft == nil
+        else {
+            return
+        }
         await emit(.translationDraft(translation))
     }
 
@@ -160,10 +219,19 @@ public actor LowLatencyTranslationClient {
     }
 
     private func cancelPendingTranslation() {
-        translationGeneration += 1
-        translationTask?.cancel()
-        translationTask = nil
+        draftTranslationGeneration += 1
+        draftWorker?.cancel()
+        draftWorker = nil
+        preemptionTask?.cancel()
+        preemptionTask = nil
+        pendingDraft = nil
         lastDraftText = ""
+    }
+
+    private func cancelFinalTranslations() {
+        finalWorker?.cancel()
+        finalWorker = nil
+        finalQueue = []
     }
 
     private func emit(_ event: LiveTranslateServerEvent) async {
