@@ -12,7 +12,7 @@
 
 `mimi` 会听取 Mac 正在播放的系统音频，把英语、日语或韩语实时翻译成简体中文，并显示在始终置顶的字幕窗口中。它不需要浏览器扩展，不使用麦克风；安装后填入阿里云百炼的 Workspace ID 和 API Key 就能开始。
 
-> 当前为早期版本。应用尚未经过 Apple 公证，需要从源码构建。
+> 当前为早期版本，应用尚未经过 Apple 公证。首次打开时需要在 macOS 中手动确认。
 
 ## 为什么是 mimi
 
@@ -26,13 +26,10 @@
 
 ## 三分钟开始
 
-### 1. 准备环境
+### 1. 准备配置
 
 - macOS 14 或更新版本
-- Xcode 16，或安装了 Swift 6 的 Xcode Command Line Tools
 - 阿里云百炼华北 2（北京）地域的 Workspace ID 和 API Key
-
-### 2. 获取阿里云配置
 
 1. 在阿里云百炼控制台选择 **华北 2（北京）**。
 2. 按[官方说明创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)，建议使用默认业务空间。
@@ -40,7 +37,25 @@
 
 Workspace ID 与 API Key 必须属于同一业务空间。API Key 会产生模型调用费用，请勿提交到 Issue、日志或截图中。
 
-### 3. 构建并打开
+### 2. 下载并打开
+
+1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载 `mimi-v0.1.0-macos.zip`。
+2. 解压并把 `mimi.app` 移到“应用程序”文件夹。
+3. 首次打开如果被 macOS 拦截，前往“系统设置 → 隐私与安全性”，点击“仍要打开”。
+
+首次打开后：
+
+1. 在设置中粘贴 Workspace ID 和 DashScope API Key。
+2. 点击 **Save**，再点击 **Start Listening**。
+3. 允许 macOS 的“屏幕与系统音频录制”权限。
+4. 如果系统要求重启应用，退出后重新打开 mimi。
+
+![mimi 配置界面](docs/images/mimi-settings.png)
+
+<details>
+<summary>从源码构建</summary>
+
+需要 Xcode 16，或安装了 Swift 6 的 Xcode Command Line Tools。
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
@@ -49,14 +64,7 @@ cd mimi
 open dist/mimi.app
 ```
 
-首次打开后：
-
-1. 在设置中粘贴 Workspace ID 和 DashScope API Key。
-2. 点击 **Save**，再点击 **Start Listening**。
-3. 允许 macOS 的“屏幕与系统音频录制”权限。
-4. 如果系统要求重启应用，退出后重新打开 `dist/mimi.app`。
-
-![mimi 配置界面](docs/images/mimi-settings.png)
+</details>
 
 ## 日常使用
 
