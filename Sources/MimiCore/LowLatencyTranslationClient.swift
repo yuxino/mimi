@@ -3,13 +3,32 @@ import Foundation
 public actor LowLatencyTranslationClient {
     public typealias EventHandler = @Sendable (LiveTranslateServerEvent) async -> Void
 
+    private struct TranslationRequest: Sendable {
+        let text: String
+        let detectedLanguage: SourceLanguage?
+    }
+
+    private struct TranslationMemoryEntry: Sendable {
+        let language: SourceLanguage?
+        let pair: QwenMTMemoryPair
+    }
+
+    private static let finalDomainHint = """
+    Natural spoken dialogue. Translate into concise, idiomatic Simplified Chinese. \
+    Preserve the speaker's tone and implied subjects from context. Avoid literal, \
+    explanatory, or translation-like wording.
+    """
+
     private let asrClient: RealtimeASRClient
-    private let mtClient: QwenMTClient
+    private let draftMTClient: QwenMTClient
+    private let finalMTClient: QwenMTClient
+    private let configuredSourceLanguage: SourceLanguage
     private var eventHandler: EventHandler?
     private var draftWorker: Task<Void, Never>?
     private var preemptionTask: Task<Void, Never>?
-    private var pendingDraft: String?
-    private var finalQueue: [String] = []
+    private var pendingDraft: TranslationRequest?
+    private var finalQueue: [TranslationRequest] = []
+    private var translationMemory: [TranslationMemoryEntry] = []
     private var finalWorker: Task<Void, Never>?
     private var draftTranslationGeneration = 0
     private var draftWorkerGeneration = 0
@@ -27,10 +46,20 @@ public actor LowLatencyTranslationClient {
             sourceLanguage: sourceLanguage,
             session: session
         )
-        self.mtClient = try QwenMTClient(
+        self.configuredSourceLanguage = sourceLanguage
+        self.draftMTClient = try QwenMTClient(
             workspaceID: workspaceID,
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
+            model: .lite,
+            session: session
+        )
+        self.finalMTClient = try QwenMTClient(
+            workspaceID: workspaceID,
+            apiKey: apiKey,
+            sourceLanguage: sourceLanguage,
+            model: .flash,
+            domainHint: Self.finalDomainHint,
             session: session
         )
     }
@@ -55,8 +84,9 @@ public actor LowLatencyTranslationClient {
 
     public func finish() async {
         cancelPendingTranslation()
-        cancelFinalTranslations()
         await asrClient.finish()
+        await waitForFinalTranslations(timeout: .seconds(5))
+        cancelFinalTranslations()
         eventHandler = nil
     }
 
@@ -76,7 +106,7 @@ public actor LowLatencyTranslationClient {
                 await emit(.translationDraft(""))
             }
             await emit(.sourceDraft(text: text, language: language))
-            enqueueDraftTranslation(text)
+            enqueueDraftTranslation(text, language: language)
 
         case let .sourceFinal(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -85,17 +115,20 @@ public actor LowLatencyTranslationClient {
                 await emit(.translationDraft(""))
             }
             await emit(.sourceFinal(text: text, language: language))
-            enqueueFinalTranslation(text)
+            enqueueFinalTranslation(text, language: language)
 
         default:
             await emit(event)
         }
     }
 
-    private func enqueueDraftTranslation(_ text: String) {
+    private func enqueueDraftTranslation(_ text: String, language: String?) {
         guard text != lastDraftText else { return }
         lastDraftText = text
-        pendingDraft = text
+        pendingDraft = TranslationRequest(
+            text: text,
+            detectedLanguage: resolvedSourceLanguage(language)
+        )
 
         guard draftWorker != nil else {
             startDraftWorker()
@@ -119,7 +152,7 @@ public actor LowLatencyTranslationClient {
     }
 
     private func runDraftWorker(workerGeneration: Int) async {
-        while !Task.isCancelled, let text = pendingDraft {
+        while !Task.isCancelled, let request = pendingDraft {
             pendingDraft = nil
             preemptionTask?.cancel()
             preemptionTask = nil
@@ -127,7 +160,10 @@ public actor LowLatencyTranslationClient {
             let generation = draftTranslationGeneration
 
             do {
-                let translation = try await mtClient.translateStreaming(text) { _ in }
+                let translation = try await draftMTClient.translateStreaming(
+                    request.text,
+                    sourceLanguageOverride: request.detectedLanguage
+                ) { _ in }
                 guard !Task.isCancelled else { break }
                 await emitStreamingDraft(translation, generation: generation)
             } catch is CancellationError {
@@ -155,9 +191,14 @@ public actor LowLatencyTranslationClient {
         startDraftWorker()
     }
 
-    private func enqueueFinalTranslation(_ text: String) {
+    private func enqueueFinalTranslation(_ text: String, language: String?) {
         cancelPendingTranslation()
-        finalQueue.append(text)
+        finalQueue.append(
+            TranslationRequest(
+                text: text,
+                detectedLanguage: resolvedSourceLanguage(language)
+            )
+        )
         guard finalWorker == nil else { return }
 
         finalWorker = Task { [weak self] in
@@ -167,11 +208,24 @@ public actor LowLatencyTranslationClient {
 
     private func runFinalWorker() async {
         while !Task.isCancelled, !finalQueue.isEmpty {
-            let text = finalQueue.removeFirst()
+            let request = finalQueue.removeFirst()
             do {
-                let translation = try await mtClient.translateStreaming(text) { _ in }
+                let recentMemory = translationMemory
+                    .filter { $0.language == request.detectedLanguage }
+                    .suffix(3)
+                    .map(\.pair)
+                let translation = try await finalMTClient.translateStreaming(
+                    request.text,
+                    sourceLanguageOverride: request.detectedLanguage,
+                    translationMemory: recentMemory
+                ) { _ in }
                 guard !Task.isCancelled else { return }
                 await emit(.translationFinal(translation))
+                remember(
+                    source: request.text,
+                    translation: translation,
+                    language: request.detectedLanguage
+                )
             } catch is CancellationError {
                 return
             } catch {
@@ -232,6 +286,39 @@ public actor LowLatencyTranslationClient {
         finalWorker?.cancel()
         finalWorker = nil
         finalQueue = []
+        translationMemory = []
+    }
+
+    private func waitForFinalTranslations(timeout: Duration) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while finalWorker != nil, clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    private func resolvedSourceLanguage(_ reportedLanguage: String?) -> SourceLanguage? {
+        guard configuredSourceLanguage == .automatic else { return nil }
+        return SourceLanguage(detectedLanguage: reportedLanguage)
+    }
+
+    private func remember(
+        source: String,
+        translation: String,
+        language: SourceLanguage?
+    ) {
+        translationMemory.removeAll {
+            $0.language == language && $0.pair.source == source
+        }
+        translationMemory.append(
+            TranslationMemoryEntry(
+                language: language,
+                pair: QwenMTMemoryPair(source: source, target: translation)
+            )
+        )
+        if translationMemory.count > 9 {
+            translationMemory.removeFirst(translationMemory.count - 9)
+        }
     }
 
     private func emit(_ event: LiveTranslateServerEvent) async {

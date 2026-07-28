@@ -38,6 +38,38 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(json["stream"] as? Bool, true)
     }
 
+    runner.run("Qwen-MT final request selects Flash with natural-dialogue guidance") {
+        let data = try QwenMTRequestEncoder.request(
+            text: "今日は晴れです。",
+            sourceLanguage: .japanese,
+            model: .flash,
+            stream: true,
+            domainHint: "Natural spoken dialogue."
+        )
+        let json = try mtJSONObject(data)
+        let options = try mtRequiredObject(json["translation_options"])
+
+        try expectEqual(json["model"] as? String, "qwen-mt-flash")
+        try expectEqual(options["domains"] as? String, "Natural spoken dialogue.")
+    }
+
+    runner.run("Qwen-MT request includes bounded translation memory pairs") {
+        let data = try QwenMTRequestEncoder.request(
+            text: "そうなんですね。",
+            sourceLanguage: .japanese,
+            model: .flash,
+            translationMemory: [
+                .init(source: "今日は晴れです。", target: "今天天气很好。")
+            ]
+        )
+        let json = try mtJSONObject(data)
+        let options = try mtRequiredObject(json["translation_options"])
+        let memory = options["tm_list"] as? [[String: Any]]
+
+        try expectEqual(memory?.first?["source"] as? String, "今日は晴れです。")
+        try expectEqual(memory?.first?["target"] as? String, "今天天气很好。")
+    }
+
     runner.run("Qwen-MT automatically detects the source language") {
         let data = try QwenMTRequestEncoder.request(
             text: "Hello, world.",
@@ -47,6 +79,13 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         let options = try mtRequiredObject(json["translation_options"])
 
         try expectEqual(options["source_lang"] as? String, "auto")
+    }
+
+    runner.run("ASR language reports resolve to explicit Qwen-MT languages") {
+        try expectEqual(SourceLanguage(detectedLanguage: "ja-JP"), .japanese)
+        try expectEqual(SourceLanguage(detectedLanguage: "English"), .english)
+        try expectEqual(SourceLanguage(detectedLanguage: "ko"), .korean)
+        try expectEqual(SourceLanguage(detectedLanguage: "unknown"), nil)
     }
 
     runner.run("Qwen-MT response decodes and trims translated content") {

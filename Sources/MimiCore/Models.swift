@@ -8,6 +8,25 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
 
     public var id: String { rawValue }
 
+    public init?(detectedLanguage: String?) {
+        guard let normalized = detectedLanguage?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        else {
+            return nil
+        }
+
+        if normalized == "ja" || normalized.hasPrefix("ja-") || normalized == "japanese" {
+            self = .japanese
+        } else if normalized == "en" || normalized.hasPrefix("en-") || normalized == "english" {
+            self = .english
+        } else if normalized == "ko" || normalized.hasPrefix("ko-") || normalized == "korean" {
+            self = .korean
+        } else {
+            return nil
+        }
+    }
+
     public var displayName: String {
         switch self {
         case .automatic:

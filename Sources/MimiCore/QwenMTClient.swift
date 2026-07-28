@@ -32,12 +32,16 @@ public actor QwenMTClient {
     private let endpoint: QwenMTEndpoint
     private let apiKey: String
     private let sourceLanguage: SourceLanguage
+    private let model: QwenMTModel
+    private let domainHint: String?
     private let session: URLSession
 
     public init(
         workspaceID: String,
         apiKey: String,
         sourceLanguage: SourceLanguage,
+        model: QwenMTModel = .lite,
+        domainHint: String? = nil,
         session: URLSession = .shared
     ) throws {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -48,11 +52,22 @@ public actor QwenMTClient {
         self.endpoint = try QwenMTEndpoint(workspaceID: workspaceID)
         self.apiKey = trimmedKey
         self.sourceLanguage = sourceLanguage
+        self.model = model
+        self.domainHint = domainHint
         self.session = session
     }
 
-    public func translate(_ text: String) async throws -> String {
-        let request = try makeRequest(text: text, stream: false)
+    public func translate(
+        _ text: String,
+        sourceLanguageOverride: SourceLanguage? = nil,
+        translationMemory: [QwenMTMemoryPair] = []
+    ) async throws -> String {
+        let request = try makeRequest(
+            text: text,
+            sourceLanguageOverride: sourceLanguageOverride,
+            stream: false,
+            translationMemory: translationMemory
+        )
 
         let (data, response) = try await session.data(for: request)
         try Self.validate(response: response, errorData: data)
@@ -62,9 +77,16 @@ public actor QwenMTClient {
 
     public func translateStreaming(
         _ text: String,
+        sourceLanguageOverride: SourceLanguage? = nil,
+        translationMemory: [QwenMTMemoryPair] = [],
         onPartial: @escaping @Sendable (String) async -> Void
     ) async throws -> String {
-        var request = try makeRequest(text: text, stream: true)
+        var request = try makeRequest(
+            text: text,
+            sourceLanguageOverride: sourceLanguageOverride,
+            stream: true,
+            translationMemory: translationMemory
+        )
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
 
         let (bytes, response) = try await session.bytes(for: request)
@@ -98,7 +120,12 @@ public actor QwenMTClient {
         return trimmedTranslation
     }
 
-    private func makeRequest(text: String, stream: Bool) throws -> URLRequest {
+    private func makeRequest(
+        text: String,
+        sourceLanguageOverride: SourceLanguage?,
+        stream: Bool,
+        translationMemory: [QwenMTMemoryPair]
+    ) throws -> URLRequest {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
             throw QwenMTProtocolError.missingTranslation
@@ -111,8 +138,11 @@ public actor QwenMTClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try QwenMTRequestEncoder.request(
             text: trimmedText,
-            sourceLanguage: sourceLanguage,
-            stream: stream
+            sourceLanguage: sourceLanguageOverride ?? sourceLanguage,
+            model: model,
+            stream: stream,
+            domainHint: domainHint,
+            translationMemory: translationMemory
         )
         return request
     }
