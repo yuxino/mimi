@@ -32,6 +32,13 @@ struct SettingsView: View {
             }
 
             Section("Subtitles") {
+                Picker("Subtitle language", selection: $settings.targetLanguage) {
+                    ForEach(TargetLanguage.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                .disabled(model.isActive)
+
                 Picker("Translation mode", selection: $settings.translationMode) {
                     ForEach(TranslationMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)

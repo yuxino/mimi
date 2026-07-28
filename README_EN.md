@@ -1,10 +1,11 @@
 <div align="center">
   <img src="Resources/Assets/mimi-cat.png" width="88" alt="mimi">
   <h1>mimi</h1>
-  <p>Live Chinese subtitles on Mac</p>
+  <p>Live translated subtitles on Mac</p>
   <p>
     <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
     · <a href="README.md">简体中文</a>
+    · <a href="README_JA.md">日本語</a>
   </p>
 </div>
 
@@ -14,7 +15,9 @@
 
 <br>
 
-mimi listens to audio playing on your Mac and translates Japanese, English, or Korean into Simplified Chinese. It works with browsers, media players, and desktop apps.
+mimi is Japanese for “ears.”
+
+It listens to audio playing on your Mac and turns Japanese, English, or Korean into live subtitles in Simplified Chinese, English, or Japanese. It works with browsers, media players, and desktop apps.
 
 Move, resize, or lock the subtitle window. The current line stays clear while earlier dialogue gently fades back.
 
@@ -24,7 +27,7 @@ Move, resize, or lock the subtitle window. The current line stays clear while ea
 2. Add your Alibaba Cloud Model Studio Workspace ID and API key
 3. Play a video and select **Start Listening**
 
-mimi translates English, Japanese, and Korean into Simplified Chinese. Let it detect the language or choose one yourself.
+mimi understands English, Japanese, and Korean. Let it detect what is playing, then choose Simplified Chinese, English, or Japanese for your subtitles.
 
 > mimi is not yet notarized by Apple. If macOS blocks the first launch, open System Settings → Privacy & Security and select **Open Anyway**.
 

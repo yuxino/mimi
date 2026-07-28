@@ -21,6 +21,7 @@ public actor TranslationClient {
                     workspaceID: configuration.workspaceID,
                     apiKey: configuration.apiKey,
                     sourceLanguage: configuration.sourceLanguage,
+                    targetLanguage: configuration.targetLanguage,
                     session: session
                 )
             )
@@ -30,6 +31,7 @@ public actor TranslationClient {
                     workspaceID: configuration.workspaceID,
                     apiKey: configuration.apiKey,
                     sourceLanguage: configuration.sourceLanguage,
+                    targetLanguage: configuration.targetLanguage,
                     session: session
                 )
             )

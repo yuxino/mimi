@@ -24,6 +24,13 @@ func runConfigurationTests(using runner: inout TestRunner) {
         )
 
         try expectEqual(configuration.translationMode, .lowLatency)
+        try expectEqual(configuration.targetLanguage, .simplifiedChinese)
+    }
+
+    runner.run("target languages expose service codes and display names") {
+        try expectEqual(TargetLanguage.simplifiedChinese.rawValue, "zh")
+        try expectEqual(TargetLanguage.english.qwenMTName, "English")
+        try expectEqual(TargetLanguage.japanese.displayName, "日本語")
     }
 
     runner.run("configuration preserves an explicit translation mode") {
@@ -31,11 +38,13 @@ func runConfigurationTests(using runner: inout TestRunner) {
             workspaceID: "ws-abc123",
             apiKey: "sk-test",
             sourceLanguage: .japanese,
+            targetLanguage: .english,
             translationMode: .highQuality
         )
         let validated = try configuration.validated()
 
         try expectEqual(validated.translationMode, .highQuality)
+        try expectEqual(validated.targetLanguage, .english)
     }
 
     runner.run("configuration requires an API key") {

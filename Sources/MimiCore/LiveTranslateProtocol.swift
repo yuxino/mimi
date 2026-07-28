@@ -34,7 +34,7 @@ public struct LiveTranslateEndpoint: Equatable, Sendable {
 public enum LiveTranslateRequestEncoder {
     public static func sessionUpdate(
         sourceLanguage: SourceLanguage,
-        targetLanguage: String = "zh",
+        targetLanguage: TargetLanguage = .simplifiedChinese,
         hotwords: [String: String] = [:],
         eventID: String? = nil
     ) throws -> Data {
@@ -49,7 +49,7 @@ public enum LiveTranslateRequestEncoder {
                     language: sourceLanguage.rawValue
                 ),
                 translation: .init(
-                    language: targetLanguage,
+                    language: targetLanguage.rawValue,
                     corpus: hotwords.isEmpty ? nil : .init(phrases: hotwords)
                 )
             )

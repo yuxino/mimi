@@ -21,6 +21,7 @@ public struct LiveTranslationConfiguration: Equatable, Sendable {
     public var workspaceID: String
     public var apiKey: String
     public var sourceLanguage: SourceLanguage
+    public var targetLanguage: TargetLanguage
     public var translationMode: TranslationMode
 
     public var effectiveTranslationMode: TranslationMode {
@@ -31,11 +32,13 @@ public struct LiveTranslationConfiguration: Equatable, Sendable {
         workspaceID: String,
         apiKey: String,
         sourceLanguage: SourceLanguage,
+        targetLanguage: TargetLanguage = .simplifiedChinese,
         translationMode: TranslationMode = .lowLatency
     ) {
         self.workspaceID = workspaceID
         self.apiKey = apiKey
         self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
         self.translationMode = translationMode
     }
 
@@ -63,6 +66,7 @@ public struct LiveTranslationConfiguration: Equatable, Sendable {
             workspaceID: workspaceID,
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             translationMode: translationMode
         )
     }
