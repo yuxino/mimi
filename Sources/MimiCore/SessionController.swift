@@ -3,10 +3,16 @@ import Foundation
 public struct TranslationSessionState: Equatable, Sendable {
     public var status: SessionStatus
     public var subtitles: SubtitleSnapshot
+    public var detectedLanguage: DetectedLanguage?
 
-    public init(status: SessionStatus = .idle, subtitles: SubtitleSnapshot = .empty) {
+    public init(
+        status: SessionStatus = .idle,
+        subtitles: SubtitleSnapshot = .empty,
+        detectedLanguage: DetectedLanguage? = nil
+    ) {
         self.status = status
         self.subtitles = subtitles
+        self.detectedLanguage = detectedLanguage
     }
 }
 
@@ -22,6 +28,7 @@ public struct TranslationSessionController: Sendable {
 
     public mutating func beginConnecting() {
         state.status = .connecting
+        state.detectedLanguage = nil
     }
 
     public mutating func didConnect() {
@@ -56,9 +63,11 @@ public struct TranslationSessionController: Sendable {
             break
         case .sessionUpdated:
             didConnect()
-        case let .sourceDraft(text, _):
+        case let .sourceDraft(text, language):
+            updateDetectedLanguage(language)
             subtitleReducer.apply(.sourceDraft(text))
-        case let .sourceFinal(text, _):
+        case let .sourceFinal(text, language):
+            updateDetectedLanguage(language)
             subtitleReducer.apply(.sourceFinal(text))
         case let .translationDraft(text):
             subtitleReducer.apply(.translationDraft(text))
@@ -73,5 +82,11 @@ public struct TranslationSessionController: Sendable {
         }
 
         state.subtitles = subtitleReducer.snapshot
+    }
+
+    private mutating func updateDetectedLanguage(_ reportedLanguage: String?) {
+        if let language = DetectedLanguage(reportedLanguage: reportedLanguage) {
+            state.detectedLanguage = language
+        }
     }
 }
