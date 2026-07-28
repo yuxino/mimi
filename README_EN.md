@@ -10,7 +10,7 @@
 
 <br>
 
-![mimi showing live Chinese subtitles over anime](docs/images/mimi-anime-train.png)
+![mimi showing live subtitles over anime](docs/images/mimi-anime-train-en.png)
 
 <br>
 
