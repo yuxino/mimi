@@ -4,8 +4,10 @@ import SwiftUI
 @MainActor
 final class OverlayWindowController {
     private static let frameAutosaveName = "mimi.subtitle-overlay"
-    private static let defaultSize = NSSize(width: 640, height: 190)
-    private static let minimumSize = NSSize(width: 460, height: 150)
+    private static let frameLayoutVersionKey = "subtitleOverlayFrameLayoutVersion"
+    private static let frameLayoutVersion = 2
+    private static let defaultSize = NSSize(width: 640, height: 136)
+    private static let minimumSize = NSSize(width: 460, height: 112)
     private static let maximumSize = NSSize(width: 960, height: 360)
 
     private let panel: NSPanel
@@ -44,6 +46,11 @@ final class OverlayWindowController {
 
         panel.setFrameAutosaveName(Self.frameAutosaveName)
         var restoredFrame = panel.frame
+        let defaults = UserDefaults.standard
+        if defaults.integer(forKey: Self.frameLayoutVersionKey) < Self.frameLayoutVersion,
+           restoredFrame.height <= 220 {
+            restoredFrame.size.height = Self.defaultSize.height
+        }
         restoredFrame.size.width = restoredFrame.width > panel.maxSize.width
             ? Self.defaultSize.width
             : max(restoredFrame.width, panel.minSize.width)
@@ -59,6 +66,7 @@ final class OverlayWindowController {
             display: false
         )
         panel.saveFrame(usingName: Self.frameAutosaveName)
+        defaults.set(Self.frameLayoutVersion, forKey: Self.frameLayoutVersionKey)
     }
 
     func show() {
