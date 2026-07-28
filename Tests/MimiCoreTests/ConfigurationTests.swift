@@ -35,6 +35,21 @@ func runConfigurationTests(using runner: inout TestRunner) {
         try expectEqual(TargetLanguage.japanese.displayName, "日本語")
     }
 
+    runner.run("detected languages normalize service codes for display") {
+        try expectEqual(
+            DetectedLanguage(reportedLanguage: "ja-JP")?.displayName,
+            "日本語"
+        )
+        try expectEqual(
+            DetectedLanguage(reportedLanguage: "yue")?.displayName,
+            "粤语"
+        )
+        try expectEqual(
+            DetectedLanguage(reportedLanguage: "unknown")?.displayName,
+            "UNKNOWN"
+        )
+    }
+
     runner.run("original subtitles force the recognition-only backend") {
         let configuration = LiveTranslationConfiguration(
             workspaceID: "workspace",

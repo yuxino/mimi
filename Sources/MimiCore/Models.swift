@@ -41,6 +41,83 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
     }
 }
 
+public struct DetectedLanguage: Equatable, Sendable {
+    public let code: String
+
+    public init?(reportedLanguage: String?) {
+        guard
+            let normalized = reportedLanguage?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased(),
+            !normalized.isEmpty
+        else {
+            return nil
+        }
+        self.code = normalized.split(separator: "-").first.map(String.init) ?? normalized
+    }
+
+    public var displayName: String {
+        switch code {
+        case "zh", "chinese", "mandarin":
+            "中文"
+        case "yue", "cantonese":
+            "粤语"
+        case "en", "english":
+            "English"
+        case "ja", "japanese":
+            "日本語"
+        case "ko", "korean":
+            "한국어"
+        case "de":
+            "Deutsch"
+        case "fr":
+            "Français"
+        case "es":
+            "Español"
+        case "pt":
+            "Português"
+        case "it":
+            "Italiano"
+        case "ru":
+            "Русский"
+        case "ar":
+            "العربية"
+        case "hi":
+            "हिन्दी"
+        case "id":
+            "Bahasa Indonesia"
+        case "th":
+            "ไทย"
+        case "tr":
+            "Türkçe"
+        case "vi":
+            "Tiếng Việt"
+        case "uk":
+            "Українська"
+        case "cs":
+            "Čeština"
+        case "da":
+            "Dansk"
+        case "tl", "fil":
+            "Filipino"
+        case "fi":
+            "Suomi"
+        case "is":
+            "Íslenska"
+        case "ms":
+            "Bahasa Melayu"
+        case "no", "nb":
+            "Norsk"
+        case "pl":
+            "Polski"
+        case "sv":
+            "Svenska"
+        default:
+            code.uppercased()
+        }
+    }
+}
+
 public enum TargetLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
     case original = "original"
     case simplifiedChinese = "zh"
