@@ -1,15 +1,9 @@
-<div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="112" alt="mimi">
-  <h1>mimi</h1>
-  <p><strong>Watch it now. Don't wait for subtitles.</strong></p>
-  <p>mimi adds live Chinese subtitles to foreign-language video playing on your Mac.</p>
-  <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
-    · <a href="README.md">简体中文</a>
-  </p>
-</div>
+![mimi: Watch it now. Don't wait for subtitles.](docs/images/mimi-product-header-en.png)
 
-![mimi translating dialogue over a video](docs/images/mimi-product-hero.png)
+<div align="center">
+  <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
+  · <a href="README.md">简体中文</a>
+</div>
 
 ## Press play. The subtitles follow.
 
@@ -18,6 +12,8 @@ No subtitle files. No translation window. No pausing every time a line gets away
 mimi moves with the dialogue. A line appears as it is spoken, then settles into place as the sentence becomes clear. Pauses and tone stay part of it.
 
 The current line stays clear while earlier dialogue fades back. Put the subtitles where they feel right, lock the window, and keep watching.
+
+![The mimi subtitle experience](docs/images/mimi-experience-board-en.png)
 
 ## The next episode starts now
 

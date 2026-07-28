@@ -1,15 +1,9 @@
-<div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="112" alt="mimi">
-  <h1>mimi</h1>
-  <p><strong>想看的内容，不必再等字幕。</strong></p>
-  <p>mimi 为 Mac 上正在播放的外语视频，实时加上中文字幕。</p>
-  <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
-    · <a href="README_EN.md">English</a>
-  </p>
-</div>
+![mimi：想看的内容，不必再等字幕](docs/images/mimi-product-header.png)
 
-![mimi 实时翻译视频中的对话](docs/images/mimi-product-hero.png)
+<div align="center">
+  <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
+  · <a href="README_EN.md">English</a>
+</div>
 
 ## 打开视频，就有字幕
 
@@ -18,6 +12,8 @@
 mimi 跟着对白往前走。正在说的内容先出现，听清之后再补完整；人物的停顿和语气，也留在字幕里。
 
 当前一句始终清楚，刚刚说过的话慢慢淡去。把字幕放到顺眼的位置，锁住，然后继续看。
+
+![mimi 字幕体验](docs/images/mimi-experience-board.png)
 
 ## 下一集，现在就看
 
