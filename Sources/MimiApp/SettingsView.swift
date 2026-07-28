@@ -44,7 +44,11 @@ struct SettingsView: View {
                         Text(mode.displayName).tag(mode)
                     }
                 }
-                .disabled(model.isActive || settings.sourceLanguage == .automatic)
+                .disabled(
+                    model.isActive
+                        || settings.sourceLanguage == .automatic
+                        || !settings.targetLanguage.translatesAudio
+                )
 
                 Text(translationModeHelp)
                     .font(.caption)
@@ -178,8 +182,12 @@ struct SettingsView: View {
     }
 
     private var translationModeHelp: String {
+        if !settings.targetLanguage.translatesAudio {
+            return "只显示识别到的原文，不会发送翻译请求。"
+        }
+
         if settings.sourceLanguage == .automatic {
-            return "自动判断每段语音的语言，并使用低延迟模式翻译成中文。"
+            return "自动判断每段语音的语言，并使用低延迟模式翻译。"
         }
 
         return switch settings.translationMode {

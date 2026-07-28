@@ -28,9 +28,23 @@ func runConfigurationTests(using runner: inout TestRunner) {
     }
 
     runner.run("target languages expose service codes and display names") {
+        try expectEqual(TargetLanguage.original.translatesAudio, false)
+        try expectEqual(TargetLanguage.original.displayName, "原文（不翻译）")
         try expectEqual(TargetLanguage.simplifiedChinese.rawValue, "zh")
         try expectEqual(TargetLanguage.english.qwenMTName, "English")
         try expectEqual(TargetLanguage.japanese.displayName, "日本語")
+    }
+
+    runner.run("original subtitles force the recognition-only backend") {
+        let configuration = LiveTranslationConfiguration(
+            workspaceID: "workspace",
+            apiKey: "secret",
+            sourceLanguage: .japanese,
+            targetLanguage: .original,
+            translationMode: .highQuality
+        )
+
+        try expectEqual(configuration.effectiveTranslationMode, .lowLatency)
     }
 
     runner.run("configuration preserves an explicit translation mode") {

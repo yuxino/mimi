@@ -17,6 +17,7 @@ public actor LowLatencyTranslationClient {
     private let draftMTClient: QwenMTClient
     private let finalMTClient: QwenMTClient
     private let configuredSourceLanguage: SourceLanguage
+    private let translatesAudio: Bool
     private var eventHandler: EventHandler?
     private var draftWorker: Task<Void, Never>?
     private var preemptionTask: Task<Void, Never>?
@@ -42,6 +43,7 @@ public actor LowLatencyTranslationClient {
             session: session
         )
         self.configuredSourceLanguage = sourceLanguage
+        self.translatesAudio = targetLanguage.translatesAudio
         self.draftMTClient = try QwenMTClient(
             workspaceID: workspaceID,
             apiKey: apiKey,
@@ -63,6 +65,8 @@ public actor LowLatencyTranslationClient {
 
     private static func finalDomainHint(for targetLanguage: TargetLanguage) -> String {
         let languageGuidance = switch targetLanguage {
+        case .original:
+            ""
         case .simplifiedChinese:
             "Use concise, idiomatic Simplified Chinese and preserve natural particles such as 嗯、啊、呢、吧、嘛."
         case .english:
@@ -120,6 +124,10 @@ public actor LowLatencyTranslationClient {
                 await emit(.translationDraft(""))
             }
             await emit(.sourceDraft(text: text, language: language))
+            guard translatesAudio else {
+                await emit(.translationDraft(text))
+                return
+            }
             enqueueDraftTranslation(text, language: language)
 
         case let .sourceFinal(text, language):
@@ -129,6 +137,10 @@ public actor LowLatencyTranslationClient {
                 await emit(.translationDraft(""))
             }
             await emit(.sourceFinal(text: text, language: language))
+            guard translatesAudio else {
+                await emit(.translationFinal(text))
+                return
+            }
             enqueueFinalTranslation(text, language: language)
 
         default:
