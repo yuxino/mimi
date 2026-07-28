@@ -21,6 +21,17 @@ It listens to audio playing on your Mac and turns Japanese, English, or Korean i
 
 Move, resize, or lock the subtitle window. The current line stays clear while earlier dialogue gently fades back.
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/mimi-game-en.png" alt="mimi showing live subtitles over a story game"></td>
+    <td width="50%"><img src="docs/images/mimi-live-en.png" alt="mimi showing live subtitles over a livestream"></td>
+  </tr>
+  <tr>
+    <td align="center">Play story-rich games in another language</td>
+    <td align="center">Follow livestreams as they happen</td>
+  </tr>
+</table>
+
 ## Get started
 
 1. Download the latest version from [Releases](https://github.com/yuxino/mimi/releases/latest)
