@@ -49,6 +49,19 @@ func runLiveTranslateProtocolTests(using runner: inout TestRunner) {
         try expectEqual(json["audio"] as? String, "AH//")
     }
 
+    runner.run("session update selects an explicit target language") {
+        let data = try LiveTranslateRequestEncoder.sessionUpdate(
+            sourceLanguage: .english,
+            targetLanguage: .japanese,
+            eventID: "event-target"
+        )
+        let json = try jsonObject(data)
+        let session = try requiredObject(json["session"])
+        let translation = try requiredObject(session["translation"])
+
+        try expectEqual(translation["language"] as? String, "ja")
+    }
+
     runner.run("finish event uses the documented type") {
         let json = try jsonObject(try LiveTranslateRequestEncoder.finish(eventID: "event-finish"))
         try expectEqual(json["type"] as? String, "session.finish")

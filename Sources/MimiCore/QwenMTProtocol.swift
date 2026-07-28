@@ -60,7 +60,7 @@ public enum QwenMTRequestEncoder {
     public static func request(
         text: String,
         sourceLanguage: SourceLanguage,
-        targetLanguage: String = "Chinese",
+        targetLanguage: TargetLanguage = .simplifiedChinese,
         model: QwenMTModel = .lite,
         stream: Bool = false,
         domainHint: String? = nil,
@@ -72,7 +72,7 @@ public enum QwenMTRequestEncoder {
             stream: stream,
             translationOptions: .init(
                 sourceLanguage: sourceLanguage.qwenMTName,
-                targetLanguage: targetLanguage,
+                targetLanguage: targetLanguage.qwenMTName,
                 domains: domainHint,
                 translationMemory: translationMemory.isEmpty ? nil : translationMemory
             )
