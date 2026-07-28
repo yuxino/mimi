@@ -53,6 +53,22 @@ func runSessionControllerTests(using runner: inout TestRunner) {
         try expectEqual(controller.state.subtitles, .empty)
     }
 
+    runner.run("stopping ignores flushed tail subtitles") {
+        var controller = TranslationSessionController()
+        controller.didConnect()
+        controller.handle(.sourceFinal(text: "Last real line.", language: "en"))
+        controller.handle(.translationFinal("最后一句正常字幕。"))
+        let subtitlesBeforeStopping = controller.state.subtitles
+
+        controller.beginStopping()
+        controller.handle(.sourceFinal(text: "Translation mode ended.", language: "en"))
+        controller.handle(.translationFinal("翻译模式已结束。"))
+        controller.handle(.sessionFinished)
+
+        try expectEqual(controller.state.status, .stopping)
+        try expectEqual(controller.state.subtitles, subtitlesBeforeStopping)
+    }
+
     runner.run("unknown server events leave state unchanged") {
         var controller = TranslationSessionController()
         let before = controller.state
