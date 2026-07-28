@@ -19,6 +19,19 @@ It starts before the speaker finishes, then quietly refines the line as more of 
 
 The current line stays clear while earlier dialogue gently recedes. Place the subtitle window where it feels right, resize it, and lock it. Once locked, it stays out of the way of your mouse.
 
+## Play what you want
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/mimi-anime-city.png" alt="mimi translating a slice-of-life anime"></td>
+    <td width="50%"><img src="docs/images/mimi-anime-fantasy.png" alt="mimi translating a fantasy anime"></td>
+  </tr>
+</table>
+
+Anime, films, interviews, or courses—mimi works with the player you already use and needs no browser extension.
+
+![mimi translating a film interview](docs/images/mimi-interview.png)
+
 ## Get started
 
 1. Download the latest version from [Releases](https://github.com/yuxino/mimi/releases/latest)
