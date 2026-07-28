@@ -6,6 +6,8 @@
     <string>en</string>
     <key>CFBundleDisplayName</key>
     <string>mimi</string>
+    <key>CFBundleIconFile</key>
+    <string>mimi.icns</string>
     <key>CFBundleExecutable</key>
     <string>mimi</string>
     <key>CFBundleIdentifier</key>

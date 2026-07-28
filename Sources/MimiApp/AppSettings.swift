@@ -26,7 +26,9 @@ final class AppSettings: ObservableObject {
         let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
         self.defaults = defaults
         self.keychain = keychain
-        self.workspaceID = defaults.string(forKey: Keys.workspaceID) ?? ""
+        self.workspaceID = isUITestMode
+            ? "your-workspace-id"
+            : defaults.string(forKey: Keys.workspaceID) ?? ""
         let storedSourceLanguage = SourceLanguage(
             rawValue: defaults.string(forKey: Keys.sourceLanguage) ?? "auto"
         ) ?? .automatic
@@ -42,7 +44,7 @@ final class AppSettings: ObservableObject {
         self.fontSize = storedFontSize > 0 ? storedFontSize : 30
         self.isOverlayLocked = defaults.object(forKey: Keys.overlayLocked) as? Bool ?? false
         if isUITestMode {
-            self.apiKey = ""
+            self.apiKey = "sk-demo-not-a-real-key"
             self.credentialLoadError = nil
         } else {
             do {

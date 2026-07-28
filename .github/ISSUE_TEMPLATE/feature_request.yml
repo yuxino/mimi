@@ -1,0 +1,24 @@
+name: Feature request
+description: 提议新的使用体验 / Propose a product improvement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景 / Use case
+      description: 你在什么情况下需要它？What are you trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: 理想体验 / Desired experience
+      description: 从用户角度描述结果，不必先设计实现。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已尝试的方法 / Alternatives tried
+
