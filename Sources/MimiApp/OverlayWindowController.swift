@@ -1,4 +1,5 @@
 import AppKit
+import MimiCore
 import SwiftUI
 
 enum SubtitleOverlayMetrics {
@@ -16,7 +17,7 @@ final class OverlayWindowController {
     private static let minimumSize = SubtitleOverlayMetrics.minimumSize
     private static let maximumSize = SubtitleOverlayMetrics.maximumSize
 
-    private let panel: NSPanel
+    private let panel: ResizeCursorPanel
 
     init(model: AppModel, settings: AppSettings) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -25,7 +26,7 @@ final class OverlayWindowController {
             y: screenFrame.minY + 72
         )
 
-        panel = NSPanel(
+        panel = ResizeCursorPanel(
             contentRect: NSRect(origin: origin, size: Self.defaultSize),
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
@@ -72,6 +73,7 @@ final class OverlayWindowController {
         )
         panel.saveFrame(usingName: Self.frameAutosaveName)
         defaults.set(Self.frameLayoutVersion, forKey: Self.frameLayoutVersionKey)
+
     }
 
     func show() {
@@ -79,10 +81,14 @@ final class OverlayWindowController {
     }
 
     func hide() {
+        panel.resetResizeCursor()
         panel.orderOut(nil)
     }
 
     func updateLocked(_ locked: Bool) {
+        if locked {
+            panel.resetResizeCursor()
+        }
         panel.ignoresMouseEvents = locked
         panel.isMovable = !locked
         panel.isMovableByWindowBackground = false
@@ -104,29 +110,134 @@ final class OverlayWindowController {
     }
 }
 
+private final class ResizeCursorPanel: NSPanel {
+    private let hitTester = OverlayResizeHitTester()
+    private var cursorState = OverlayResizeCursorState()
+    nonisolated(unsafe) private var localMouseMonitor: Any?
+    nonisolated(unsafe) private var globalMouseMonitor: Any?
+    private var cursorRefreshIsScheduled = false
+
+    override init(
+        contentRect: NSRect,
+        styleMask style: NSWindow.StyleMask,
+        backing backingStoreType: NSWindow.BackingStoreType,
+        defer flag: Bool
+    ) {
+        super.init(
+            contentRect: contentRect,
+            styleMask: style,
+            backing: backingStoreType,
+            defer: flag
+        )
+        installMouseMonitors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("ResizeCursorPanel does not support NSCoding")
+    }
+
+    deinit {
+        if let localMouseMonitor {
+            NSEvent.removeMonitor(localMouseMonitor)
+        }
+        if let globalMouseMonitor {
+            NSEvent.removeMonitor(globalMouseMonitor)
+        }
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        super.sendEvent(event)
+
+        switch event.type {
+        case .mouseMoved, .cursorUpdate:
+            updateResizeCursor(for: event)
+        case .mouseExited:
+            apply(cursorState.update(region: nil))
+        default:
+            break
+        }
+    }
+
+    func resetResizeCursor() {
+        apply(cursorState.update(region: nil))
+    }
+
+    private func updateResizeCursor(for event: NSEvent) {
+        guard let contentView else { return }
+        let point = contentView.convert(event.locationInWindow, from: nil)
+        apply(
+            cursorState.update(
+                region: hitTester.region(
+                    at: point,
+                    in: contentView.bounds,
+                    isFlipped: contentView.isFlipped
+                )
+            )
+        )
+    }
+
+    private func installMouseMonitors() {
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) {
+            [weak self] event in
+            self?.scheduleCursorRefresh()
+            return event
+        }
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) {
+            [weak self] _ in
+            Task { @MainActor in
+                self?.scheduleCursorRefresh()
+            }
+        }
+    }
+
+    private func scheduleCursorRefresh() {
+        guard isVisible, !ignoresMouseEvents else { return }
+        guard !cursorRefreshIsScheduled else { return }
+        cursorRefreshIsScheduled = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.cursorRefreshIsScheduled = false
+            self.refreshCursorAtCurrentMouseLocation()
+        }
+    }
+
+    private func refreshCursorAtCurrentMouseLocation() {
+        guard let contentView else { return }
+        let windowPoint = convertPoint(fromScreen: NSEvent.mouseLocation)
+        let contentPoint = contentView.convert(windowPoint, from: nil)
+        apply(
+            cursorState.update(
+                region: hitTester.region(
+                    at: contentPoint,
+                    in: contentView.bounds,
+                    isFlipped: contentView.isFlipped
+                )
+            )
+        )
+    }
+
+    private func apply(_ action: OverlayResizeCursorAction) {
+        switch action {
+        case let .set(region):
+            resizeCursor(for: region).set()
+        case .restoreDefault:
+            NSCursor.arrow.set()
+        case .none:
+            break
+        }
+    }
+}
+
 private final class ResizeCursorHostingView: NSHostingView<AnyView> {
-    private enum Region {
-        case top
-        case left
-        case bottom
-        case right
-        case topLeft
-        case topRight
-        case bottomLeft
-        case bottomRight
-    }
-
-    private struct CursorRegion {
-        let rect: NSRect
-        let region: Region
-    }
-
-    private static let edgeThickness: CGFloat = 14
-    private static let cornerSize: CGFloat = 24
-
+    private let hitTester = OverlayResizeHitTester()
     private var pointerTrackingArea: NSTrackingArea?
+    private var cursorState = OverlayResizeCursorState()
 
     override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
         if let pointerTrackingArea {
             removeTrackingArea(pointerTrackingArea)
         }
@@ -137,114 +248,109 @@ private final class ResizeCursorHostingView: NSHostingView<AnyView> {
                 .activeAlways,
                 .inVisibleRect,
                 .mouseEnteredAndExited,
-                .mouseMoved
+                .mouseMoved,
+                .cursorUpdate
             ],
             owner: self,
             userInfo: nil
         )
         addTrackingArea(area)
         pointerTrackingArea = area
-        super.updateTrackingAreas()
+    }
+
+    override func layout() {
+        super.layout()
+        window?.invalidateCursorRects(for: self)
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        let point = convert(event.locationInWindow, from: nil)
-        guard let region = cursorRegions.first(where: { $0.rect.contains(point) }) else {
-            return
-        }
-        cursor(for: region.region).set()
+        updateCursor(for: event)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        updateCursor(for: event)
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
-        NSCursor.arrow.set()
+        clearResizeCursorIfNeeded()
     }
 
     override func resetCursorRects() {
         super.resetCursorRects()
 
-        for region in cursorRegions {
-            addCursorRect(region.rect, cursor: cursor(for: region.region))
-        }
-    }
-
-    private var cursorRegions: [CursorRegion] {
-        let edge = Self.edgeThickness
-        let corner = Self.cornerSize
-        let width = bounds.width
-        let height = bounds.height
-
-        return [
-            CursorRegion(
-                rect: NSRect(x: 0, y: height - corner, width: corner, height: corner),
-                region: .topLeft
-            ),
-            CursorRegion(
-                rect: NSRect(x: width - corner, y: height - corner, width: corner, height: corner),
-                region: .topRight
-            ),
-            CursorRegion(
-                rect: NSRect(x: 0, y: 0, width: corner, height: corner),
-                region: .bottomLeft
-            ),
-            CursorRegion(
-                rect: NSRect(x: width - corner, y: 0, width: corner, height: corner),
-                region: .bottomRight
-            ),
-            CursorRegion(
-                rect: NSRect(x: corner, y: height - edge, width: max(0, width - corner * 2), height: edge),
-                region: .top
-            ),
-            CursorRegion(
-                rect: NSRect(x: 0, y: corner, width: edge, height: max(0, height - corner * 2)),
-                region: .left
-            ),
-            CursorRegion(
-                rect: NSRect(x: corner, y: 0, width: max(0, width - corner * 2), height: edge),
-                region: .bottom
-            ),
-            CursorRegion(
-                rect: NSRect(x: width - edge, y: corner, width: edge, height: max(0, height - corner * 2)),
-                region: .right
+        for region in OverlayResizeRegion.allCases {
+            addCursorRect(
+                hitTester.rect(for: region, in: bounds, isFlipped: isFlipped),
+                cursor: resizeCursor(for: region)
             )
-        ]
-    }
-
-    private func cursor(for region: Region) -> NSCursor {
-        if #available(macOS 15.0, *) {
-            let position: NSCursor.FrameResizePosition = switch region {
-            case .top: .top
-            case .left: .left
-            case .bottom: .bottom
-            case .right: .right
-            case .topLeft: .topLeft
-            case .topRight: .topRight
-            case .bottomLeft: .bottomLeft
-            case .bottomRight: .bottomRight
-            }
-            return .frameResize(position: position, directions: .all)
-        }
-
-        return switch region {
-        case .top: .resizeUp
-        case .left: .resizeLeft
-        case .bottom: .resizeDown
-        case .right: .resizeRight
-        case .topLeft, .bottomRight:
-            diagonalCursor(systemName: "arrow.up.left.and.arrow.down.right")
-        case .topRight, .bottomLeft:
-            diagonalCursor(systemName: "arrow.up.right.and.arrow.down.left")
         }
     }
 
-    private func diagonalCursor(systemName: String) -> NSCursor {
-        guard let image = NSImage(systemSymbolName: systemName, accessibilityDescription: nil) else {
-            return .resizeLeftRight
-        }
-        image.size = NSSize(width: 18, height: 18)
-        return NSCursor(image: image, hotSpot: NSPoint(x: 9, y: 9))
+    private func updateCursor(for event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        applyCursorAction(
+            cursorState.update(
+                region: hitTester.region(
+                    at: point,
+                    in: bounds,
+                    isFlipped: isFlipped
+                )
+            )
+        )
     }
+
+    private func clearResizeCursorIfNeeded() {
+        applyCursorAction(cursorState.update(region: nil))
+    }
+
+    private func applyCursorAction(_ action: OverlayResizeCursorAction) {
+        switch action {
+        case let .set(region):
+            resizeCursor(for: region).set()
+        case .restoreDefault:
+            NSCursor.arrow.set()
+        case .none:
+            break
+        }
+    }
+
+}
+
+private func resizeCursor(for region: OverlayResizeRegion) -> NSCursor {
+    if #available(macOS 15.0, *) {
+        let position: NSCursor.FrameResizePosition = switch region {
+        case .top: .top
+        case .left: .left
+        case .bottom: .bottom
+        case .right: .right
+        case .topLeft: .topLeft
+        case .topRight: .topRight
+        case .bottomLeft: .bottomLeft
+        case .bottomRight: .bottomRight
+        }
+        return .frameResize(position: position, directions: .all)
+    }
+
+    return switch region {
+    case .top: .resizeUp
+    case .left: .resizeLeft
+    case .bottom: .resizeDown
+    case .right: .resizeRight
+    case .topLeft, .bottomRight:
+        diagonalCursor(systemName: "arrow.up.left.and.arrow.down.right")
+    case .topRight, .bottomLeft:
+        diagonalCursor(systemName: "arrow.up.right.and.arrow.down.left")
+    }
+}
+
+private func diagonalCursor(systemName: String) -> NSCursor {
+    guard let image = NSImage(systemSymbolName: systemName, accessibilityDescription: nil) else {
+        return .resizeLeftRight
+    }
+    image.size = NSSize(width: 18, height: 18)
+    return NSCursor(image: image, hotSpot: NSPoint(x: 9, y: 9))
 }
 
 private extension NSRect {

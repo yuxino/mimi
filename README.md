@@ -9,30 +9,28 @@
   </p>
 </div>
 
-<br>
-
-![mimi 为番剧显示实时中文字幕](docs/images/mimi-anime-train.png)
-
-<br>
-
 mimi，日语里“耳朵”的意思。
 
 它听取 Mac 正在播放的声音，把日语、英语或韩语实时翻译成简体中文、英语或日语字幕。浏览器、播放器和桌面应用都可以使用。
 
-字幕窗可以移动、自由调整宽高，也可以锁定后让鼠标直接穿过。当前对白保持清楚，刚刚说过的内容会带着时间慢慢淡去。
-
-<p align="center">
-  <img src="docs/images/mimi-overlay-current.png" width="760" alt="mimi 当前的字幕窗口">
-</p>
+字幕窗可以移动、自由调整宽高，也可以锁定后让鼠标直接穿过。当前对白保持清楚，刚刚说过的内容会带着时间慢慢淡去。人物持续说话时，mimi 会把长段落切成容易阅读的小句，只让最后一小段继续更新。
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/mimi-game.png" alt="mimi 为剧情游戏显示实时字幕"></td>
-    <td width="50%"><img src="docs/images/mimi-live.png" alt="mimi 为直播显示实时字幕"></td>
+    <td width="50%"><img src="docs/images/mimi-film-real.jpg" alt="mimi 为日本剧情片显示实时中文字幕"></td>
+    <td width="50%"><img src="docs/images/mimi-game-real.jpg" alt="mimi 为写实剧情游戏显示实时中文字幕"></td>
   </tr>
   <tr>
-    <td align="center">玩没有中文字幕的游戏</td>
-    <td align="center">听懂正在发生的直播</td>
+    <td align="center">看懂没有字幕的海外影视</td>
+    <td align="center">玩懂对白很多的剧情游戏</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/mimi-romance-real.jpg" alt="mimi 为成熟向夜间剧情显示实时中文字幕"></td>
+    <td width="50%"><img src="docs/images/mimi-live-real.jpg" alt="mimi 为日本直播显示实时中文字幕"></td>
+  </tr>
+  <tr>
+    <td align="center">跟上成熟向影片与夜间剧情</td>
+    <td align="center">听懂直播、播客和旅行分享</td>
   </tr>
 </table>
 
@@ -50,7 +48,7 @@ mimi 支持英语、日语和韩语。你可以让它自动判断正在播放的
 
 mimi 不使用麦克风，不需要注册账号，也不会保存音频和字幕记录。API Key 保存在 macOS 钥匙串中。
 
-跨语言翻译只显示确认后的译文，不把不断改写的中间结果放到画面上。选择“原文”或同语种字幕时，文字仍会实时出现。
+跨语言翻译会先显示已经稳定下来的预翻译，再由最终译文自然接替。已经完成的小句保持不动，只更新正在说的尾句，减少整段文字反复重排。
 
 [创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key) · [查找 Workspace ID](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)
 
@@ -60,6 +58,7 @@ mimi 不使用麦克风，不需要注册账号，也不会保存音频和字幕
 
 - 拖动顶部中央的短横移动字幕窗；四条边和四个角都可以自由调整大小
 - 字号可在 14–20 之间调整，窗口变窄时字幕会自然换行
+- 持续讲话会按标点和长度自动分句，只滚动追加新的一句
 - 左上角会显示当前识别语言和字幕语言
 - 淡色时间标记属于已经确认的字幕，当前一句保持醒目
 - 锁定之后，鼠标可以直接穿过字幕窗操作视频

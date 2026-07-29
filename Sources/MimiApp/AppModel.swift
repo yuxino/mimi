@@ -333,6 +333,20 @@ final class AppModel: ObservableObject {
             )
         }
 
+        if ProcessInfo.processInfo.environment["MIMI_UI_TEST_LONG_SUBTITLE"] == "1" {
+            controller.handle(
+                .sourceDraft(
+                    text: "話し手が長いあいだ途切れずに話し続けても字幕は読みやすい長さで区切られ最後の部分だけが更新されます",
+                    language: "ja"
+                )
+            )
+            controller.handle(
+                .translationDraft(
+                    "即使说话者长时间连续讲话字幕也会保持容易阅读的长度已经完成的小句不会反复重排只有最后一小段继续更新"
+                )
+            )
+        }
+
         publishState()
     }
 
@@ -373,10 +387,20 @@ private final class AudioSendPipeline: @unchecked Sendable {
         self.continuation = pair.continuation
         self.onError = onError
         self.worker = Task {
+            let clock = ContinuousClock()
             do {
                 for await data in pair.stream {
                     try Task.checkCancellation()
+                    let startedAt = clock.now
                     try await client.sendAudio(data)
+                    let sendMilliseconds = PipelineDiagnostics.milliseconds(
+                        startedAt.duration(to: clock.now)
+                    )
+                    if sendMilliseconds > 200 {
+                        PipelineDiagnostics.log(
+                            "audio send blockedMs=\(sendMilliseconds) bytes=\(data.count)"
+                        )
+                    }
                 }
             } catch is CancellationError {
                 return
@@ -391,6 +415,7 @@ private final class AudioSendPipeline: @unchecked Sendable {
         case .enqueued:
             break
         case .dropped:
+            PipelineDiagnostics.log("audio queue dropped newest buffer")
             failOnce(with: AudioSendPipelineError.fellBehind)
         case .terminated:
             break

@@ -124,21 +124,61 @@ struct SubtitleOverlayView: View {
         let visibleHistory = subtitles.history.filter {
             isSameLanguageMode || $0.source != $0.translation
         }
-        var rows = visibleHistory.suffix(2).map {
-            SubtitleRow(text: $0.translation, createdAt: $0.createdAt)
+        var rows = visibleHistory.suffix(2).flatMap { pair in
+            SubtitleTextSegmenter.segments(
+                in: pair.translation,
+                maximumCharacters: subtitleSegmentLength
+            ).enumerated().map { index, text in
+                SubtitleRow(
+                    id: "history-\(pair.createdAt.timeIntervalSinceReferenceDate)-\(index)",
+                    text: text,
+                    createdAt: index == 0 ? pair.createdAt : nil
+                )
+            }
         }
-        let current = subtitles.translation.text
 
-        if shouldShowCurrentSubtitle(subtitles.translation),
-           !current.isEmpty,
-           rows.last?.text != current {
-            rows.append(SubtitleRow(text: current, createdAt: nil))
+        let currentLine = subtitles.translation
+        let currentIsAlreadyInHistory = currentLine.isFinal
+            && visibleHistory.last?.translation == currentLine.text
+        if shouldShowCurrentSubtitle(currentLine), !currentIsAlreadyInHistory {
+            rows.append(
+                contentsOf: SubtitleTextSegmenter.segments(
+                    in: currentLine.text,
+                    maximumCharacters: subtitleSegmentLength
+                ).enumerated().map { index, text in
+                    SubtitleRow(
+                        id: "current-\(index)",
+                        text: text,
+                        createdAt: nil
+                    )
+                }
+            )
         }
         return Array(rows.suffix(3))
     }
 
     private func shouldShowCurrentSubtitle(_ line: SubtitleLine) -> Bool {
-        line.isFinal || isSameLanguageMode
+        !line.text.isEmpty
+    }
+
+    private var subtitleSegmentLength: Int {
+        switch settings.targetLanguage {
+        case .simplifiedChinese:
+            28
+        case .english:
+            64
+        case .japanese:
+            32
+        case .original:
+            switch model.state.detectedLanguage?.code {
+            case "en":
+                64
+            case "ja":
+                32
+            default:
+                28
+            }
+        }
     }
 
     private var isSameLanguageMode: Bool {
@@ -225,7 +265,8 @@ private struct OverlayControlButton: View {
     }
 }
 
-private struct SubtitleRow: Equatable {
+private struct SubtitleRow: Identifiable, Equatable {
+    let id: String
     let text: String
     let createdAt: Date?
 }
@@ -240,7 +281,7 @@ private struct SubtitleTimeline: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             if let createdAt = row.createdAt {
                                 Text(createdAt.formatted(
@@ -281,7 +322,7 @@ private struct SubtitleTimeline: View {
             .onAppear {
                 proxy.scrollTo(bottomAnchor, anchor: .bottom)
             }
-            .onChange(of: rows) {
+            .onChange(of: rows.count) {
                 proxy.scrollTo(bottomAnchor, anchor: .bottom)
             }
         }

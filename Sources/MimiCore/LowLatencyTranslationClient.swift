@@ -6,6 +6,7 @@ public actor LowLatencyTranslationClient {
     private struct TranslationRequest: Sendable {
         let text: String
         let detectedLanguage: SourceLanguage?
+        let enqueuedAt: ContinuousClock.Instant
     }
 
     private struct TranslationMemoryEntry: Sendable {
@@ -18,6 +19,7 @@ public actor LowLatencyTranslationClient {
     private let finalMTClient: QwenMTClient
     private let configuredSourceLanguage: SourceLanguage
     private let translatesAudio: Bool
+    private let clock = ContinuousClock()
     private var eventHandler: EventHandler?
     private var draftWorker: Task<Void, Never>?
     private var preemptionTask: Task<Void, Never>?
@@ -121,6 +123,7 @@ public actor LowLatencyTranslationClient {
         case let .sourceDraft(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
+            PipelineDiagnostics.log("asr draft length=\(text.count)")
             if lastDraftText.isEmpty {
                 await emit(.translationDraft(""))
             }
@@ -134,6 +137,9 @@ public actor LowLatencyTranslationClient {
         case let .sourceFinal(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
+            PipelineDiagnostics.log(
+                "asr final length=\(text.count) queuedFinals=\(finalQueue.count)"
+            )
             if lastDraftText.isEmpty {
                 await emit(.translationDraft(""))
             }
@@ -154,7 +160,8 @@ public actor LowLatencyTranslationClient {
         lastDraftText = text
         pendingDraft = TranslationRequest(
             text: text,
-            detectedLanguage: resolvedSourceLanguage(language)
+            detectedLanguage: resolvedSourceLanguage(language),
+            enqueuedAt: clock.now
         )
 
         guard draftWorker != nil else {
@@ -185,19 +192,21 @@ public actor LowLatencyTranslationClient {
             preemptionTask = nil
             draftTranslationGeneration += 1
             let generation = draftTranslationGeneration
+            let startedAt = clock.now
+            PipelineDiagnostics.log(
+                "mt draft started waitMs=\(PipelineDiagnostics.milliseconds(request.enqueuedAt.duration(to: startedAt))) length=\(request.text.count)"
+            )
 
             do {
                 let translation = try await draftMTClient.translateStreaming(
                     request.text,
                     sourceLanguageOverride: request.detectedLanguage
-                ) { [weak self] partialTranslation in
-                    await self?.emitStreamingDraft(
-                        partialTranslation,
-                        generation: generation
-                    )
-                }
+                ) { _ in }
                 guard !Task.isCancelled else { break }
-                await emitStreamingDraft(translation, generation: generation)
+                PipelineDiagnostics.log(
+                    "mt draft completed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) pending=\(pendingDraft == nil ? 0 : 1)"
+                )
+                await emitCompletedDraft(translation, generation: generation)
             } catch is CancellationError {
                 break
             } catch {
@@ -233,9 +242,11 @@ public actor LowLatencyTranslationClient {
         finalQueue.append(
             TranslationRequest(
                 text: text,
-                detectedLanguage: resolvedSourceLanguage(language)
+                detectedLanguage: resolvedSourceLanguage(language),
+                enqueuedAt: clock.now
             )
         )
+        PipelineDiagnostics.log("mt final enqueued depth=\(finalQueue.count)")
         guard finalWorker == nil else { return }
 
         finalWorker = Task { [weak self] in
@@ -246,6 +257,10 @@ public actor LowLatencyTranslationClient {
     private func runFinalWorker() async {
         while !Task.isCancelled, !finalQueue.isEmpty {
             let request = finalQueue.removeFirst()
+            let startedAt = clock.now
+            PipelineDiagnostics.log(
+                "mt final started waitMs=\(PipelineDiagnostics.milliseconds(request.enqueuedAt.duration(to: startedAt))) remaining=\(finalQueue.count)"
+            )
             do {
                 let recentMemory = translationMemory
                     .filter { $0.language == request.detectedLanguage }
@@ -257,6 +272,9 @@ public actor LowLatencyTranslationClient {
                     translationMemory: recentMemory
                 ) { _ in }
                 guard !Task.isCancelled else { return }
+                PipelineDiagnostics.log(
+                    "mt final completed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) remaining=\(finalQueue.count)"
+                )
                 await emit(.translationFinal(translation))
                 remember(
                     source: request.text,
@@ -266,6 +284,9 @@ public actor LowLatencyTranslationClient {
             } catch is CancellationError {
                 return
             } catch {
+                PipelineDiagnostics.log(
+                    "mt final failed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) error=\(String(describing: type(of: error)))"
+                )
                 if await handleTranslationFailure(error) {
                     return
                 }
@@ -289,7 +310,7 @@ public actor LowLatencyTranslationClient {
         }
     }
 
-    private func emitStreamingDraft(_ translation: String, generation: Int) async {
+    private func emitCompletedDraft(_ translation: String, generation: Int) async {
         guard
             generation == draftTranslationGeneration,
             pendingDraft == nil
