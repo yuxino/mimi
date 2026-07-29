@@ -6,22 +6,10 @@ struct SubtitleOverlayView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
     @State private var isHovering = false
+    private let accentColor = Color(red: 0.48, green: 0.66, blue: 1)
 
     var body: some View {
-        GeometryReader { geometry in
-            let referenceSize = SubtitleOverlayMetrics.referenceSize
-            let scale = min(
-                geometry.size.width / referenceSize.width,
-                geometry.size.height / referenceSize.height
-            )
-
-            ZStack {
-                overlayCanvas
-                    .frame(width: referenceSize.width, height: referenceSize.height)
-                    .scaleEffect(scale)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-        }
+        overlayCanvas
     }
 
     private var overlayCanvas: some View {
@@ -32,7 +20,10 @@ struct SubtitleOverlayView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [.white.opacity(0.035), .clear],
+                        colors: [
+                            .white.opacity(0.035),
+                            .clear
+                        ],
                         startPoint: .top,
                         endPoint: .center
                     )
@@ -40,13 +31,15 @@ struct SubtitleOverlayView: View {
 
             VStack(spacing: 0) {
                 WindowDragArea()
-                    .frame(height: 14)
+                    .frame(width: 120, height: 18)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: model.isActive ? 38 : 24, alignment: .bottom)
                     .opacity(isHovering || model.showsOverlayControlsForUITesting ? 1 : 0)
 
                 if visibleRows.isEmpty {
                     Spacer(minLength: 0)
                     Text(emptyStateText)
-                        .font(.system(size: max(15, settings.fontSize * 0.68), weight: .medium))
+                        .font(.system(size: max(12, settings.fontSize * 0.68), weight: .medium))
                         .foregroundStyle(emptyStateColor)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
@@ -62,27 +55,40 @@ struct SubtitleOverlayView: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 0.75)
+                .stroke(
+                    isHovering && !settings.isOverlayLocked
+                        ? accentColor.opacity(0.34)
+                        : .white.opacity(0.12),
+                    lineWidth: isHovering && !settings.isOverlayLocked ? 1 : 0.75
+                )
         }
         .overlay(alignment: .topLeading) {
-            if model.isActive, let languageStatusText {
-                Text(languageStatusText)
+            if model.isActive, let languageStatus {
+                HStack(spacing: 3) {
+                    Text(languageStatus.source)
+                        .foregroundStyle(accentColor.opacity(isHovering ? 0.9 : 0.72))
+                    Text(languageStatus.separator)
+                        .foregroundStyle(.white.opacity(isHovering ? 0.48 : 0.32))
+                    Text(languageStatus.target)
+                        .foregroundStyle(.white.opacity(isHovering ? 0.7 : 0.5))
+                }
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(isHovering ? 0.66 : 0.46))
                     .lineLimit(1)
                     .padding(.horizontal, 8)
                     .frame(height: 20)
                     .background(
-                        .black.opacity(0.24),
+                        accentColor.opacity(isHovering ? 0.11 : 0.075),
                         in: Capsule()
                     )
                     .overlay {
                         Capsule()
-                            .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                            .stroke(accentColor.opacity(isHovering ? 0.22 : 0.14), lineWidth: 0.5)
                     }
                     .padding(.leading, 12)
                     .padding(.top, 10)
-                    .accessibilityLabel("Current languages: \(languageStatusText)")
+                    .accessibilityLabel(
+                        "Current languages: \(languageStatus.source) \(languageStatus.separator) \(languageStatus.target)"
+                    )
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -109,20 +115,43 @@ struct SubtitleOverlayView: View {
             }
         }
         .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.16), value: isHovering)
         .padding(6)
     }
 
     private var visibleRows: [SubtitleRow] {
         let subtitles = model.state.subtitles
-        var rows = subtitles.history.suffix(2).map {
-            SubtitleRow(text: $0.translation)
+        let visibleHistory = subtitles.history.filter {
+            isSameLanguageMode || $0.source != $0.translation
+        }
+        var rows = visibleHistory.suffix(2).map {
+            SubtitleRow(text: $0.translation, createdAt: $0.createdAt)
         }
         let current = subtitles.translation.text
 
-        if !current.isEmpty, rows.last?.text != current {
-            rows.append(SubtitleRow(text: current))
+        if shouldShowCurrentSubtitle(subtitles.translation),
+           !current.isEmpty,
+           rows.last?.text != current {
+            rows.append(SubtitleRow(text: current, createdAt: nil))
         }
         return Array(rows.suffix(3))
+    }
+
+    private func shouldShowCurrentSubtitle(_ line: SubtitleLine) -> Bool {
+        line.isFinal || isSameLanguageMode
+    }
+
+    private var isSameLanguageMode: Bool {
+        if settings.targetLanguage == .original {
+            return true
+        }
+
+        if let detectedLanguage = model.state.detectedLanguage {
+            return detectedLanguage.code == settings.targetLanguage.rawValue
+        }
+
+        return settings.sourceLanguage != .automatic
+            && settings.sourceLanguage.rawValue == settings.targetLanguage.rawValue
     }
 
     private var hasSubtitleContent: Bool {
@@ -132,7 +161,7 @@ struct SubtitleOverlayView: View {
             || !subtitles.history.isEmpty
     }
 
-    private var languageStatusText: String? {
+    private var languageStatus: (source: String, separator: String, target: String)? {
         let sourceName: String
         if let detected = model.state.detectedLanguage {
             sourceName = detected.displayName
@@ -143,9 +172,9 @@ struct SubtitleOverlayView: View {
         }
 
         if settings.targetLanguage == .original {
-            return "\(sourceName) · 原文"
+            return (sourceName, "·", "原文")
         }
-        return "\(sourceName) → \(settings.targetLanguage.displayName)"
+        return (sourceName, "→", settings.targetLanguage.displayName)
     }
 
     private var emptyStateText: String {
@@ -153,7 +182,9 @@ struct SubtitleOverlayView: View {
         case .connecting:
             "正在连接"
         case .listening:
-            "正在聆听，译文会保留在这里"
+            isWaitingForFinalTranslation
+                ? "正在翻译"
+                : "正在聆听，译文会保留在这里"
         case .stopping:
             "正在结束"
         case let .error(message):
@@ -166,6 +197,12 @@ struct SubtitleOverlayView: View {
     private var emptyStateColor: Color {
         if case .error = model.state.status { return .red.opacity(0.9) }
         return .white.opacity(0.5)
+    }
+
+    private var isWaitingForFinalTranslation: Bool {
+        guard !isSameLanguageMode else { return false }
+        let subtitles = model.state.subtitles
+        return subtitles.source.isFinal && !subtitles.translation.isFinal
     }
 }
 
@@ -190,6 +227,7 @@ private struct OverlayControlButton: View {
 
 private struct SubtitleRow: Equatable {
     let text: String
+    let createdAt: Date?
 }
 
 private struct SubtitleTimeline: View {
@@ -203,18 +241,35 @@ private struct SubtitleTimeline: View {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                        Text(row.text)
-                            .font(.system(
-                                size: rowFontSize(at: index),
-                                weight: index == rows.count - 1 ? .medium : .regular
-                            ))
-                            .foregroundStyle(.white.opacity(rowOpacity(at: index)))
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .lineSpacing(2)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, index == rows.count - 1 ? 7 : 5)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            if let createdAt = row.createdAt {
+                                Text(createdAt.formatted(
+                                    .dateTime
+                                        .hour(.twoDigits(amPM: .omitted))
+                                        .minute(.twoDigits)
+                                ))
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .monospacedDigit()
+                                .foregroundStyle(timestampColor(at: index))
+                                .frame(width: 31, alignment: .trailing)
+                            } else {
+                                Color.clear
+                                    .frame(width: 31, height: 1)
+                            }
+
+                            Text(row.text)
+                                .font(.system(
+                                    size: rowFontSize(at: index),
+                                    weight: index == rows.count - 1 ? .medium : .regular
+                                ))
+                                .foregroundStyle(.white.opacity(rowOpacity(at: index)))
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .lineSpacing(2)
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, index == rows.count - 1 ? 7 : 5)
                     }
 
                     Color.clear
@@ -233,7 +288,7 @@ private struct SubtitleTimeline: View {
     }
 
     private func rowFontSize(at index: Int) -> Double {
-        index == rows.count - 1 ? fontSize : max(15, fontSize * 0.82)
+        index == rows.count - 1 ? fontSize : max(12, fontSize * 0.82)
     }
 
     private func rowOpacity(at index: Int) -> Double {
@@ -243,6 +298,12 @@ private struct SubtitleTimeline: View {
         case 1: 0.58
         default: 0.34
         }
+    }
+
+    private func timestampColor(at index: Int) -> Color {
+        let distance = rows.count - 1 - index
+        let opacity = distance <= 1 ? 0.46 : 0.28
+        return Color(red: 0.48, green: 0.66, blue: 1).opacity(opacity)
     }
 }
 
@@ -257,14 +318,22 @@ private struct WindowDragArea: NSViewRepresentable {
 
     private final class DraggableNSView: NSView {
         private let handle = NSView()
+        private var trackingArea: NSTrackingArea?
+        private var isPointerInside = false {
+            didSet {
+                guard oldValue != isPointerInside else { return }
+                updateHandleAppearance()
+                needsLayout = true
+            }
+        }
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
             wantsLayer = true
             handle.wantsLayer = true
-            handle.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.28).cgColor
             handle.layer?.cornerRadius = 1.5
             addSubview(handle)
+            updateHandleAppearance()
         }
 
         required init?(coder: NSCoder) {
@@ -273,16 +342,53 @@ private struct WindowDragArea: NSViewRepresentable {
 
         override func layout() {
             super.layout()
+            let handleWidth: CGFloat = isPointerInside ? 40 : 32
             handle.frame = NSRect(
-                x: (bounds.width - 32) / 2,
+                x: (bounds.width - handleWidth) / 2,
                 y: (bounds.height - 3) / 2,
-                width: 32,
+                width: handleWidth,
                 height: 3
             )
         }
 
+        override func updateTrackingAreas() {
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+            }
+
+            let area = NSTrackingArea(
+                rect: bounds,
+                options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect],
+                owner: self,
+                userInfo: nil
+            )
+            addTrackingArea(area)
+            trackingArea = area
+            super.updateTrackingAreas()
+        }
+
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .openHand)
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            isPointerInside = true
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            isPointerInside = false
+        }
+
         override func mouseDown(with event: NSEvent) {
+            NSCursor.closedHand.push()
+            defer { NSCursor.pop() }
             window?.performDrag(with: event)
+        }
+
+        private func updateHandleAppearance() {
+            handle.layer?.backgroundColor = isPointerInside
+                ? NSColor(calibratedRed: 0.48, green: 0.66, blue: 1, alpha: 0.78).cgColor
+                : NSColor.white.withAlphaComponent(0.28).cgColor
         }
     }
 }

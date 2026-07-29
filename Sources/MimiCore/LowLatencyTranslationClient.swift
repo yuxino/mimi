@@ -204,7 +204,9 @@ public actor LowLatencyTranslationClient {
                 if await handleTranslationFailure(error) {
                     break
                 }
-                await emitStreamingDraft(request.text, generation: generation)
+                // A failed translation is not a translation. Keep the last
+                // confirmed subtitle instead of exposing the source sentence
+                // as if it were translated text.
             }
         }
 
@@ -267,7 +269,10 @@ public actor LowLatencyTranslationClient {
                 if await handleTranslationFailure(error) {
                     return
                 }
-                await emit(.translationFinal(request.text))
+                // Skip this segment on transient translation failure. Emitting
+                // the source here would permanently add untranslated text to
+                // the translated subtitle history.
+                await emit(.translationFinal(""))
             }
         }
 

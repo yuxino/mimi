@@ -3,6 +3,9 @@ import MimiCore
 
 @MainActor
 final class AppSettings: ObservableObject {
+    static let fontSizeRange = 14.0 ... 20.0
+    static let defaultFontSize = 18.0
+
     @Published var workspaceID: String
     @Published var apiKey: String
     @Published var sourceLanguage: SourceLanguage
@@ -46,9 +49,13 @@ final class AppSettings: ObservableObject {
             : storedTranslationMode
 
         let storedFontSize = defaults.double(forKey: Keys.fontSize)
-        // 30 was the original default. Move existing installs to the quieter
-        // product default while preserving every explicitly chosen size.
-        self.fontSize = storedFontSize == 30 || storedFontSize == 0 ? 26 : storedFontSize
+        let preferredFontSize = storedFontSize == 0
+            ? Self.defaultFontSize
+            : storedFontSize
+        self.fontSize = min(
+            Self.fontSizeRange.upperBound,
+            max(Self.fontSizeRange.lowerBound, preferredFontSize)
+        )
         self.isOverlayLocked = defaults.object(forKey: Keys.overlayLocked) as? Bool ?? false
         if isUITestMode {
             self.apiKey = "sk-demo-not-a-real-key"
