@@ -9,7 +9,7 @@
   </p>
 </div>
 
-mimi is Japanese for “ears.”
+The name mimi comes from the reading of the Japanese word 耳（みみ, “ear”）, written in roman letters as *mimi*.
 
 It listens to audio playing on your Mac and turns Japanese, English, or Korean into live subtitles in Simplified Chinese, English, or Japanese. It works with browsers, media players, and desktop apps.
 
