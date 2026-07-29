@@ -31,6 +31,8 @@ final class SystemAudioCapture: NSObject, @unchecked Sendable {
     private var stream: SCStream?
     private var audioHandler: AudioHandler?
     private var errorHandler: ErrorHandler?
+    private let clock = ContinuousClock()
+    private var lastAudioBufferAt: ContinuousClock.Instant?
 
     func start(
         onAudio: @escaping AudioHandler,
@@ -129,6 +131,14 @@ extension SystemAudioCapture: SCStreamOutput {
         guard outputType == .audio, sampleBuffer.isValid else { return }
 
         do {
+            let now = clock.now
+            if let lastAudioBufferAt {
+                let gap = PipelineDiagnostics.milliseconds(lastAudioBufferAt.duration(to: now))
+                if gap > 500 {
+                    PipelineDiagnostics.log("capture gapMs=\(gap)")
+                }
+            }
+            lastAudioBufferAt = now
             if let data = try Self.makePCM16Data(from: sampleBuffer), !data.isEmpty {
                 currentAudioHandler()?(data)
             }

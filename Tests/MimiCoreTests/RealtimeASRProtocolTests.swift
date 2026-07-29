@@ -10,7 +10,7 @@ func runRealtimeASRProtocolTests(using runner: inout TestRunner) {
         )
     }
 
-    runner.run("ASR session uses the documented low-latency VAD preset") {
+    runner.run("ASR session uses a balanced noise threshold with low-latency silence") {
         let data = try RealtimeASRRequestEncoder.sessionUpdate(
             sourceLanguage: .japanese,
             eventID: "event-session"
@@ -25,7 +25,7 @@ func runRealtimeASRProtocolTests(using runner: inout TestRunner) {
         try expectEqual(session["input_audio_format"] as? String, "pcm")
         try expectEqual(transcription["language"] as? String, "ja")
         try expectEqual(turnDetection["type"] as? String, "server_vad")
-        try expectEqual(turnDetection["threshold"] as? Double, 0.0)
+        try expectEqual(turnDetection["threshold"] as? Double, 0.2)
         try expectEqual(turnDetection["silence_duration_ms"] as? Int, 400)
     }
 

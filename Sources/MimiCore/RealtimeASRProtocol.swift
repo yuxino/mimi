@@ -40,7 +40,7 @@ public enum RealtimeASRRequestEncoder {
                     ),
                     turnDetection: .init(
                         type: "server_vad",
-                        threshold: 0.0,
+                        threshold: 0.2,
                         silenceDurationMilliseconds: 400
                     )
                 )

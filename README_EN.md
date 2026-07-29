@@ -9,30 +9,28 @@
   </p>
 </div>
 
-<br>
-
-![mimi showing live subtitles over anime](docs/images/mimi-anime-train-en.png)
-
-<br>
-
 mimi is Japanese for “ears.”
 
 It listens to audio playing on your Mac and turns Japanese, English, or Korean into live subtitles in Simplified Chinese, English, or Japanese. It works with browsers, media players, and desktop apps.
 
-Move the subtitle window, resize it freely from any edge, or lock it to click through. The current line stays clear while earlier dialogue fades back with a quiet timestamp.
-
-<p align="center">
-  <img src="docs/images/mimi-overlay-current-en.png" width="760" alt="The current mimi subtitle window">
-</p>
+Move the subtitle window, resize it freely from any edge, or lock it to click through. The current line stays clear while earlier dialogue fades back with a quiet timestamp. When someone keeps talking, mimi breaks the passage into readable subtitle-sized lines and updates only the active tail.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/mimi-game-en.png" alt="mimi showing live subtitles over a story game"></td>
-    <td width="50%"><img src="docs/images/mimi-live-en.png" alt="mimi showing live subtitles over a livestream"></td>
+    <td width="50%"><img src="docs/images/mimi-film-real-en.jpg" alt="mimi showing live English subtitles over a Japanese drama"></td>
+    <td width="50%"><img src="docs/images/mimi-game-real-en.jpg" alt="mimi showing live English subtitles over a realistic narrative game"></td>
   </tr>
   <tr>
-    <td align="center">Play story-rich games in another language</td>
-    <td align="center">Follow livestreams as they happen</td>
+    <td align="center">Watch films without native subtitles</td>
+    <td align="center">Follow dialogue-heavy narrative games</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/mimi-romance-real-en.jpg" alt="mimi showing live English subtitles over a mature late-night drama"></td>
+    <td width="50%"><img src="docs/images/mimi-live-real-en.jpg" alt="mimi showing live English subtitles over a Japanese livestream"></td>
+  </tr>
+  <tr>
+    <td align="center">Keep up with mature and late-night stories</td>
+    <td align="center">Understand livestreams, podcasts, and travel videos</td>
   </tr>
 </table>
 
@@ -50,7 +48,7 @@ mimi understands English, Japanese, and Korean. Let it detect what is playing, t
 
 mimi never uses your microphone, asks for an account, or saves recordings and subtitle history. Your API key stays in macOS Keychain.
 
-For translated subtitles, mimi waits for a confirmed line instead of showing every changing intermediate result. Original-language subtitles remain live.
+For translated subtitles, mimi shows a stable preview before the final translation takes over. Completed subtitle-sized lines stay put while only the active tail changes, avoiding constant full-paragraph reflow.
 
 [Create an API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Find your Workspace ID](https://help.aliyun.com/en/model-studio/obtain-the-app-id-and-workspace-id)
 
@@ -60,6 +58,7 @@ For translated subtitles, mimi waits for a confirmed line instead of showing eve
 
 - Drag the short handle at the top center to move the window; resize freely from any edge or corner
 - Choose a subtitle size from 14–20; narrower windows wrap text naturally
+- Continuous speech is split by punctuation and length, with new lines appended as they become readable
 - The top-left label shows the detected and subtitle languages
 - Faint timestamps mark confirmed lines while the current line stays prominent
 - Lock the panel to click through it
