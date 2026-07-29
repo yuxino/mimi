@@ -25,7 +25,12 @@ public struct SubtitleReducer: Sendable {
             }
 
         case let .translationDraft(text):
-            snapshot.translation = SubtitleLine(text: text.trimmed, isFinal: false)
+            let trimmed = text.trimmed
+            // 不让空白 draft 覆盖已确认的 final 译文
+            if trimmed.isEmpty, snapshot.translation.isFinal {
+                return
+            }
+            snapshot.translation = SubtitleLine(text: trimmed, isFinal: false)
 
         case let .translationFinal(text):
             let translation = text.trimmed

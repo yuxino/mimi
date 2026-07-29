@@ -121,10 +121,12 @@ struct SubtitleOverlayView: View {
 
     private var visibleRows: [SubtitleRow] {
         let subtitles = model.state.subtitles
+
+        // 只显示历史中已确认的 final 行
         let visibleHistory = subtitles.history.filter {
             isSameLanguageMode || $0.source != $0.translation
         }
-        var rows = visibleHistory.suffix(2).flatMap { pair in
+        let rows = visibleHistory.flatMap { pair in
             SubtitleTextSegmenter.segments(
                 in: pair.translation,
                 maximumCharacters: subtitleSegmentLength
@@ -137,24 +139,20 @@ struct SubtitleOverlayView: View {
             }
         }
 
+        // 当前行只有 final 才显示，不展示翻译到一半的草稿
         let currentLine = subtitles.translation
-        let currentIsAlreadyInHistory = currentLine.isFinal
-            && visibleHistory.last?.translation == currentLine.text
-        if shouldShowCurrentSubtitle(currentLine), !currentIsAlreadyInHistory {
-            rows.append(
-                contentsOf: SubtitleTextSegmenter.segments(
+        if currentLine.isFinal, !currentLine.text.isEmpty {
+            let notDuplicate = visibleHistory.last?.translation != currentLine.text
+            if notDuplicate {
+                return rows + SubtitleTextSegmenter.segments(
                     in: currentLine.text,
                     maximumCharacters: subtitleSegmentLength
                 ).enumerated().map { index, text in
-                    SubtitleRow(
-                        id: "current-\(index)",
-                        text: text,
-                        createdAt: nil
-                    )
+                    SubtitleRow(id: "current-\(index)", text: text, createdAt: nil)
                 }
-            )
+            }
         }
-        return Array(rows.suffix(3))
+        return rows
     }
 
     private func shouldShowCurrentSubtitle(_ line: SubtitleLine) -> Bool {
