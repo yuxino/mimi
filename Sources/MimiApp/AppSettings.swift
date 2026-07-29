@@ -42,8 +42,8 @@ final class AppSettings: ObservableObject {
             rawValue: defaults.string(forKey: Keys.targetLanguage) ?? "zh"
         ) ?? .simplifiedChinese
         let storedTranslationMode = TranslationMode(
-            rawValue: defaults.string(forKey: Keys.translationMode) ?? "lowLatency"
-        ) ?? .lowLatency
+            rawValue: defaults.string(forKey: Keys.translationMode) ?? "highQuality"
+        ) ?? .highQuality
         self.translationMode = storedSourceLanguage == .automatic
             ? .lowLatency
             : storedTranslationMode

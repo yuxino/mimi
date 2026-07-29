@@ -4,8 +4,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
-    @State private var message = ""
-    @State private var isError = false
 
     var body: some View {
         Form {
@@ -23,10 +21,6 @@ struct SettingsView: View {
                         Text("Couldn’t read the saved API key: \(credentialError)")
                             .font(.caption)
                             .foregroundStyle(.red)
-                        Button("Try Again") {
-                            reloadAPIKey()
-                        }
-                        .buttonStyle(.link)
                     }
                 }
             }
@@ -82,11 +76,6 @@ struct SettingsView: View {
             }
 
             HStack {
-                Button("Save") {
-                    save()
-                }
-                .keyboardShortcut(.defaultAction)
-
                 Button {
                     Task {
                         if model.isActive {
@@ -102,12 +91,6 @@ struct SettingsView: View {
                     )
                 }
 
-                if !message.isEmpty {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(isError ? .red : .green)
-                }
-
                 Text(sessionStatusText)
                     .font(.caption)
                     .foregroundStyle(sessionStatusColor)
@@ -115,54 +98,17 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 460)
+        .frame(width: 560, height: 420)
         .onDisappear {
             settings.persistPreferences()
             model.setOverlayLocked(settings.isOverlayLocked)
-        }
-        .onAppear {
-            if settings.apiKey.isEmpty, settings.credentialLoadError != nil {
-                reloadAPIKey()
-            }
-        }
-    }
-
-    private func save() {
-        do {
-            try settings.save()
-            model.setOverlayLocked(settings.isOverlayLocked)
-            isError = false
-            message = "Saved"
-        } catch {
-            isError = true
-            message = error.localizedDescription
         }
     }
 
     private func startListening() {
         model.setOverlayLocked(settings.isOverlayLocked)
-        isError = false
-        message = "Starting…"
         Task {
             await model.start(using: settings)
-            if case let .error(errorMessage) = model.state.status {
-                isError = true
-                message = errorMessage
-            } else {
-                message = "Saved"
-            }
-        }
-    }
-
-    private func reloadAPIKey() {
-        do {
-            if try settings.reloadAPIKey() {
-                isError = false
-                message = "API key restored"
-            }
-        } catch {
-            isError = true
-            message = error.localizedDescription
         }
     }
 
