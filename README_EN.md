@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="88" alt="mimi">
+  <img src="Resources/Assets/mimi-icon.png" width="96" alt="mimi">
   <h1>mimi</h1>
   <p>Live translated subtitles on Mac</p>
   <p>
@@ -19,7 +19,11 @@ mimi is Japanese for “ears.”
 
 It listens to audio playing on your Mac and turns Japanese, English, or Korean into live subtitles in Simplified Chinese, English, or Japanese. It works with browsers, media players, and desktop apps.
 
-Move, resize, or lock the subtitle window. The current line stays clear while earlier dialogue gently fades back.
+Move the subtitle window, resize it freely from any edge, or lock it to click through. The current line stays clear while earlier dialogue fades back with a quiet timestamp.
+
+<p align="center">
+  <img src="docs/images/mimi-overlay-current-en.png" width="760" alt="The current mimi subtitle window">
+</p>
 
 <table>
   <tr>
@@ -46,14 +50,18 @@ mimi understands English, Japanese, and Korean. Let it detect what is playing, t
 
 mimi never uses your microphone, asks for an account, or saves recordings and subtitle history. Your API key stays in macOS Keychain.
 
+For translated subtitles, mimi waits for a confirmed line instead of showing every changing intermediate result. Original-language subtitles remain live.
+
 [Create an API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Find your Workspace ID](https://help.aliyun.com/en/model-studio/obtain-the-app-id-and-workspace-id)
 
 > The Workspace ID and API key must belong to the same China (Beijing) workspace. Model usage may incur charges.
 
 ## A few useful details
 
-- Drag the panel background to move it; drag a corner to scale the entire subtitle interface
+- Drag the short handle at the top center to move the window; resize freely from any edge or corner
+- Choose a subtitle size from 14–20; narrower windows wrap text naturally
 - The top-left label shows the detected and subtitle languages
+- Faint timestamps mark confirmed lines while the current line stays prominent
 - Lock the panel to click through it
 - Use the eraser in the top-right corner to clear the current subtitles
 - If two subtitle panels appear, disable Chrome Live Caption / Live Translate

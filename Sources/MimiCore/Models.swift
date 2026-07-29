@@ -203,10 +203,16 @@ public struct SubtitleLine: Equatable, Sendable {
 public struct SubtitlePair: Equatable, Sendable {
     public let source: String
     public let translation: String
+    public let createdAt: Date
 
-    public init(source: String, translation: String) {
+    public init(source: String, translation: String, createdAt: Date = .now) {
         self.source = source
         self.translation = translation
+        self.createdAt = createdAt
+    }
+
+    public static func == (lhs: SubtitlePair, rhs: SubtitlePair) -> Bool {
+        lhs.source == rhs.source && lhs.translation == rhs.translation
     }
 }
 
