@@ -68,7 +68,7 @@ struct SettingsView: View {
 
                 HStack {
                     Text("Font size")
-                    Slider(value: $settings.fontSize, in: 20...48, step: 1)
+                    Slider(value: $settings.fontSize, in: AppSettings.fontSizeRange, step: 1)
                     Text("\(Int(settings.fontSize))")
                         .monospacedDigit()
                         .frame(width: 28, alignment: .trailing)
@@ -76,7 +76,7 @@ struct SettingsView: View {
 
                 Toggle("Lock subtitle position", isOn: $settings.isOverlayLocked)
 
-                Text("Drag the subtitle background to move it. Drag an edge to resize it; mimi remembers both after restart.")
+                Text("Drag the top handle to move subtitles. Resize from any edge or corner; mimi remembers both after restart.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

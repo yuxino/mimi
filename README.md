@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="Resources/Assets/mimi-cat.png" width="88" alt="mimi">
+  <img src="Resources/Assets/mimi-icon.png" width="96" alt="mimi">
   <h1>mimi</h1>
   <p>Mac 上的实时翻译字幕</p>
   <p>
@@ -19,7 +19,11 @@ mimi，日语里“耳朵”的意思。
 
 它听取 Mac 正在播放的声音，把日语、英语或韩语实时翻译成简体中文、英语或日语字幕。浏览器、播放器和桌面应用都可以使用。
 
-字幕窗可以移动、缩放和锁定。当前对白保持清楚，刚刚说过的内容会慢慢淡去。
+字幕窗可以移动、自由调整宽高，也可以锁定后让鼠标直接穿过。当前对白保持清楚，刚刚说过的内容会带着时间慢慢淡去。
+
+<p align="center">
+  <img src="docs/images/mimi-overlay-current.png" width="760" alt="mimi 当前的字幕窗口">
+</p>
 
 <table>
   <tr>
@@ -46,14 +50,18 @@ mimi 支持英语、日语和韩语。你可以让它自动判断正在播放的
 
 mimi 不使用麦克风，不需要注册账号，也不会保存音频和字幕记录。API Key 保存在 macOS 钥匙串中。
 
+跨语言翻译只显示确认后的译文，不把不断改写的中间结果放到画面上。选择“原文”或同语种字幕时，文字仍会实时出现。
+
 [创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key) · [查找 Workspace ID](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)
 
 > Workspace ID 和 API Key 需要来自华北 2（北京）的同一个业务空间。模型调用可能产生费用。
 
 ## 使用提示
 
-- 拖动字幕背景可以移动窗口，拖动边角会等比缩放整个字幕界面
+- 拖动顶部中央的短横移动字幕窗；四条边和四个角都可以自由调整大小
+- 字号可在 14–20 之间调整，窗口变窄时字幕会自然换行
 - 左上角会显示当前识别语言和字幕语言
+- 淡色时间标记属于已经确认的字幕，当前一句保持醒目
 - 锁定之后，鼠标可以直接穿过字幕窗操作视频
 - 右上角的橡皮擦会清空当前字幕
 - 如果同时出现两块字幕，请关闭 Chrome 的“实时字幕 / 实时翻译”

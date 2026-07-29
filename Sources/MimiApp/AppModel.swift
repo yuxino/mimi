@@ -28,7 +28,7 @@ final class AppModel: ObservableObject {
         overlayController?.updateLocked(settings.isOverlayLocked)
 
         if isUITestMode {
-            seedUITestSubtitles()
+            seedUITestSubtitles(targetLanguage: settings.targetLanguage)
             overlayController?.show()
         }
     }
@@ -274,17 +274,77 @@ final class AppModel: ObservableObject {
         state = controller.state
     }
 
-    private func seedUITestSubtitles() {
+    private func seedUITestSubtitles(targetLanguage: TargetLanguage) {
         controller.didConnect()
-        controller.handle(.sourceFinal(text: "今日は映画について話しましょう。", language: "ja"))
-        controller.handle(.translationFinal("今天咱们聊聊电影吧。"))
-        controller.handle(.sourceFinal(text: "主人公は駅で友達を待っています。", language: "ja"))
-        controller.handle(.translationFinal("主人公正在车站等朋友呢。"))
-        controller.handle(.sourceFinal(text: "電車が遅れているので少し心配になりました。", language: "ja"))
-        controller.handle(.translationFinal("因为电车晚点了，我有点担心。"))
-        controller.handle(.sourceDraft(text: "でも、もうすぐ来るでしょう。", language: "ja"))
-        controller.handle(.translationDraft("嗯……不过应该很快就到了吧。"))
+
+        switch targetLanguage {
+        case .english:
+            seedUITestHistory(
+                sourceLanguage: "ja",
+                sources: [
+                    "今日は映画について話しましょう。",
+                    "主人公は駅で友達を待っています。",
+                    "電車が遅れているので少し心配になりました。"
+                ],
+                translations: [
+                    "Let's talk about the film today.",
+                    "The protagonist is waiting for a friend at the station.",
+                    "The delayed train has her a little worried."
+                ]
+            )
+        case .japanese:
+            seedUITestHistory(
+                sourceLanguage: "en",
+                sources: [
+                    "Let's talk about the film today.",
+                    "The main character is waiting for a friend at the station.",
+                    "The train is late, so she's getting a little worried."
+                ],
+                translations: [
+                    "今日は映画の話をしましょう。",
+                    "主人公は駅で友達を待っています。",
+                    "電車が遅れていて、少し心配になってきました。"
+                ]
+            )
+        case .simplifiedChinese:
+            seedUITestHistory(
+                sourceLanguage: "ja",
+                sources: [
+                    "今日は映画について話しましょう。",
+                    "主人公は駅で友達を待っています。",
+                    "電車が遅れているので少し心配になりました。"
+                ],
+                translations: [
+                    "今天咱们聊聊电影吧。",
+                    "主人公正在车站等朋友呢。",
+                    "因为电车晚点了，我有点担心。"
+                ]
+            )
+        case .original:
+            let sources = [
+                "今日は映画について話しましょう。",
+                "主人公は駅で友達を待っています。",
+                "電車が遅れているので少し心配になりました。"
+            ]
+            seedUITestHistory(
+                sourceLanguage: "ja",
+                sources: sources,
+                translations: sources
+            )
+        }
+
         publishState()
+    }
+
+    private func seedUITestHistory(
+        sourceLanguage: String,
+        sources: [String],
+        translations: [String]
+    ) {
+        for (source, translation) in zip(sources, translations) {
+            controller.handle(.sourceFinal(text: source, language: sourceLanguage))
+            controller.handle(.translationFinal(translation))
+        }
     }
 }
 
