@@ -202,14 +202,9 @@ struct SubtitleOverlayView: View {
     }
 
     private var languageStatus: (source: String, separator: String, target: String)? {
-        let sourceName: String
-        if let detected = model.state.detectedLanguage {
-            sourceName = detected.displayName
-        } else if settings.sourceLanguage != .automatic {
-            sourceName = settings.sourceLanguage.displayName
-        } else {
-            sourceName = "识别中"
-        }
+        let sourceName = settings.sourceLanguage.statusDisplayName(
+            detectedLanguage: model.state.detectedLanguage
+        )
 
         if settings.targetLanguage == .original {
             return (sourceName, "·", "原文")

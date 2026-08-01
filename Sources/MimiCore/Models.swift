@@ -39,6 +39,12 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
             "한국어"
         }
     }
+
+    public func statusDisplayName(detectedLanguage: DetectedLanguage?) -> String {
+        guard self == .automatic else { return displayName }
+        guard let detectedLanguage else { return "正在识别" }
+        return "自动识别（\(detectedLanguage.displayName)）"
+    }
 }
 
 public struct DetectedLanguage: Equatable, Sendable {
