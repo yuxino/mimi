@@ -5,6 +5,25 @@ func runConfigurationTests(using runner: inout TestRunner) {
         try expectEqual(SourceLanguage.automatic.displayName, "自动识别")
     }
 
+    runner.run("automatic language status includes the detected language") {
+        let japanese = DetectedLanguage(reportedLanguage: "ja-JP")
+
+        try expectEqual(
+            SourceLanguage.automatic.statusDisplayName(detectedLanguage: japanese),
+            "自动识别（日本語）"
+        )
+        try expectEqual(
+            SourceLanguage.automatic.statusDisplayName(detectedLanguage: nil),
+            "正在识别"
+        )
+        try expectEqual(
+            SourceLanguage.japanese.statusDisplayName(
+                detectedLanguage: DetectedLanguage(reportedLanguage: "en")
+            ),
+            "日本語"
+        )
+    }
+
     runner.run("automatic language resolves high quality to low latency") {
         let configuration = LiveTranslationConfiguration(
             workspaceID: "ws-abc123",
