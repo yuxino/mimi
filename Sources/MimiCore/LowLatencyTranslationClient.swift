@@ -38,6 +38,7 @@ public actor LowLatencyTranslationClient {
         targetLanguage: TargetLanguage = .simplifiedChinese,
         session: URLSession = .shared
     ) throws {
+        let domainHint = QwenMTDomainHint.spokenDialogue(for: targetLanguage)
         self.asrClient = try RealtimeASRClient(
             workspaceID: workspaceID,
             apiKey: apiKey,
@@ -52,6 +53,7 @@ public actor LowLatencyTranslationClient {
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
             model: .flash,
+            domainHint: domainHint,
             streamingTimeout: .seconds(5),
             session: session
         )
@@ -61,28 +63,9 @@ public actor LowLatencyTranslationClient {
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
             model: .flash,
-            domainHint: Self.finalDomainHint(for: targetLanguage),
+            domainHint: domainHint,
             session: session
         )
-    }
-
-    private static func finalDomainHint(for targetLanguage: TargetLanguage) -> String {
-        let languageGuidance = switch targetLanguage {
-        case .original:
-            ""
-        case .simplifiedChinese:
-            "Use concise, idiomatic Simplified Chinese and preserve natural particles such as 嗯、啊、呢、吧、嘛."
-        case .english:
-            "Use concise, idiomatic conversational English with natural contractions and interjections."
-        case .japanese:
-            "Use natural conversational Japanese with appropriate register, particles, and sentence endings."
-        }
-        return """
-        Natural spoken dialogue. \(languageGuidance) Preserve the speaker's tone and \
-        implied subjects from context. Avoid literal, explanatory, or translation-like \
-        wording. Preserve meaningful interjections and hesitation. Collapse accidental \
-        ASR repetition, and do not mechanically translate every filler.
-        """
     }
 
     public func connect(onEvent: @escaping EventHandler) async throws {
@@ -123,7 +106,9 @@ public actor LowLatencyTranslationClient {
         case let .sourceDraft(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
-            PipelineDiagnostics.log("asr draft length=\(text.count)")
+            PipelineDiagnostics.log(
+                "asr draft length=\(text.count) language=\(language ?? "unknown")"
+            )
             if lastDraftText.isEmpty {
                 await emit(.translationDraft(""))
             }
@@ -138,7 +123,7 @@ public actor LowLatencyTranslationClient {
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
             PipelineDiagnostics.log(
-                "asr final length=\(text.count) queuedFinals=\(finalQueue.count)"
+                "asr final length=\(text.count) language=\(language ?? "unknown") queuedFinals=\(finalQueue.count)"
             )
             if lastDraftText.isEmpty {
                 await emit(.translationDraft(""))
@@ -208,8 +193,12 @@ public actor LowLatencyTranslationClient {
                 )
                 await emitCompletedDraft(translation, generation: generation)
             } catch is CancellationError {
+                PipelineDiagnostics.log("mt draft cancelled")
                 break
             } catch {
+                PipelineDiagnostics.log(
+                    "mt draft failed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) error=\(PipelineDiagnostics.errorLabel(error))"
+                )
                 if await handleTranslationFailure(error) {
                     break
                 }
@@ -232,6 +221,7 @@ public actor LowLatencyTranslationClient {
     private func preemptStaleDraft() {
         preemptionTask = nil
         guard pendingDraft != nil else { return }
+        PipelineDiagnostics.log("mt draft preempted for newer ASR text")
         draftTranslationGeneration += 1
         draftWorker?.cancel()
         startDraftWorker()
@@ -285,7 +275,7 @@ public actor LowLatencyTranslationClient {
                 return
             } catch {
                 PipelineDiagnostics.log(
-                    "mt final failed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) error=\(String(describing: type(of: error)))"
+                    "mt final failed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) error=\(PipelineDiagnostics.errorLabel(error))"
                 )
                 if await handleTranslationFailure(error) {
                     return
@@ -293,6 +283,7 @@ public actor LowLatencyTranslationClient {
                 // Skip this segment on transient translation failure. Emitting
                 // the source here would permanently add untranslated text to
                 // the translated subtitle history.
+                PipelineDiagnostics.log("mt final emitted empty translation after failure")
                 await emit(.translationFinal(""))
             }
         }
@@ -311,10 +302,12 @@ public actor LowLatencyTranslationClient {
     }
 
     private func emitCompletedDraft(_ translation: String, generation: Int) async {
-        guard
-            generation == draftTranslationGeneration,
-            pendingDraft == nil
-        else {
+        guard generation == draftTranslationGeneration else {
+            PipelineDiagnostics.log("mt draft discarded generation mismatch")
+            return
+        }
+        guard pendingDraft == nil else {
+            PipelineDiagnostics.log("mt draft discarded because newer ASR text is pending")
             return
         }
         await emit(.translationDraft(translation))

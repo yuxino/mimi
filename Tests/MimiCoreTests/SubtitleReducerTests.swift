@@ -70,6 +70,17 @@ func runSubtitleReducerTests(using runner: inout TestRunner) {
         try expectEqual(reducer.snapshot.history.count, 1)
     }
 
+    runner.run("identical source and translation remain in history") {
+        var reducer = SubtitleReducer()
+        reducer.apply(.sourceFinal("嗯啊"))
+        reducer.apply(.translationFinal("嗯啊"))
+
+        try expectEqual(
+            reducer.snapshot.history,
+            [SubtitlePair(source: "嗯啊", translation: "嗯啊")]
+        )
+    }
+
     runner.run("history is bounded") {
         var reducer = SubtitleReducer(maxHistoryCount: 2)
         for index in 1...3 {

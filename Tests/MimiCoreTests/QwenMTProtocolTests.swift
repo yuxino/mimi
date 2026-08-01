@@ -50,11 +50,8 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(options["target_lang"] as? String, "English")
     }
 
-    runner.run("Qwen-MT final request selects Flash with natural-dialogue guidance") {
-        let guidance = """
-        Natural spoken dialogue. Preserve meaningful interjections and hesitation \
-        as natural Chinese particles such as 嗯、啊、呢、吧、嘛.
-        """
+    runner.run("Qwen-MT request preserves vocal sounds in natural-dialogue guidance") {
+        let guidance = QwenMTDomainHint.spokenDialogue(for: .simplifiedChinese)
         let data = try QwenMTRequestEncoder.request(
             text: "今日は晴れです。",
             sourceLanguage: .japanese,
@@ -67,6 +64,18 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
 
         try expectEqual(json["model"] as? String, "qwen-mt-flash")
         try expectEqual(options["domains"] as? String, guidance)
+        try expect(
+            guidance.contains("gasps, moans, and cries"),
+            "guidance should preserve vocal sounds"
+        )
+        try expect(
+            guidance.contains("Do not sanitize, euphemize, censor, or omit"),
+            "guidance should preserve explicit dialogue"
+        )
+        try expect(
+            !guidance.contains("do not mechanically translate every filler"),
+            "guidance should not filter filler sounds"
+        )
     }
 
     runner.run("Qwen-MT request includes bounded translation memory pairs") {
@@ -101,6 +110,7 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(SourceLanguage(detectedLanguage: "ja-JP"), .japanese)
         try expectEqual(SourceLanguage(detectedLanguage: "English"), .english)
         try expectEqual(SourceLanguage(detectedLanguage: "ko"), .korean)
+        try expectEqual(SourceLanguage(detectedLanguage: "zh-CN"), .chinese)
         try expectEqual(SourceLanguage(detectedLanguage: "unknown"), nil)
     }
 
@@ -139,6 +149,18 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(
             QwenMTClientError.requestTimedOut.localizedDescription,
             "Qwen-MT took too long to respond."
+        )
+    }
+
+    runner.run("Qwen-MT diagnostics retain status without response content") {
+        try expectEqual(
+            PipelineDiagnostics.errorLabel(
+                QwenMTClientError.requestFailed(
+                    statusCode: 429,
+                    message: "sensitive response detail"
+                )
+            ),
+            "QwenMTClientError.requestFailed(status=429)"
         )
     }
 }

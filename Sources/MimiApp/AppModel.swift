@@ -35,10 +35,16 @@ final class AppModel: ObservableObject {
 
     func start(using settings: AppSettings) async {
         guard !state.status.isActive else { return }
+        PipelineDiagnostics.log(
+            "session start requested source=\(settings.sourceLanguage.rawValue) target=\(settings.targetLanguage.rawValue) mode=\(settings.translationMode.rawValue)"
+        )
 
         do {
             try settings.save()
         } catch {
+            PipelineDiagnostics.log(
+                "session settings failed error=\(PipelineDiagnostics.errorLabel(error))"
+            )
             controller.didFail(error.localizedDescription)
             publishState()
             return
@@ -57,6 +63,7 @@ final class AppModel: ObservableObject {
 
         do {
             let configuration = try settings.configuration()
+            PipelineDiagnostics.log("session connecting clear=\(clearSubtitles ? 1 : 0)")
             if clearSubtitles {
                 controller.clearSubtitles()
             }
@@ -69,6 +76,7 @@ final class AppModel: ObservableObject {
             try await newClient.connect { [weak self] event in
                 await self?.receive(event)
             }
+            PipelineDiagnostics.log("asr websocket connected")
 
             let newAudioSender = AudioSendPipeline(
                 client: newClient,
@@ -89,14 +97,19 @@ final class AppModel: ObservableObject {
                     }
                 }
             )
+            PipelineDiagnostics.log("audio capture started")
 
             controller.didConnect()
             activeSettings = settings
             publishState()
             overlayController?.show()
             startHealthChecks()
+            PipelineDiagnostics.log("session listening")
             return true
         } catch {
+            PipelineDiagnostics.log(
+                "session establish failed error=\(PipelineDiagnostics.errorLabel(error))"
+            )
             audioSender?.stop()
             audioSender = nil
             await audioCapture.stop()
@@ -113,6 +126,7 @@ final class AppModel: ObservableObject {
 
     func stop() async {
         guard state.status.isActive || client != nil else { return }
+        PipelineDiagnostics.log("session stop requested")
 
         stopHealthChecks()
         recoveryTask?.cancel()
@@ -128,6 +142,7 @@ final class AppModel: ObservableObject {
         client = nil
         controller.didStop()
         publishState()
+        PipelineDiagnostics.log("session stopped")
     }
 
     func clearSubtitles() {
@@ -135,11 +150,49 @@ final class AppModel: ObservableObject {
         publishState()
     }
 
+    func switchSourceLanguage(
+        to language: SourceLanguage,
+        using settings: AppSettings
+    ) async {
+        guard language != .automatic else { return }
+
+        let targetLanguage = language.targetLanguageAfterQuickSwitch(
+            from: settings.sourceLanguage,
+            currentTarget: settings.targetLanguage
+        )
+        let needsReconnect = state.status == .listening
+            && (settings.sourceLanguage != language
+                || settings.targetLanguage != targetLanguage
+                || settings.translationMode != .highQuality)
+        settings.sourceLanguage = language
+        settings.targetLanguage = targetLanguage
+        settings.translationMode = .highQuality
+        settings.persistPreferences()
+        guard needsReconnect else { return }
+
+        PipelineDiagnostics.log(
+            "session language switch source=\(language.rawValue) target=\(targetLanguage.rawValue) mode=highQuality"
+        )
+        stopHealthChecks()
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        activeSettings = settings
+        controller.beginConnecting()
+        publishState()
+        audioSender?.stop()
+        audioSender = nil
+        await audioCapture.stop()
+        await client?.disconnect()
+        client = nil
+        _ = await establishSession(using: settings, clearSubtitles: false)
+    }
+
     func setOverlayLocked(_ locked: Bool) {
         overlayController?.updateLocked(locked)
     }
 
     func showOverlay() {
+        guard state.status == .listening else { return }
         overlayController?.show()
     }
 
@@ -149,6 +202,7 @@ final class AppModel: ObservableObject {
 
     private func receive(_ event: LiveTranslateServerEvent) async {
         if case let .error(code, message) = event, code == "transport_error" {
+            PipelineDiagnostics.log("session transport error code=\(code)")
             controller.beginConnecting()
             publishState()
             queueRecovery(after: message)
@@ -159,6 +213,7 @@ final class AppModel: ObservableObject {
         publishState()
 
         if case .error = event {
+            PipelineDiagnostics.log("session terminal error")
             stopHealthChecks()
             recoveryTask?.cancel()
             recoveryTask = nil
@@ -172,6 +227,9 @@ final class AppModel: ObservableObject {
     }
 
     private func handleCaptureFailure(_ error: Error) async {
+        PipelineDiagnostics.log(
+            "audio capture failed error=\(PipelineDiagnostics.errorLabel(error))"
+        )
         stopHealthChecks()
         audioSender?.stop()
         audioSender = nil
@@ -185,6 +243,9 @@ final class AppModel: ObservableObject {
 
     private func handleAudioTransportFailure(_ error: Error) async {
         guard !isRecovering, activeSettings != nil else { return }
+        PipelineDiagnostics.log(
+            "audio transport failed error=\(PipelineDiagnostics.errorLabel(error))"
+        )
         queueRecovery(after: error.localizedDescription)
     }
 
@@ -213,6 +274,9 @@ final class AppModel: ObservableObject {
             try await client.ping()
             return true
         } catch {
+            PipelineDiagnostics.log(
+                "connection health failed error=\(PipelineDiagnostics.errorLabel(error))"
+            )
             healthCheckTask = nil
             queueRecovery(after: error.localizedDescription)
             return false
@@ -230,6 +294,7 @@ final class AppModel: ObservableObject {
     private func recoverConnection(after failureMessage: String) async {
         guard !isRecovering, let settings = activeSettings else { return }
 
+        PipelineDiagnostics.log("session recovery started")
         isRecovering = true
         stopHealthChecks()
         controller.beginConnecting()
@@ -241,7 +306,8 @@ final class AppModel: ObservableObject {
         client = nil
 
         var recovered = false
-        for delay in [1, 2] {
+        for (attempt, delay) in [1, 2].enumerated() {
+            PipelineDiagnostics.log("session recovery attempt=\(attempt + 1)")
             do {
                 try await Task.sleep(for: .seconds(delay))
             } catch {
@@ -263,6 +329,7 @@ final class AppModel: ObservableObject {
             return
         }
         if !recovered {
+            PipelineDiagnostics.log("session recovery exhausted")
             activeSettings = nil
             controller.didFail(failureMessage)
             publishState()
@@ -272,6 +339,9 @@ final class AppModel: ObservableObject {
 
     private func publishState() {
         state = controller.state
+        if !state.status.isActive {
+            overlayController?.hide()
+        }
     }
 
     private func seedUITestSubtitles(targetLanguage: TargetLanguage) {
@@ -388,11 +458,20 @@ private final class AudioSendPipeline: @unchecked Sendable {
         self.onError = onError
         self.worker = Task {
             let clock = ContinuousClock()
+            var sentBufferCount = 0
+            var sentByteCount = 0
             do {
                 for await data in pair.stream {
                     try Task.checkCancellation()
                     let startedAt = clock.now
                     try await client.sendAudio(data)
+                    sentBufferCount += 1
+                    sentByteCount += data.count
+                    if sentBufferCount == 1 || sentBufferCount.isMultiple(of: 100) {
+                        PipelineDiagnostics.log(
+                            "audio sent buffers=\(sentBufferCount) bytes=\(sentByteCount)"
+                        )
+                    }
                     let sendMilliseconds = PipelineDiagnostics.milliseconds(
                         startedAt.duration(to: clock.now)
                     )
