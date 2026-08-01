@@ -9,12 +9,13 @@ final class SettingsWindowController {
 
     init(model: AppModel, settings: AppSettings) {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 610),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "mimi Settings"
+        window.title = "mimi 设置"
+        window.contentMinSize = NSSize(width: 520, height: 550)
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(
             rootView: SettingsView()

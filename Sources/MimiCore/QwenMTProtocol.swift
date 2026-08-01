@@ -46,6 +46,30 @@ public enum QwenMTModel: String, Sendable {
     case flash = "qwen-mt-flash"
 }
 
+public enum QwenMTDomainHint {
+    public static func spokenDialogue(for targetLanguage: TargetLanguage) -> String {
+        let languageGuidance = switch targetLanguage {
+        case .original:
+            ""
+        case .simplifiedChinese:
+            "Use concise, idiomatic Simplified Chinese and preserve natural particles such as 嗯、啊、呢、吧、嘛."
+        case .english:
+            "Use concise, idiomatic conversational English with natural contractions and interjections."
+        case .japanese:
+            "Use natural conversational Japanese with appropriate register, particles, and sentence endings."
+        }
+        return """
+        Natural spoken dialogue. \(languageGuidance) Preserve the speaker's tone and \
+        implied subjects from context. Avoid literal, explanatory, or translation-like \
+        wording. Faithfully preserve every vocalization represented in the source, \
+        including interjections, hesitation, breaths, gasps, moans, and cries. Render \
+        non-lexical sounds naturally in the target language. Do not sanitize, euphemize, \
+        censor, or omit explicit dialogue or vocal sounds. Collapse only clear accidental \
+        ASR repetition.
+        """
+    }
+}
+
 public struct QwenMTMemoryPair: Equatable, Sendable, Encodable {
     public let source: String
     public let target: String
@@ -173,6 +197,8 @@ private extension SourceLanguage {
         switch self {
         case .automatic:
             "auto"
+        case .chinese:
+            "Chinese"
         case .english:
             "English"
         case .japanese:

@@ -2,9 +2,17 @@ import Foundation
 
 public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
     case automatic = "auto"
+    case chinese = "zh"
     case english = "en"
     case japanese = "ja"
     case korean = "ko"
+
+    public static let manualCases: [SourceLanguage] = [
+        .japanese,
+        .english,
+        .korean,
+        .chinese
+    ]
 
     public var id: String { rawValue }
 
@@ -16,7 +24,12 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
             return nil
         }
 
-        if normalized == "ja" || normalized.hasPrefix("ja-") || normalized == "japanese" {
+        if normalized == "zh"
+            || normalized.hasPrefix("zh-")
+            || normalized == "chinese"
+            || normalized == "mandarin" {
+            self = .chinese
+        } else if normalized == "ja" || normalized.hasPrefix("ja-") || normalized == "japanese" {
             self = .japanese
         } else if normalized == "en" || normalized.hasPrefix("en-") || normalized == "english" {
             self = .english
@@ -31,6 +44,8 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
         switch self {
         case .automatic:
             "自动识别"
+        case .chinese:
+            "中文"
         case .english:
             "English"
         case .japanese:
@@ -40,10 +55,29 @@ public enum SourceLanguage: String, CaseIterable, Codable, Identifiable, Sendabl
         }
     }
 
-    public func statusDisplayName(detectedLanguage: DetectedLanguage?) -> String {
+    public func statusDisplayName(
+        detectedLanguage: DetectedLanguage?,
+        targetLanguage: TargetLanguage
+    ) -> String {
         guard self == .automatic else { return displayName }
-        guard let detectedLanguage else { return "正在识别" }
+        guard let detectedLanguage else { return "自动识别中" }
+        if targetLanguage == .simplifiedChinese, detectedLanguage.code == "zh" {
+            return "自动识别中"
+        }
         return "自动识别（\(detectedLanguage.displayName)）"
+    }
+
+    public func targetLanguageAfterQuickSwitch(
+        from previousSource: SourceLanguage,
+        currentTarget: TargetLanguage
+    ) -> TargetLanguage {
+        if self == .chinese {
+            return .original
+        }
+        if previousSource == .chinese, currentTarget == .original {
+            return .simplifiedChinese
+        }
+        return currentTarget
     }
 }
 

@@ -31,28 +31,19 @@ struct MenuBarView: View {
             }
             .keyboardShortcut(.space, modifiers: [.command, .shift])
 
-            Picker("Source Language", selection: $settings.sourceLanguage) {
-                ForEach(SourceLanguage.allCases) { language in
-                    Text(language.displayName).tag(language)
+            Picker("识别语言", selection: sourceLanguageBinding) {
+                ForEach(SourceLanguage.manualCases) { language in
+                    Text(sourceLanguageTitle(language)).tag(language)
                 }
             }
-            .disabled(model.isActive)
-            .onChange(of: settings.sourceLanguage) {
-                if settings.sourceLanguage == .automatic {
-                    settings.translationMode = .lowLatency
-                }
-                settings.persistPreferences()
-            }
+            .disabled(isChangingSession)
 
-            Picker("Translation Mode", selection: $settings.translationMode) {
-                ForEach(TranslationMode.allCases) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
-            }
-            .disabled(model.isActive || settings.sourceLanguage == .automatic)
-            .onChange(of: settings.translationMode) {
-                settings.persistPreferences()
-            }
+            Label(
+                settings.targetLanguage.translatesAudio ? "高质量翻译" : "只显示中文原文",
+                systemImage: settings.targetLanguage.translatesAudio ? "sparkles" : "text.quote"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
 
             Toggle("Lock Subtitle Position", isOn: $settings.isOverlayLocked)
                 .onChange(of: settings.isOverlayLocked) {
@@ -63,6 +54,7 @@ struct MenuBarView: View {
             Button("Show Subtitle Window") {
                 model.showOverlay()
             }
+            .disabled(model.state.status != .listening)
 
             Button("Clear Subtitles") {
                 model.clearSubtitles()
@@ -83,6 +75,9 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 290)
+        .onAppear {
+            prepareLanguagePreferences()
+        }
     }
 
     private var statusText: String {
@@ -106,6 +101,7 @@ struct MenuBarView: View {
             set: { shouldListen in
                 Task {
                     if shouldListen {
+                        prepareLanguagePreferences()
                         await model.start(using: settings)
                     } else {
                         await model.stop()
@@ -113,6 +109,38 @@ struct MenuBarView: View {
                 }
             }
         )
+    }
+
+    private var sourceLanguageBinding: Binding<SourceLanguage> {
+        Binding(
+            get: {
+                settings.sourceLanguage == .automatic ? .japanese : settings.sourceLanguage
+            },
+            set: { language in
+                Task {
+                    await model.switchSourceLanguage(to: language, using: settings)
+                }
+            }
+        )
+    }
+
+    private func sourceLanguageTitle(_ language: SourceLanguage) -> String {
+        language == .chinese ? "中文原文" : language.displayName
+    }
+
+    private func prepareLanguagePreferences() {
+        if settings.sourceLanguage == .automatic {
+            settings.sourceLanguage = .japanese
+        }
+        if settings.sourceLanguage == .chinese {
+            settings.targetLanguage = .original
+        }
+        settings.translationMode = .highQuality
+        settings.persistPreferences()
+    }
+
+    private var isChangingSession: Bool {
+        model.state.status == .connecting || model.state.status == .stopping
     }
 
     private var statusColor: Color {

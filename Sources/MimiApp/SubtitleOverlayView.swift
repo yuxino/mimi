@@ -6,6 +6,7 @@ struct SubtitleOverlayView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
     @State private var isHovering = false
+    @State private var showsLanguagePicker = false
     private let accentColor = Color(red: 0.48, green: 0.66, blue: 1)
 
     var body: some View {
@@ -64,14 +65,34 @@ struct SubtitleOverlayView: View {
         }
         .overlay(alignment: .topLeading) {
             if model.isActive, let languageStatus {
-                HStack(spacing: 3) {
-                    Text(languageStatus.source)
-                        .foregroundStyle(accentColor.opacity(isHovering ? 0.9 : 0.72))
-                    Text(languageStatus.separator)
-                        .foregroundStyle(.white.opacity(isHovering ? 0.48 : 0.32))
-                    Text(languageStatus.target)
-                        .foregroundStyle(.white.opacity(isHovering ? 0.7 : 0.5))
-                }
+                Button {
+                    showsLanguagePicker.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        RecognitionActivityIndicator(phase: activityPhase)
+
+                        Text(languageStatus.source)
+                            .foregroundStyle(accentColor.opacity(isHovering ? 0.96 : 0.8))
+                        Text(languageStatus.separator)
+                            .foregroundStyle(.white.opacity(isHovering ? 0.48 : 0.32))
+                        Text(languageStatus.target)
+                            .foregroundStyle(.white.opacity(isHovering ? 0.74 : 0.56))
+
+                        if settings.targetLanguage.translatesAudio {
+                            Rectangle()
+                                .fill(.white.opacity(0.14))
+                                .frame(width: 0.5, height: 9)
+
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 7, weight: .semibold))
+                                .foregroundStyle(accentColor.opacity(0.74))
+                            Text("高质量")
+                                .foregroundStyle(.white.opacity(isHovering ? 0.72 : 0.52))
+                        }
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 6, weight: .bold))
+                            .foregroundStyle(.white.opacity(isHovering ? 0.5 : 0.3))
+                    }
                     .font(.system(size: 10, weight: .medium))
                     .lineLimit(1)
                     .padding(.horizontal, 8)
@@ -84,11 +105,54 @@ struct SubtitleOverlayView: View {
                         Capsule()
                             .stroke(accentColor.opacity(isHovering ? 0.22 : 0.14), lineWidth: 0.5)
                     }
-                    .padding(.leading, 12)
-                    .padding(.top, 10)
-                    .accessibilityLabel(
-                        "Current languages: \(languageStatus.source) \(languageStatus.separator) \(languageStatus.target)"
-                    )
+                }
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+                .disabled(model.state.status != .listening)
+                .help(languagePickerHelp)
+                .accessibilityLabel(
+                    languagePickerAccessibilityLabel(languageStatus)
+                )
+                .popover(isPresented: $showsLanguagePicker, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("识别语言")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 2)
+
+                        ForEach(SourceLanguage.manualCases) { language in
+                            Button {
+                                showsLanguagePicker = false
+                                Task {
+                                    await model.switchSourceLanguage(to: language, using: settings)
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Text(sourceLanguageButtonTitle(language))
+                                    Spacer(minLength: 12)
+                                    if settings.sourceLanguage == language {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(accentColor)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 8)
+                            .frame(height: 26)
+                            .accessibilityLabel(
+                                settings.sourceLanguage == language
+                                    ? "\(sourceLanguageButtonTitle(language))，当前语言"
+                                    : "切换到 \(sourceLanguageButtonTitle(language))"
+                            )
+                        }
+                    }
+                    .padding(8)
+                    .frame(width: 156)
+                }
+                .padding(.leading, 12)
+                .padding(.top, 10)
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -121,9 +185,7 @@ struct SubtitleOverlayView: View {
 
     private var visibleRows: [SubtitleRow] {
         let subtitles = model.state.subtitles
-        let visibleHistory = subtitles.history.filter {
-            isSameLanguageMode || $0.source != $0.translation
-        }
+        let visibleHistory = subtitles.history
         var rows = visibleHistory.flatMap { pair in
             SubtitleTextSegmenter.segments(
                 in: pair.translation,
@@ -203,13 +265,32 @@ struct SubtitleOverlayView: View {
 
     private var languageStatus: (source: String, separator: String, target: String)? {
         let sourceName = settings.sourceLanguage.statusDisplayName(
-            detectedLanguage: model.state.detectedLanguage
+            detectedLanguage: model.state.detectedLanguage,
+            targetLanguage: settings.targetLanguage
         )
 
         if settings.targetLanguage == .original {
             return (sourceName, "·", "原文")
         }
         return (sourceName, "→", settings.targetLanguage.displayName)
+    }
+
+    private var activityPhase: OverlayActivityPhase {
+        switch model.state.status {
+        case .connecting, .stopping:
+            return .connecting
+        case .listening:
+            if isWaitingForFinalTranslation {
+                return .translating
+            }
+            if !model.state.subtitles.source.text.isEmpty,
+                !model.state.subtitles.source.isFinal {
+                return .recognizing
+            }
+            return .listening
+        case .idle, .error:
+            return .listening
+        }
     }
 
     private var emptyStateText: String {
@@ -238,6 +319,111 @@ struct SubtitleOverlayView: View {
         guard !isSameLanguageMode else { return false }
         let subtitles = model.state.subtitles
         return subtitles.source.isFinal && !subtitles.translation.isFinal
+    }
+
+    private func sourceLanguageButtonTitle(_ language: SourceLanguage) -> String {
+        language == .chinese ? "中文原文" : language.displayName
+    }
+
+    private var languagePickerHelp: String {
+        settings.targetLanguage.translatesAudio
+            ? "切换识别语言（保持高质量翻译）"
+            : "切换识别语言"
+    }
+
+    private func languagePickerAccessibilityLabel(
+        _ status: (source: String, separator: String, target: String)
+    ) -> String {
+        let mode = settings.targetLanguage.translatesAudio ? "高质量翻译" : "只显示原文"
+        return "\(activityPhase.accessibilityLabel)，当前语言：\(status.source) \(status.separator) \(status.target)，\(mode)。打开以切换识别语言。"
+    }
+}
+
+private enum OverlayActivityPhase {
+    case connecting
+    case listening
+    case recognizing
+    case translating
+
+    var accessibilityLabel: String {
+        switch self {
+        case .connecting:
+            "正在连接"
+        case .listening:
+            "正在聆听"
+        case .recognizing:
+            "正在识别"
+        case .translating:
+            "正在翻译"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .connecting:
+            .white.opacity(0.5)
+        case .listening:
+            Color(red: 0.48, green: 0.66, blue: 1).opacity(0.62)
+        case .recognizing:
+            Color(red: 0.48, green: 0.66, blue: 1)
+        case .translating:
+            Color(red: 0.72, green: 0.58, blue: 1)
+        }
+    }
+
+    var animationSpeed: Double {
+        switch self {
+        case .connecting:
+            2.6
+        case .listening:
+            1.8
+        case .recognizing:
+            7.2
+        case .translating:
+            4.4
+        }
+    }
+
+    var amplitude: Double {
+        switch self {
+        case .connecting:
+            3
+        case .listening:
+            2
+        case .recognizing:
+            6
+        case .translating:
+            4
+        }
+    }
+}
+
+private struct RecognitionActivityIndicator: View {
+    let phase: OverlayActivityPhase
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / 24)) { timeline in
+            let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .center, spacing: 1.25) {
+                ForEach(0..<3, id: \.self) { index in
+                    Capsule()
+                        .fill(phase.color)
+                        .frame(width: 1.75, height: barHeight(index: index, time: time))
+                }
+            }
+            .frame(width: 8, height: 10)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func barHeight(index: Int, time: TimeInterval) -> Double {
+        if reduceMotion {
+            return [3.0, 6.0, 4.0][index]
+        }
+        let wave = (sin(time * phase.animationSpeed + Double(index) * 1.7) + 1) / 2
+        return 2 + wave * phase.amplitude
     }
 }
 

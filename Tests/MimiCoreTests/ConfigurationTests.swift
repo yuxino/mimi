@@ -5,20 +5,78 @@ func runConfigurationTests(using runner: inout TestRunner) {
         try expectEqual(SourceLanguage.automatic.displayName, "自动识别")
     }
 
+    runner.run("manual source languages are available for high-quality switching") {
+        try expectEqual(
+            SourceLanguage.manualCases,
+            [.japanese, .english, .korean, .chinese]
+        )
+    }
+
+    runner.run("Chinese quick switch shows original subtitles") {
+        try expectEqual(
+            SourceLanguage.chinese.targetLanguageAfterQuickSwitch(
+                from: .japanese,
+                currentTarget: .simplifiedChinese
+            ),
+            .original
+        )
+    }
+
+    runner.run("leaving Chinese original mode restores Chinese translation") {
+        try expectEqual(
+            SourceLanguage.japanese.targetLanguageAfterQuickSwitch(
+                from: .chinese,
+                currentTarget: .original
+            ),
+            .simplifiedChinese
+        )
+    }
+
+    runner.run("ordinary language switches preserve a custom target") {
+        try expectEqual(
+            SourceLanguage.english.targetLanguageAfterQuickSwitch(
+                from: .japanese,
+                currentTarget: .english
+            ),
+            .english
+        )
+    }
+
     runner.run("automatic language status includes the detected language") {
         let japanese = DetectedLanguage(reportedLanguage: "ja-JP")
 
         try expectEqual(
-            SourceLanguage.automatic.statusDisplayName(detectedLanguage: japanese),
+            SourceLanguage.automatic.statusDisplayName(
+                detectedLanguage: japanese,
+                targetLanguage: .simplifiedChinese
+            ),
             "自动识别（日本語）"
         )
         try expectEqual(
-            SourceLanguage.automatic.statusDisplayName(detectedLanguage: nil),
-            "正在识别"
+            SourceLanguage.automatic.statusDisplayName(
+                detectedLanguage: nil,
+                targetLanguage: .simplifiedChinese
+            ),
+            "自动识别中"
+        )
+        try expectEqual(
+            SourceLanguage.automatic.statusDisplayName(
+                detectedLanguage: DetectedLanguage(reportedLanguage: "zh"),
+                targetLanguage: .simplifiedChinese
+            ),
+            "自动识别中"
+        )
+        try expectEqual(
+            SourceLanguage.automatic.statusDisplayName(
+                detectedLanguage: DetectedLanguage(reportedLanguage: "zh"),
+                targetLanguage: .english
+            ),
+            "自动识别（中文）"
         )
         try expectEqual(
             SourceLanguage.japanese.statusDisplayName(
-                detectedLanguage: DetectedLanguage(reportedLanguage: "en")
+                detectedLanguage: DetectedLanguage(reportedLanguage: "en"),
+                targetLanguage: .simplifiedChinese
             ),
             "日本語"
         )

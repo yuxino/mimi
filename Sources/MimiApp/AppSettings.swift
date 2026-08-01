@@ -26,11 +26,13 @@ final class AppSettings: ObservableObject {
 
     private let defaults: UserDefaults
     private let keychain: KeychainStore
+    private let isUITestMode: Bool
 
     init(defaults: UserDefaults = .standard, keychain: KeychainStore = KeychainStore()) {
         let isUITestMode = ProcessInfo.processInfo.environment["MIMI_UI_TEST"] == "1"
         self.defaults = defaults
         self.keychain = keychain
+        self.isUITestMode = isUITestMode
         self.workspaceID = isUITestMode
             ? "your-workspace-id"
             : defaults.string(forKey: Keys.workspaceID) ?? ""
@@ -87,6 +89,10 @@ final class AppSettings: ObservableObject {
         apiKey = configuration.apiKey
         targetLanguage = configuration.targetLanguage
         translationMode = configuration.effectiveTranslationMode
+        guard !isUITestMode else {
+            credentialLoadError = nil
+            return
+        }
         try keychain.saveAPIKey(configuration.apiKey)
         credentialLoadError = nil
         persistPreferences()
@@ -94,6 +100,7 @@ final class AppSettings: ObservableObject {
 
     @discardableResult
     func reloadAPIKey() throws -> Bool {
+        guard !isUITestMode else { return false }
         do {
             guard let storedKey = try keychain.loadAPIKey(), !storedKey.isEmpty else {
                 credentialLoadError = nil
@@ -109,6 +116,7 @@ final class AppSettings: ObservableObject {
     }
 
     func persistPreferences() {
+        guard !isUITestMode else { return }
         defaults.set(workspaceID, forKey: Keys.workspaceID)
         defaults.set(sourceLanguage.rawValue, forKey: Keys.sourceLanguage)
         defaults.set(targetLanguage.rawValue, forKey: Keys.targetLanguage)
