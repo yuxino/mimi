@@ -52,6 +52,21 @@ func runSessionControllerTests(using runner: inout TestRunner) {
         try expectEqual(controller.state.status, .error("Bad language"))
     }
 
+    runner.run("translation activity follows the real Plus request lifecycle") {
+        var controller = TranslationSessionController()
+        controller.didConnect()
+
+        controller.handle(.translationStarted)
+        try expectEqual(controller.state.isTranslationPending, true)
+
+        controller.handle(.translationFinal("翻译完成。"))
+        try expectEqual(controller.state.isTranslationPending, false)
+
+        controller.handle(.translationStarted)
+        controller.didFail("Request failed")
+        try expectEqual(controller.state.isTranslationPending, false)
+    }
+
     runner.run("clearing subtitles does not change session status") {
         var controller = TranslationSessionController()
         controller.didConnect()

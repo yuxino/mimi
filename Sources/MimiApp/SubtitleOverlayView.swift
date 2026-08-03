@@ -127,6 +127,13 @@ struct SubtitleOverlayView: View {
                     HStack(spacing: 4) {
                         RecognitionActivityIndicator(phase: activityPhase)
 
+                        if isWaitingForFinalTranslation {
+                            Text("翻译中")
+                                .foregroundStyle(activityPhase.color.opacity(0.96))
+                            Text("·")
+                                .foregroundStyle(.white.opacity(0.34))
+                        }
+
                         Text(languageStatus.source)
                             .foregroundStyle(accentColor.opacity(isHovering ? 0.96 : 0.8))
                         Text(languageStatus.separator)
@@ -381,8 +388,7 @@ struct SubtitleOverlayView: View {
 
     private var isWaitingForFinalTranslation: Bool {
         guard !isSameLanguageMode else { return false }
-        let subtitles = model.state.subtitles
-        return subtitles.source.isFinal && !subtitles.translation.isFinal
+        return model.state.isTranslationPending
     }
 
     private func sourceLanguageButtonTitle(_ language: SourceLanguage) -> String {
@@ -470,14 +476,27 @@ private struct RecognitionActivityIndicator: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / 24)) { timeline in
             let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 1.25) {
-                ForEach(0..<3, id: \.self) { index in
-                    Capsule()
-                        .fill(phase.color)
-                        .frame(width: 1.75, height: barHeight(index: index, time: time))
+            ZStack {
+                if case .translating = phase {
+                    Circle()
+                        .fill(phase.color.opacity(innerGlowOpacity(time: time)))
+                        .frame(width: innerGlowSize(time: time), height: innerGlowSize(time: time))
+
+                    Circle()
+                        .stroke(phase.color.opacity(outerRingOpacity(time: time)), lineWidth: 1)
+                        .frame(width: outerRingSize(time: time), height: outerRingSize(time: time))
                 }
+
+                HStack(alignment: .center, spacing: 1.25) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Capsule()
+                            .fill(phase.color)
+                            .frame(width: 1.75, height: barHeight(index: index, time: time))
+                    }
+                }
+                .frame(width: 8, height: 10)
             }
-            .frame(width: 8, height: 10)
+            .frame(width: 18, height: 18)
         }
         .accessibilityHidden(true)
     }
@@ -488,6 +507,27 @@ private struct RecognitionActivityIndicator: View {
         }
         let wave = (sin(time * phase.animationSpeed + Double(index) * 1.7) + 1) / 2
         return 2 + wave * phase.amplitude
+    }
+
+    private func pulseProgress(time: TimeInterval) -> Double {
+        guard !reduceMotion else { return 0.45 }
+        return (sin(time * 3.2) + 1) / 2
+    }
+
+    private func innerGlowSize(time: TimeInterval) -> Double {
+        10 + pulseProgress(time: time) * 4
+    }
+
+    private func innerGlowOpacity(time: TimeInterval) -> Double {
+        0.13 + pulseProgress(time: time) * 0.15
+    }
+
+    private func outerRingSize(time: TimeInterval) -> Double {
+        10 + pulseProgress(time: time) * 8
+    }
+
+    private func outerRingOpacity(time: TimeInterval) -> Double {
+        0.34 - pulseProgress(time: time) * 0.22
     }
 }
 
