@@ -37,7 +37,7 @@ struct SubtitleOverlayView: View {
             Spacer(minLength: 4)
 
             OverlayControlButton(
-                systemImage: "chevron.up",
+                systemImage: "chevron.down",
                 label: "展开字幕"
             ) {
                 model.setOverlayCollapsed(false)
@@ -222,7 +222,7 @@ struct SubtitleOverlayView: View {
             if model.isActive, !settings.isOverlayLocked {
                 HStack(spacing: 4) {
                     OverlayControlButton(
-                        systemImage: "chevron.down",
+                        systemImage: "chevron.up",
                         label: "收起字幕"
                     ) {
                         model.setOverlayCollapsed(true)
