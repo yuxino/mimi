@@ -17,8 +17,7 @@ Thank you for improving mimi. Small, focused pull requests are the easiest to re
 ## 本地验证 / Local verification
 
 ```bash
-swift run mimi-core-tests
-swift build -c release -Xswiftc -warnings-as-errors
+./scripts/check.sh
 ./scripts/package-app.sh
 ```
 
@@ -51,4 +50,3 @@ Without a usable identity, the script falls back to ad-hoc signing. The app stil
 - List tests run and include screenshots for UI changes.
 - Keep commits focused and avoid unrelated refactors.
 - Confirm the diff contains no credentials, recordings, personal paths, or build artifacts.
-
