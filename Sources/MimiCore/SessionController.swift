@@ -4,15 +4,18 @@ public struct TranslationSessionState: Equatable, Sendable {
     public var status: SessionStatus
     public var subtitles: SubtitleSnapshot
     public var detectedLanguage: DetectedLanguage?
+    public var isTranslationPending: Bool
 
     public init(
         status: SessionStatus = .idle,
         subtitles: SubtitleSnapshot = .empty,
-        detectedLanguage: DetectedLanguage? = nil
+        detectedLanguage: DetectedLanguage? = nil,
+        isTranslationPending: Bool = false
     ) {
         self.status = status
         self.subtitles = subtitles
         self.detectedLanguage = detectedLanguage
+        self.isTranslationPending = isTranslationPending
     }
 }
 
@@ -29,22 +32,31 @@ public struct TranslationSessionController: Sendable {
     public mutating func beginConnecting() {
         state.status = .connecting
         state.detectedLanguage = nil
+        state.isTranslationPending = false
     }
 
     public mutating func didConnect() {
         state.status = .listening
     }
 
+    public mutating func didPause() {
+        state.status = .listening
+        state.isTranslationPending = false
+    }
+
     public mutating func beginStopping() {
         state.status = .stopping
+        state.isTranslationPending = false
     }
 
     public mutating func didStop() {
         state.status = .idle
+        state.isTranslationPending = false
     }
 
     public mutating func didFail(_ message: String) {
         state.status = .error(message)
+        state.isTranslationPending = false
     }
 
     public mutating func clearSubtitles() {
@@ -69,9 +81,12 @@ public struct TranslationSessionController: Sendable {
         case let .sourceFinal(text, language):
             updateDetectedLanguage(language)
             subtitleReducer.apply(.sourceFinal(text))
+        case .translationStarted:
+            state.isTranslationPending = true
         case let .translationDraft(text):
             subtitleReducer.apply(.translationDraft(text))
         case let .translationFinal(text):
+            state.isTranslationPending = false
             subtitleReducer.apply(.translationFinal(text))
         case .sessionFinished:
             didStop()

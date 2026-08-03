@@ -111,4 +111,28 @@ func runOverlayResizeInteractionTests(using runner: inout TestRunner) {
         try expectEqual(state.update(region: nil), .restoreDefault)
         try expectEqual(state.update(region: nil), .none)
     }
+
+    runner.run("collapsing keeps the overlay centered and bottom anchored") {
+        let expanded = CGRect(x: 200, y: 72, width: 640, height: 136)
+        let collapsed = SubtitleOverlayCollapseLayout.collapsedFrame(
+            from: expanded,
+            compactSize: CGSize(width: 280, height: 54)
+        )
+
+        try expectEqual(collapsed.midX, expanded.midX)
+        try expectEqual(collapsed.minY, expanded.minY)
+        try expectEqual(collapsed.size, CGSize(width: 280, height: 54))
+    }
+
+    runner.run("expanding follows a compact bar moved by the user") {
+        let movedCompactBar = CGRect(x: 80, y: 180, width: 280, height: 54)
+        let expanded = SubtitleOverlayCollapseLayout.expandedFrame(
+            from: movedCompactBar,
+            expandedSize: CGSize(width: 700, height: 180)
+        )
+
+        try expectEqual(expanded.midX, movedCompactBar.midX)
+        try expectEqual(expanded.minY, movedCompactBar.minY)
+        try expectEqual(expanded.size, CGSize(width: 700, height: 180))
+    }
 }

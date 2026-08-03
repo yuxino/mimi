@@ -54,4 +54,32 @@ func runSubtitleTextSegmenterTests(using runner: inout TestRunner) {
 
         try expectEqual(Array(extended.prefix(first.count - 1)), Array(first.dropLast()))
     }
+
+    runner.run("long draft preview keeps only its newest two segments") {
+        let text = "第一段已经说完。第二段也已经说完。第三段正在继续。第四段是最新内容"
+        let fullSegments = SubtitleTextSegmenter.segments(
+            in: text,
+            maximumCharacters: 12
+        )
+
+        try expectEqual(
+            SubtitleTextSegmenter.visibleDraftSegments(
+                in: text,
+                maximumCharacters: 12,
+                maximumSegments: 2
+            ),
+            Array(fullSegments.suffix(2))
+        )
+    }
+
+    runner.run("short draft preview remains intact") {
+        try expectEqual(
+            SubtitleTextSegmenter.visibleDraftSegments(
+                in: "短字幕",
+                maximumCharacters: 12,
+                maximumSegments: 2
+            ),
+            ["短字幕"]
+        )
+    }
 }
