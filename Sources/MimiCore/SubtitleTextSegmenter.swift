@@ -63,6 +63,19 @@ public enum SubtitleTextSegmenter {
         return result
     }
 
+    public static func visibleDraftSegments(
+        in text: String,
+        maximumCharacters: Int,
+        maximumSegments: Int = 2
+    ) -> [String] {
+        let maximumSegments = max(0, maximumSegments)
+        guard maximumSegments > 0 else { return [] }
+        return Array(
+            segments(in: text, maximumCharacters: maximumCharacters)
+                .suffix(maximumSegments)
+        )
+    }
+
     private static func appendSegment(
         from remaining: inout [Character],
         through end: Int,

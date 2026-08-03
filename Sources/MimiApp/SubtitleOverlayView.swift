@@ -278,11 +278,18 @@ struct SubtitleOverlayView: View {
         let currentIsAlreadyInHistory = currentLine.isFinal
             && visibleHistory.last?.translation == currentLine.text
         if shouldShowCurrentSubtitle(currentLine), !currentIsAlreadyInHistory {
-            rows.append(
-                contentsOf: SubtitleTextSegmenter.segments(
+            let currentSegments = currentLine.isFinal
+                ? SubtitleTextSegmenter.segments(
                     in: currentLine.text,
                     maximumCharacters: subtitleSegmentLength
-                ).enumerated().map { index, text in
+                )
+                : SubtitleTextSegmenter.visibleDraftSegments(
+                    in: currentLine.text,
+                    maximumCharacters: subtitleSegmentLength,
+                    maximumSegments: 2
+                )
+            rows.append(
+                contentsOf: currentSegments.enumerated().map { index, text in
                     SubtitleRow(
                         id: "current-\(index)",
                         text: text,
