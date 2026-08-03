@@ -16,8 +16,11 @@ final class OverlayWindowController {
     private static let defaultSize = SubtitleOverlayMetrics.referenceSize
     private static let minimumSize = SubtitleOverlayMetrics.minimumSize
     private static let maximumSize = SubtitleOverlayMetrics.maximumSize
+    private static let collapsedSize = NSSize(width: 280, height: 54)
 
     private let panel: ResizeCursorPanel
+    private let hostingView: ResizeCursorHostingView
+    private var expandedSize = SubtitleOverlayMetrics.referenceSize
 
     init(model: AppModel, settings: AppSettings) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -46,13 +49,14 @@ final class OverlayWindowController {
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.contentView = ResizeCursorHostingView(
+        hostingView = ResizeCursorHostingView(
             rootView: AnyView(
                 SubtitleOverlayView()
                 .environmentObject(model)
                 .environmentObject(settings)
             )
         )
+        panel.contentView = hostingView
 
         panel.setFrameAutosaveName(Self.frameAutosaveName)
         var restoredFrame = panel.frame
@@ -73,7 +77,7 @@ final class OverlayWindowController {
         )
         panel.saveFrame(usingName: Self.frameAutosaveName)
         defaults.set(Self.frameLayoutVersion, forKey: Self.frameLayoutVersionKey)
-
+        expandedSize = panel.frame.size
     }
 
     func show() {
@@ -92,6 +96,59 @@ final class OverlayWindowController {
         panel.ignoresMouseEvents = locked
         panel.isMovable = !locked
         panel.isMovableByWindowBackground = false
+    }
+
+    func setCollapsed(_ collapsed: Bool) {
+        panel.resetResizeCursor()
+
+        if collapsed {
+            expandedSize = panel.frame.size
+            panel.saveFrame(usingName: Self.frameAutosaveName)
+            panel.setFrameAutosaveName("")
+            setResizeInteractionEnabled(false)
+            panel.minSize = Self.collapsedSize
+            panel.maxSize = Self.collapsedSize
+            panel.contentMinSize = Self.collapsedSize
+            panel.contentMaxSize = Self.collapsedSize
+
+            let frame = SubtitleOverlayCollapseLayout.collapsedFrame(
+                from: panel.frame,
+                compactSize: Self.collapsedSize
+            )
+            panel.setFrame(constrainedFrame(frame), display: true, animate: true)
+        } else {
+            panel.minSize = Self.minimumSize
+            panel.maxSize = Self.maximumSize
+            panel.contentMinSize = Self.minimumSize
+            panel.contentMaxSize = Self.maximumSize
+
+            let frame = SubtitleOverlayCollapseLayout.expandedFrame(
+                from: panel.frame,
+                expandedSize: expandedSize
+            )
+            panel.setFrameAutosaveName(Self.frameAutosaveName)
+            panel.setFrame(constrainedFrame(frame), display: true, animate: true)
+            panel.saveFrame(usingName: Self.frameAutosaveName)
+            setResizeInteractionEnabled(true)
+        }
+    }
+
+    private func setResizeInteractionEnabled(_ enabled: Bool) {
+        panel.resizeInteractionEnabled = enabled
+        hostingView.resizeInteractionEnabled = enabled
+    }
+
+    private func constrainedFrame(_ frame: NSRect) -> NSRect {
+        let targetScreen = NSScreen.screens.max { lhs, rhs in
+            lhs.visibleFrame.intersection(frame).area
+                < rhs.visibleFrame.intersection(frame).area
+        } ?? NSScreen.main
+        return Self.constrain(
+            frame,
+            to: targetScreen?.visibleFrame
+                ?? NSScreen.main?.visibleFrame
+                ?? frame
+        )
     }
 
     private static func constrain(_ frame: NSRect, to visibleFrame: NSRect) -> NSRect {
@@ -116,6 +173,16 @@ private final class ResizeCursorPanel: NSPanel {
     nonisolated(unsafe) private var localMouseMonitor: Any?
     nonisolated(unsafe) private var globalMouseMonitor: Any?
     private var cursorRefreshIsScheduled = false
+    var resizeInteractionEnabled = true {
+        didSet {
+            if !resizeInteractionEnabled {
+                resetResizeCursor()
+            }
+            if let contentView {
+                invalidateCursorRects(for: contentView)
+            }
+        }
+    }
 
     override init(
         contentRect: NSRect,
@@ -148,6 +215,11 @@ private final class ResizeCursorPanel: NSPanel {
 
     override func sendEvent(_ event: NSEvent) {
         super.sendEvent(event)
+
+        guard resizeInteractionEnabled else {
+            resetResizeCursor()
+            return
+        }
 
         switch event.type {
         case .mouseMoved, .cursorUpdate:
@@ -192,7 +264,7 @@ private final class ResizeCursorPanel: NSPanel {
     }
 
     private func scheduleCursorRefresh() {
-        guard isVisible, !ignoresMouseEvents else { return }
+        guard resizeInteractionEnabled, isVisible, !ignoresMouseEvents else { return }
         guard !cursorRefreshIsScheduled else { return }
         cursorRefreshIsScheduled = true
 
@@ -234,6 +306,14 @@ private final class ResizeCursorHostingView: NSHostingView<AnyView> {
     private let hitTester = OverlayResizeHitTester()
     private var pointerTrackingArea: NSTrackingArea?
     private var cursorState = OverlayResizeCursorState()
+    var resizeInteractionEnabled = true {
+        didSet {
+            if !resizeInteractionEnabled {
+                clearResizeCursorIfNeeded()
+            }
+            window?.invalidateCursorRects(for: self)
+        }
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -265,10 +345,15 @@ private final class ResizeCursorHostingView: NSHostingView<AnyView> {
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
+        guard resizeInteractionEnabled else { return }
         updateCursor(for: event)
     }
 
     override func cursorUpdate(with event: NSEvent) {
+        guard resizeInteractionEnabled else {
+            clearResizeCursorIfNeeded()
+            return
+        }
         updateCursor(for: event)
     }
 
@@ -279,6 +364,8 @@ private final class ResizeCursorHostingView: NSHostingView<AnyView> {
 
     override func resetCursorRects() {
         super.resetCursorRects()
+
+        guard resizeInteractionEnabled else { return }
 
         for region in OverlayResizeRegion.allCases {
             addCursorRect(

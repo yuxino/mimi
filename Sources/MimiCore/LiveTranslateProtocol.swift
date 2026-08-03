@@ -82,6 +82,7 @@ public enum LiveTranslateServerEvent: Equatable, Sendable {
     case sessionUpdated
     case sourceDraft(text: String, language: String?)
     case sourceFinal(text: String, language: String?)
+    case translationStarted
     case translationDraft(String)
     case translationFinal(String)
     case sessionFinished
