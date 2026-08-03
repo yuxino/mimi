@@ -5,7 +5,7 @@ public actor TranslationClient {
 
     private enum Backend {
         case lowLatency(LowLatencyTranslationClient)
-        case highQuality(LiveTranslateClient)
+        case highQuality(HighQualityTranslationClient)
     }
 
     private let backend: Backend
@@ -27,7 +27,7 @@ public actor TranslationClient {
             )
         case .highQuality:
             self.backend = .highQuality(
-                try LiveTranslateClient(
+                try HighQualityTranslationClient(
                     workspaceID: configuration.workspaceID,
                     apiKey: configuration.apiKey,
                     sourceLanguage: configuration.sourceLanguage,

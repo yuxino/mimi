@@ -180,7 +180,7 @@ public actor QwenMTClient {
 
         var request = URLRequest(url: endpoint.url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10
+        request.timeoutInterval = model == .plus ? 30 : 10
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try QwenMTRequestEncoder.request(
