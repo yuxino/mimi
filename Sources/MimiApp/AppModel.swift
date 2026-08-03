@@ -428,6 +428,10 @@ final class AppModel: ObservableObject {
             )
         }
 
+        if ProcessInfo.processInfo.environment["MIMI_UI_TEST_TRANSLATING"] == "1" {
+            controller.handle(.translationStarted)
+        }
+
         publishState()
     }
 

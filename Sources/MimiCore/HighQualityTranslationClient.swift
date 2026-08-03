@@ -126,6 +126,7 @@ public actor HighQualityTranslationClient {
             PipelineDiagnostics.log(
                 "mt plus final started waitMs=\(PipelineDiagnostics.milliseconds(request.enqueuedAt.duration(to: startedAt))) remaining=\(finalQueue.count)"
             )
+            await emit(.translationStarted)
             await emit(.sourceFinal(text: request.text, language: request.language))
 
             do {
