@@ -67,6 +67,21 @@ func runSessionControllerTests(using runner: inout TestRunner) {
         try expectEqual(controller.state.isTranslationPending, false)
     }
 
+    runner.run("pausing clears translation activity without discarding subtitles") {
+        var controller = TranslationSessionController()
+        controller.didConnect()
+        controller.handle(.sourceFinal(text: "Please wait.", language: "en"))
+        controller.handle(.translationFinal("请稍等。"))
+        controller.handle(.translationStarted)
+        let subtitlesBeforePause = controller.state.subtitles
+
+        controller.didPause()
+
+        try expectEqual(controller.state.status, .listening)
+        try expectEqual(controller.state.isTranslationPending, false)
+        try expectEqual(controller.state.subtitles, subtitlesBeforePause)
+    }
+
     runner.run("clearing subtitles does not change session status") {
         var controller = TranslationSessionController()
         controller.didConnect()

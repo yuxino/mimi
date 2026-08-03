@@ -39,6 +39,11 @@ public struct TranslationSessionController: Sendable {
         state.status = .listening
     }
 
+    public mutating func didPause() {
+        state.status = .listening
+        state.isTranslationPending = false
+    }
+
     public mutating func beginStopping() {
         state.status = .stopping
         state.isTranslationPending = false
