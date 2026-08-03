@@ -1,12 +1,22 @@
 import Foundation
+import OSLog
 
 public enum PipelineDiagnostics {
+    private static let logger = Logger(
+        subsystem: "app.yuxino.mimi",
+        category: "pipeline"
+    )
+
+    // Diagnostics contain timing, counts, language codes, and sanitized error
+    // labels only. Keep them on by default so intermittent pipeline failures
+    // can be diagnosed without recording subtitle or translation content.
     public static let isEnabled =
-        ProcessInfo.processInfo.environment["MIMI_PIPELINE_DIAGNOSTICS"] == "1"
+        ProcessInfo.processInfo.environment["MIMI_PIPELINE_DIAGNOSTICS"] != "0"
 
     public static func log(_ message: @autoclosure () -> String) {
         guard isEnabled else { return }
-        NSLog("mimi-pipeline %@", message())
+        let value = message()
+        logger.notice("\(value, privacy: .public)")
     }
 
     public static func errorLabel(_ error: Error) -> String {

@@ -15,6 +15,10 @@ public actor HighQualityTranslationClient {
     private let translatesAudio: Bool
     private let clock = ContinuousClock()
     private var eventHandler: EventHandler?
+    private var draftCommitter = ASRDraftCommitter()
+    private var latestDraftLanguage: String?
+    private var draftStabilityTask: Task<Void, Never>?
+    private var draftMaximumWaitTask: Task<Void, Never>?
     private var finalQueue: [TranslationRequest] = []
     private var translationMemory: [QwenMTMemoryPair] = []
     private var finalWorker: Task<Void, Never>?
@@ -46,6 +50,7 @@ public actor HighQualityTranslationClient {
     }
 
     public func connect(onEvent: @escaping EventHandler) async throws {
+        resetDraftFinalization()
         cancelFinalTranslations()
         eventHandler = onEvent
         try await asrClient.connect { [weak self] event in
@@ -63,12 +68,15 @@ public actor HighQualityTranslationClient {
 
     public func finish() async {
         await asrClient.finish()
+        await commitPendingDraft(boundary: "session-finish")
         await waitForFinalTranslations(timeout: .seconds(35))
+        resetDraftFinalization()
         cancelFinalTranslations()
         eventHandler = nil
     }
 
     public func disconnect() async {
+        resetDraftFinalization()
         cancelFinalTranslations()
         eventHandler = nil
         await asrClient.disconnect()
@@ -79,37 +87,110 @@ public actor HighQualityTranslationClient {
         case let .sourceDraft(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
+            let uncommittedText = draftCommitter.updateDraft(text)
+            latestDraftLanguage = language
             PipelineDiagnostics.log(
-                "audio3 asr draft length=\(text.count) language=\(language ?? sourceLanguage.rawValue)"
+                "audio3 asr draft length=\(text.count) pendingLength=\(uncommittedText.count) language=\(language ?? sourceLanguage.rawValue)"
             )
+            guard draftCommitter.hasPendingText else { return }
+            scheduleDraftFinalization()
             if !translatesAudio {
-                await emit(.sourceDraft(text: text, language: language))
-                await emit(.translationDraft(text))
+                await emit(.sourceDraft(text: uncommittedText, language: language))
+                await emit(.translationDraft(uncommittedText))
             } else if finalWorker == nil, finalQueue.isEmpty {
                 // While Plus is translating a confirmed sentence, keep that
                 // sentence visible instead of pairing its translation with a
                 // draft from the next sentence.
-                await emit(.sourceDraft(text: text, language: language))
+                await emit(.sourceDraft(text: uncommittedText, language: language))
             }
 
         case let .sourceFinal(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
+            cancelDraftTimers()
+            latestDraftLanguage = nil
+            let uncommittedText = draftCommitter.finishSentence(text)
             PipelineDiagnostics.log(
-                "audio3 asr final length=\(text.count) language=\(language ?? sourceLanguage.rawValue) queuedFinals=\(finalQueue.count)"
+                "audio3 asr final length=\(text.count) pendingLength=\(uncommittedText?.count ?? 0) language=\(language ?? sourceLanguage.rawValue) queuedFinals=\(finalQueue.count)"
             )
-            guard translatesAudio else {
-                await emit(.sourceFinal(text: text, language: language))
-                await emit(.translationFinal(text))
+            guard let uncommittedText else {
+                PipelineDiagnostics.log("audio3 asr final deduplicated")
                 return
             }
-            finalQueue.append(.init(text: text, language: language, enqueuedAt: clock.now))
-            PipelineDiagnostics.log("mt plus final enqueued depth=\(finalQueue.count)")
-            startFinalWorkerIfNeeded()
+            await enqueueConfirmedSource(
+                uncommittedText,
+                language: language,
+                boundary: "server-final"
+            )
 
         default:
             await emit(event)
         }
+    }
+
+    private func scheduleDraftFinalization() {
+        draftStabilityTask?.cancel()
+        draftStabilityTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(1_200))
+                guard !Task.isCancelled else { return }
+                await self?.commitPendingDraft(boundary: "stable-draft")
+            } catch {
+                return
+            }
+        }
+
+        guard draftMaximumWaitTask == nil else { return }
+        draftMaximumWaitTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(4_500))
+                guard !Task.isCancelled else { return }
+                await self?.commitPendingDraft(boundary: "maximum-wait")
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func commitPendingDraft(boundary: String) async {
+        cancelDraftTimers()
+        guard let text = draftCommitter.commitLatestDraft() else { return }
+        let language = latestDraftLanguage
+        PipelineDiagnostics.log(
+            "audio3 asr local final boundary=\(boundary) length=\(text.count) language=\(language ?? sourceLanguage.rawValue)"
+        )
+        await enqueueConfirmedSource(text, language: language, boundary: boundary)
+    }
+
+    private func enqueueConfirmedSource(
+        _ text: String,
+        language: String?,
+        boundary: String
+    ) async {
+        guard translatesAudio else {
+            await emit(.sourceFinal(text: text, language: language))
+            await emit(.translationFinal(text))
+            return
+        }
+
+        finalQueue.append(.init(text: text, language: language, enqueuedAt: clock.now))
+        PipelineDiagnostics.log(
+            "mt plus final enqueued boundary=\(boundary) depth=\(finalQueue.count)"
+        )
+        startFinalWorkerIfNeeded()
+    }
+
+    private func cancelDraftTimers() {
+        draftStabilityTask?.cancel()
+        draftStabilityTask = nil
+        draftMaximumWaitTask?.cancel()
+        draftMaximumWaitTask = nil
+    }
+
+    private func resetDraftFinalization() {
+        cancelDraftTimers()
+        draftCommitter.reset()
+        latestDraftLanguage = nil
     }
 
     private func startFinalWorkerIfNeeded() {

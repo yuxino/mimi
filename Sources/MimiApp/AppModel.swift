@@ -553,6 +553,7 @@ private final class AudioSendPipeline: @unchecked Sendable {
             let clock = ContinuousClock()
             var sentBufferCount = 0
             var sentByteCount = 0
+            var peakAudioSample = 0
             do {
                 for await data in pair.stream {
                     try Task.checkCancellation()
@@ -560,10 +561,12 @@ private final class AudioSendPipeline: @unchecked Sendable {
                     try await client.sendAudio(data)
                     sentBufferCount += 1
                     sentByteCount += data.count
+                    peakAudioSample = max(peakAudioSample, Self.peakPCM16Sample(in: data))
                     if sentBufferCount == 1 || sentBufferCount.isMultiple(of: 100) {
                         PipelineDiagnostics.log(
-                            "audio sent buffers=\(sentBufferCount) bytes=\(sentByteCount)"
+                            "audio sent buffers=\(sentBufferCount) bytes=\(sentByteCount) peakDbFS=\(Self.decibelsFullScale(for: peakAudioSample))"
                         )
+                        peakAudioSample = 0
                     }
                     let sendMilliseconds = PipelineDiagnostics.milliseconds(
                         startedAt.duration(to: clock.now)
@@ -614,5 +617,24 @@ private final class AudioSendPipeline: @unchecked Sendable {
         guard shouldReport else { return }
         continuation.finish()
         onError(error)
+    }
+
+    private static func peakPCM16Sample(in data: Data) -> Int {
+        data.withUnsafeBytes { bytes in
+            var peak = 0
+            var offset = 0
+            while offset + 1 < bytes.count {
+                let bits = UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
+                let sample = Int(Int16(bitPattern: bits))
+                peak = max(peak, abs(sample))
+                offset += 2
+            }
+            return peak
+        }
+    }
+
+    private static func decibelsFullScale(for peak: Int) -> Int {
+        guard peak > 0 else { return -96 }
+        return Int((20 * log10(Double(peak) / 32_768)).rounded())
     }
 }
