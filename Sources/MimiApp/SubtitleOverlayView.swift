@@ -10,7 +10,63 @@ struct SubtitleOverlayView: View {
     private let accentColor = Color(red: 0.48, green: 0.66, blue: 1)
 
     var body: some View {
-        overlayCanvas
+        Group {
+            if model.isOverlayCollapsed {
+                compactOverlay
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            } else {
+                overlayCanvas
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: model.isOverlayCollapsed)
+    }
+
+    private var compactOverlay: some View {
+        HStack(spacing: 8) {
+            WindowDragArea(onDoubleClick: model.toggleOverlayCollapsed)
+                .frame(width: 42, height: 30)
+
+            RecognitionActivityIndicator(phase: activityPhase)
+
+            Text(activityPhase.accessibilityLabel)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.76))
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            OverlayControlButton(
+                systemImage: "chevron.up",
+                label: "展开字幕"
+            ) {
+                model.setOverlayCollapsed(false)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.black.opacity(0.68))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.05), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(accentColor.opacity(isHovering ? 0.3 : 0.16), lineWidth: 0.75)
+        }
+        .onHover { isHovering = $0 }
+        .padding(6)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("字幕已收起，\(activityPhase.accessibilityLabel)")
     }
 
     private var overlayCanvas: some View {
@@ -31,7 +87,7 @@ struct SubtitleOverlayView: View {
                 )
 
             VStack(spacing: 0) {
-                WindowDragArea()
+                WindowDragArea(onDoubleClick: model.toggleOverlayCollapsed)
                     .frame(width: 120, height: 18)
                     .frame(maxWidth: .infinity)
                     .frame(height: model.isActive ? 38 : 24, alignment: .bottom)
@@ -156,23 +212,31 @@ struct SubtitleOverlayView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if !settings.isOverlayLocked
-                && (isHovering || model.showsOverlayControlsForUITesting) {
+            if model.isActive, !settings.isOverlayLocked {
                 HStack(spacing: 4) {
-                    if hasSubtitleContent {
-                        OverlayControlButton(
-                            systemImage: "eraser.fill",
-                            label: "Clear subtitles"
-                        ) {
-                            model.clearSubtitles()
-                        }
+                    OverlayControlButton(
+                        systemImage: "chevron.down",
+                        label: "收起字幕"
+                    ) {
+                        model.setOverlayCollapsed(true)
                     }
 
-                    OverlayControlButton(
-                        systemImage: "gearshape.fill",
-                        label: "Open mimi Settings"
-                    ) {
-                        model.showSettings()
+                    if isHovering || model.showsOverlayControlsForUITesting {
+                        if hasSubtitleContent {
+                            OverlayControlButton(
+                                systemImage: "eraser.fill",
+                                label: "Clear subtitles"
+                            ) {
+                                model.clearSubtitles()
+                            }
+                        }
+
+                        OverlayControlButton(
+                            systemImage: "gearshape.fill",
+                            label: "Open mimi Settings"
+                        ) {
+                            model.showSettings()
+                        }
                     }
                 }
                 .padding(10)
@@ -530,16 +594,22 @@ private struct SubtitleTimeline: View {
 }
 
 private struct WindowDragArea: NSViewRepresentable {
+    let onDoubleClick: () -> Void
+
     func makeNSView(context: Context) -> NSView {
-        let view = DraggableNSView()
-        view.toolTip = "Drag to move subtitles"
+        let view = DraggableNSView(onDoubleClick: onDoubleClick)
+        view.toolTip = "拖动字幕；双击收起或展开"
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let view = nsView as? DraggableNSView else { return }
+        view.onDoubleClick = onDoubleClick
+    }
 
     private final class DraggableNSView: NSView {
         private let handle = NSView()
+        var onDoubleClick: () -> Void
         private var trackingArea: NSTrackingArea?
         private var isPointerInside = false {
             didSet {
@@ -549,8 +619,9 @@ private struct WindowDragArea: NSViewRepresentable {
             }
         }
 
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
+        init(onDoubleClick: @escaping () -> Void) {
+            self.onDoubleClick = onDoubleClick
+            super.init(frame: .zero)
             wantsLayer = true
             handle.wantsLayer = true
             handle.layer?.cornerRadius = 1.5
@@ -602,6 +673,10 @@ private struct WindowDragArea: NSViewRepresentable {
         }
 
         override func mouseDown(with event: NSEvent) {
+            if event.clickCount == 2 {
+                onDoubleClick()
+                return
+            }
             NSCursor.closedHand.push()
             defer { NSCursor.pop() }
             window?.performDrag(with: event)

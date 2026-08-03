@@ -5,6 +5,7 @@ import MimiCore
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var state = TranslationSessionState()
+    @Published private(set) var isOverlayCollapsed = false
 
     private var controller = TranslationSessionController()
     private let audioCapture = SystemAudioCapture()
@@ -194,6 +195,16 @@ final class AppModel: ObservableObject {
     func showOverlay() {
         guard state.status == .listening else { return }
         overlayController?.show()
+    }
+
+    func toggleOverlayCollapsed() {
+        setOverlayCollapsed(!isOverlayCollapsed)
+    }
+
+    func setOverlayCollapsed(_ collapsed: Bool) {
+        guard collapsed != isOverlayCollapsed else { return }
+        overlayController?.setCollapsed(collapsed)
+        isOverlayCollapsed = collapsed
     }
 
     func showSettings() {

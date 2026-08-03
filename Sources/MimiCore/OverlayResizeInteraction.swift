@@ -144,3 +144,29 @@ public struct OverlayResizeHitTester: Sendable {
         }
     }
 }
+
+public enum SubtitleOverlayCollapseLayout {
+    public static func collapsedFrame(
+        from expandedFrame: CGRect,
+        compactSize: CGSize
+    ) -> CGRect {
+        CGRect(
+            x: expandedFrame.midX - compactSize.width / 2,
+            y: expandedFrame.minY,
+            width: compactSize.width,
+            height: compactSize.height
+        )
+    }
+
+    public static func expandedFrame(
+        from collapsedFrame: CGRect,
+        expandedSize: CGSize
+    ) -> CGRect {
+        CGRect(
+            x: collapsedFrame.midX - expandedSize.width / 2,
+            y: collapsedFrame.minY,
+            width: expandedSize.width,
+            height: expandedSize.height
+        )
+    }
+}
