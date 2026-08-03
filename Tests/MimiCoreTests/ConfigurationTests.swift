@@ -127,7 +127,7 @@ func runConfigurationTests(using runner: inout TestRunner) {
         )
     }
 
-    runner.run("original subtitles force the recognition-only backend") {
+    runner.run("original subtitles preserve the strongest recognition backend") {
         let configuration = LiveTranslationConfiguration(
             workspaceID: "workspace",
             apiKey: "secret",
@@ -136,7 +136,7 @@ func runConfigurationTests(using runner: inout TestRunner) {
             translationMode: .highQuality
         )
 
-        try expectEqual(configuration.effectiveTranslationMode, .lowLatency)
+        try expectEqual(configuration.effectiveTranslationMode, .highQuality)
     }
 
     runner.run("configuration preserves an explicit translation mode") {

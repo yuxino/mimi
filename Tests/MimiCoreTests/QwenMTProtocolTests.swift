@@ -95,6 +95,18 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expectEqual(memory?.first?["target"] as? String, "今天天气很好。")
     }
 
+    runner.run("Qwen-MT request can select the highest-quality Plus model") {
+        let data = try QwenMTRequestEncoder.request(
+            text: "今日はいい天気ですね。",
+            sourceLanguage: .japanese,
+            targetLanguage: .simplifiedChinese,
+            model: .plus
+        )
+        let json = try mtJSONObject(data)
+
+        try expectEqual(json["model"] as? String, "qwen-mt-plus")
+    }
+
     runner.run("Qwen-MT automatically detects the source language") {
         let data = try QwenMTRequestEncoder.request(
             text: "Hello, world.",

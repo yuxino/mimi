@@ -44,6 +44,7 @@ public struct QwenMTEndpoint: Equatable, Sendable {
 public enum QwenMTModel: String, Sendable {
     case lite = "qwen-mt-lite"
     case flash = "qwen-mt-flash"
+    case plus = "qwen-mt-plus"
 }
 
 public enum QwenMTDomainHint {
