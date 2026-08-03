@@ -45,6 +45,26 @@ func runSubtitleReducerTests(using runner: inout TestRunner) {
         )
     }
 
+    runner.run("a Plus final replaces its preview and alone enters history") {
+        var reducer = SubtitleReducer()
+        reducer.apply(.sourceDraft("今日は晴れです"))
+        reducer.apply(.translationDraft("今天晴天"))
+
+        try expectEqual(reducer.snapshot.history, [])
+
+        reducer.apply(.sourceFinal("今日は晴れです。"))
+        reducer.apply(.translationFinal("今天天气很好。"))
+
+        try expectEqual(
+            reducer.snapshot.history,
+            [SubtitlePair(source: "今日は晴れです。", translation: "今天天气很好。")]
+        )
+        try expectEqual(
+            reducer.snapshot.translation,
+            SubtitleLine(text: "今天天气很好。", isFinal: true)
+        )
+    }
+
     runner.run("a delayed final translation stays paired with its original source") {
         var reducer = SubtitleReducer()
         reducer.apply(.sourceFinal("First sentence."))
