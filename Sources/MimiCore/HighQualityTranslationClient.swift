@@ -9,7 +9,20 @@ public actor HighQualityTranslationClient {
         let enqueuedAt: ContinuousClock.Instant
     }
 
+    private struct DraftTranslationRequest: Sendable {
+        let text: String
+        let language: String?
+        let generation: Int
+        let enqueuedAt: ContinuousClock.Instant
+    }
+
+    private struct DraftPreview: Sendable {
+        let request: DraftTranslationRequest
+        let translation: String
+    }
+
     private let asrClient: Audio3ASRClient
+    private let draftMTClient: QwenMTClient
     private let mtClient: QwenMTClient
     private let sourceLanguage: SourceLanguage
     private let translatesAudio: Bool
@@ -19,6 +32,12 @@ public actor HighQualityTranslationClient {
     private var latestDraftLanguage: String?
     private var draftStabilityTask: Task<Void, Never>?
     private var draftMaximumWaitTask: Task<Void, Never>?
+    private var draftPreviewTracker = DraftPreviewTracker()
+    private var pendingDraftTranslation: DraftTranslationRequest?
+    private var draftWorker: Task<Void, Never>?
+    private var draftPreemptionTask: Task<Void, Never>?
+    private var draftWorkerGeneration = 0
+    private var activeDraftPreview: DraftPreview?
     private var finalQueue: [TranslationRequest] = []
     private var translationMemory: [QwenMTMemoryPair] = []
     private var finalWorker: Task<Void, Never>?
@@ -36,13 +55,24 @@ public actor HighQualityTranslationClient {
             sourceLanguage: sourceLanguage,
             session: session
         )
+        let domainHint = QwenMTDomainHint.spokenDialogue(for: targetLanguage)
+        self.draftMTClient = try QwenMTClient(
+            workspaceID: workspaceID,
+            apiKey: apiKey,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            model: .flash,
+            domainHint: domainHint,
+            streamingTimeout: .seconds(5),
+            session: session
+        )
         self.mtClient = try QwenMTClient(
             workspaceID: workspaceID,
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
             model: .plus,
-            domainHint: QwenMTDomainHint.spokenDialogue(for: targetLanguage),
+            domainHint: domainHint,
             session: session
         )
         self.sourceLanguage = sourceLanguage
@@ -51,6 +81,7 @@ public actor HighQualityTranslationClient {
 
     public func connect(onEvent: @escaping EventHandler) async throws {
         resetDraftFinalization()
+        cancelDraftTranslations()
         cancelFinalTranslations()
         eventHandler = onEvent
         try await asrClient.connect { [weak self] event in
@@ -67,6 +98,7 @@ public actor HighQualityTranslationClient {
     }
 
     public func finish() async {
+        cancelDraftTranslations()
         await asrClient.finish()
         await commitPendingDraft(boundary: "session-finish")
         await waitForFinalTranslations(timeout: .seconds(35))
@@ -77,6 +109,7 @@ public actor HighQualityTranslationClient {
 
     public func disconnect() async {
         resetDraftFinalization()
+        cancelDraftTranslations()
         cancelFinalTranslations()
         eventHandler = nil
         await asrClient.disconnect()
@@ -97,17 +130,18 @@ public actor HighQualityTranslationClient {
             if !translatesAudio {
                 await emit(.sourceDraft(text: uncommittedText, language: language))
                 await emit(.translationDraft(uncommittedText))
-            } else if finalWorker == nil, finalQueue.isEmpty {
-                // While Plus is translating a confirmed sentence, keep that
-                // sentence visible instead of pairing its translation with a
-                // draft from the next sentence.
-                await emit(.sourceDraft(text: uncommittedText, language: language))
+            } else {
+                if finalWorker == nil, finalQueue.isEmpty {
+                    await emit(.sourceDraft(text: uncommittedText, language: language))
+                }
+                enqueueDraftTranslation(uncommittedText, language: language)
             }
 
         case let .sourceFinal(text, language):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
             cancelDraftTimers()
+            cancelDraftTranslations()
             latestDraftLanguage = nil
             let uncommittedText = draftCommitter.finishSentence(text)
             PipelineDiagnostics.log(
@@ -155,6 +189,7 @@ public actor HighQualityTranslationClient {
     private func commitPendingDraft(boundary: String) async {
         cancelDraftTimers()
         guard let text = draftCommitter.commitLatestDraft() else { return }
+        cancelDraftTranslations()
         let language = latestDraftLanguage
         PipelineDiagnostics.log(
             "audio3 asr local final boundary=\(boundary) length=\(text.count) language=\(language ?? sourceLanguage.rawValue)"
@@ -178,6 +213,147 @@ public actor HighQualityTranslationClient {
             "mt plus final enqueued boundary=\(boundary) depth=\(finalQueue.count)"
         )
         startFinalWorkerIfNeeded()
+    }
+
+    private func enqueueDraftTranslation(_ text: String, language: String?) {
+        guard let generation = draftPreviewTracker.update(text) else { return }
+        activeDraftPreview = nil
+        pendingDraftTranslation = .init(
+            text: text,
+            language: language,
+            generation: generation,
+            enqueuedAt: clock.now
+        )
+
+        guard draftWorker != nil else {
+            startDraftWorker()
+            return
+        }
+
+        guard draftPreemptionTask == nil else { return }
+        draftPreemptionTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(450))
+                guard !Task.isCancelled else { return }
+                await self?.preemptStaleDraft()
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func startDraftWorker() {
+        draftWorkerGeneration += 1
+        let workerGeneration = draftWorkerGeneration
+        draftWorker = Task { [weak self] in
+            await self?.runDraftWorker(workerGeneration: workerGeneration)
+        }
+    }
+
+    private func runDraftWorker(workerGeneration: Int) async {
+        while !Task.isCancelled, let request = pendingDraftTranslation {
+            pendingDraftTranslation = nil
+            draftPreemptionTask?.cancel()
+            draftPreemptionTask = nil
+            let startedAt = clock.now
+            let memory = Array(translationMemory.suffix(2))
+            PipelineDiagnostics.log(
+                "mt flash preview started waitMs=\(PipelineDiagnostics.milliseconds(request.enqueuedAt.duration(to: startedAt))) length=\(request.text.count)"
+            )
+
+            do {
+                let translation = try await draftMTClient.translateStreaming(
+                    request.text,
+                    translationMemory: memory
+                ) { [weak self] partial in
+                    await self?.emitDraftPreview(partial, for: request)
+                }
+                guard !Task.isCancelled else { break }
+                PipelineDiagnostics.log(
+                    "mt flash preview completed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) pending=\(pendingDraftTranslation == nil ? 0 : 1)"
+                )
+                await emitDraftPreview(translation, for: request)
+            } catch is CancellationError {
+                PipelineDiagnostics.log("mt flash preview cancelled")
+                break
+            } catch {
+                PipelineDiagnostics.log(
+                    "mt flash preview failed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) error=\(PipelineDiagnostics.errorLabel(error))"
+                )
+                if let clientError = error as? QwenMTClientError,
+                    clientError.isAuthenticationFailure {
+                    await handleTranslationFailure(clientError)
+                    return
+                }
+            }
+        }
+
+        guard workerGeneration == draftWorkerGeneration else { return }
+        draftWorker = nil
+        draftPreemptionTask?.cancel()
+        draftPreemptionTask = nil
+
+        if pendingDraftTranslation != nil {
+            startDraftWorker()
+        }
+    }
+
+    private func emitDraftPreview(
+        _ translation: String,
+        for request: DraftTranslationRequest
+    ) async {
+        let trimmed = translation.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            !trimmed.isEmpty,
+            pendingDraftTranslation == nil,
+            draftPreviewTracker.accepts(
+                text: request.text,
+                generation: request.generation
+            )
+        else {
+            return
+        }
+
+        activeDraftPreview = .init(request: request, translation: trimmed)
+        await emit(.sourceDraft(text: request.text, language: request.language))
+        await emit(.translationDraft(trimmed))
+    }
+
+    private func preemptStaleDraft() {
+        draftPreemptionTask = nil
+        guard pendingDraftTranslation != nil else { return }
+        PipelineDiagnostics.log("mt flash preview preempted for newer ASR text")
+        draftWorker?.cancel()
+        startDraftWorker()
+    }
+
+    private func restoreActiveDraftPreview() async {
+        guard
+            let activeDraftPreview,
+            draftPreviewTracker.accepts(
+                text: activeDraftPreview.request.text,
+                generation: activeDraftPreview.request.generation
+            )
+        else {
+            return
+        }
+        await emit(
+            .sourceDraft(
+                text: activeDraftPreview.request.text,
+                language: activeDraftPreview.request.language
+            )
+        )
+        await emit(.translationDraft(activeDraftPreview.translation))
+    }
+
+    private func cancelDraftTranslations() {
+        draftPreviewTracker.reset()
+        pendingDraftTranslation = nil
+        activeDraftPreview = nil
+        draftPreemptionTask?.cancel()
+        draftPreemptionTask = nil
+        draftWorker?.cancel()
+        draftWorker = nil
     }
 
     private func cancelDraftTimers() {
@@ -218,6 +394,7 @@ public actor HighQualityTranslationClient {
                 )
                 await emit(.translationFinal(translation))
                 remember(source: request.text, translation: translation)
+                await restoreActiveDraftPreview()
             } catch is CancellationError {
                 return
             } catch {
