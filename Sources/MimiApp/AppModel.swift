@@ -6,6 +6,7 @@ import MimiCore
 final class AppModel: ObservableObject {
     @Published private(set) var state = TranslationSessionState()
     @Published private(set) var isOverlayCollapsed = false
+    @Published private(set) var isPaused = false
 
     private var controller = TranslationSessionController()
     private let audioCapture = SystemAudioCapture()
@@ -30,12 +31,21 @@ final class AppModel: ObservableObject {
 
         if isUITestMode {
             seedUITestSubtitles(targetLanguage: settings.targetLanguage)
+            if ProcessInfo.processInfo.environment["MIMI_UI_TEST_PAUSED"] == "1" {
+                isPaused = true
+                controller.didPause()
+                publishState()
+            }
+            if ProcessInfo.processInfo.environment["MIMI_UI_TEST_COLLAPSED"] == "1" {
+                setOverlayCollapsed(true)
+            }
             overlayController?.show()
         }
     }
 
     func start(using settings: AppSettings) async {
         guard !state.status.isActive else { return }
+        isPaused = false
         PipelineDiagnostics.log(
             "session start requested source=\(settings.sourceLanguage.rawValue) target=\(settings.targetLanguage.rawValue) mode=\(settings.translationMode.rawValue)"
         )
@@ -134,6 +144,7 @@ final class AppModel: ObservableObject {
         recoveryTask = nil
         activeSettings = nil
         isRecovering = false
+        isPaused = false
         controller.beginStopping()
         publishState()
         audioSender?.stop()
@@ -149,6 +160,66 @@ final class AppModel: ObservableObject {
     func clearSubtitles() {
         controller.clearSubtitles()
         publishState()
+    }
+
+    func togglePaused(using settings: AppSettings) async {
+        if isUITestMode {
+            isPaused.toggle()
+            if isPaused {
+                controller.didPause()
+            } else {
+                controller.didConnect()
+            }
+            publishState()
+            return
+        }
+
+        if isPaused {
+            await resume(using: settings)
+        } else {
+            await pause()
+        }
+    }
+
+    func pause() async {
+        guard !isPaused, state.status == .listening else { return }
+        PipelineDiagnostics.log("session pause requested")
+
+        isPaused = true
+        stopHealthChecks()
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        isRecovering = false
+        controller.didPause()
+        publishState()
+        audioSender?.stop()
+        audioSender = nil
+        await audioCapture.stop()
+        await client?.disconnect()
+        client = nil
+        controller.didPause()
+        publishState()
+        PipelineDiagnostics.log("session paused")
+    }
+
+    func resume(using settings: AppSettings) async {
+        guard isPaused else { return }
+        PipelineDiagnostics.log("session resume requested")
+
+        isPaused = false
+        activeSettings = settings
+        let resumed = await establishSession(using: settings, clearSubtitles: false)
+        guard !resumed else {
+            PipelineDiagnostics.log("session resumed")
+            return
+        }
+
+        isPaused = true
+        activeSettings = settings
+        controller.didPause()
+        publishState()
+        overlayController?.show()
+        PipelineDiagnostics.log("session resume failed; remaining paused")
     }
 
     func switchSourceLanguage(
@@ -169,6 +240,10 @@ final class AppModel: ObservableObject {
         settings.targetLanguage = targetLanguage
         settings.translationMode = .highQuality
         settings.persistPreferences()
+        if isPaused {
+            activeSettings = settings
+            return
+        }
         guard needsReconnect else { return }
 
         PipelineDiagnostics.log(
@@ -212,6 +287,8 @@ final class AppModel: ObservableObject {
     }
 
     private func receive(_ event: LiveTranslateServerEvent) async {
+        guard !isPaused else { return }
+
         if case let .error(code, message) = event, code == "transport_error" {
             PipelineDiagnostics.log("session transport error code=\(code)")
             controller.beginConnecting()
@@ -238,6 +315,7 @@ final class AppModel: ObservableObject {
     }
 
     private func handleCaptureFailure(_ error: Error) async {
+        guard !isPaused else { return }
         PipelineDiagnostics.log(
             "audio capture failed error=\(PipelineDiagnostics.errorLabel(error))"
         )
@@ -253,7 +331,7 @@ final class AppModel: ObservableObject {
     }
 
     private func handleAudioTransportFailure(_ error: Error) async {
-        guard !isRecovering, activeSettings != nil else { return }
+        guard !isPaused, !isRecovering, activeSettings != nil else { return }
         PipelineDiagnostics.log(
             "audio transport failed error=\(PipelineDiagnostics.errorLabel(error))"
         )
@@ -279,7 +357,7 @@ final class AppModel: ObservableObject {
     }
 
     private func checkConnectionHealth() async -> Bool {
-        guard !isRecovering, let client else { return false }
+        guard !isPaused, !isRecovering, let client else { return false }
 
         do {
             try await client.ping()
@@ -295,7 +373,7 @@ final class AppModel: ObservableObject {
     }
 
     private func queueRecovery(after failureMessage: String) {
-        guard recoveryTask == nil, activeSettings != nil else { return }
+        guard !isPaused, recoveryTask == nil, activeSettings != nil else { return }
         recoveryTask = Task { @MainActor [weak self] in
             await self?.recoverConnection(after: failureMessage)
             self?.recoveryTask = nil
@@ -303,7 +381,7 @@ final class AppModel: ObservableObject {
     }
 
     private func recoverConnection(after failureMessage: String) async {
-        guard !isRecovering, let settings = activeSettings else { return }
+        guard !isPaused, !isRecovering, let settings = activeSettings else { return }
 
         PipelineDiagnostics.log("session recovery started")
         isRecovering = true

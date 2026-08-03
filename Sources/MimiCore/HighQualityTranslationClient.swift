@@ -130,7 +130,7 @@ public actor HighQualityTranslationClient {
             await emit(.sourceFinal(text: request.text, language: request.language))
 
             do {
-                let translation = try await translateWithOneRetry(request.text)
+                let translation = try await translateWithRetry(request.text)
                 guard !Task.isCancelled else { return }
                 PipelineDiagnostics.log(
                     "mt plus final completed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) remaining=\(finalQueue.count)"
@@ -143,10 +143,8 @@ public actor HighQualityTranslationClient {
                 PipelineDiagnostics.log(
                     "mt plus final failed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) error=\(PipelineDiagnostics.errorLabel(error))"
                 )
-                if await handleTranslationFailure(error) {
-                    return
-                }
-                await emit(.translationFinal(""))
+                await handleTranslationFailure(error)
+                return
             }
         }
 
@@ -156,45 +154,46 @@ public actor HighQualityTranslationClient {
         }
     }
 
-    private func handleTranslationFailure(_ error: Error) async -> Bool {
-        guard
-            let clientError = error as? QwenMTClientError,
-            clientError.isAuthenticationFailure
-        else {
-            return false
+    private func handleTranslationFailure(_ error: Error) async {
+        let code: String
+        if let clientError = error as? QwenMTClientError,
+            clientError.isAuthenticationFailure {
+            code = "translation_authentication_failed"
+        } else {
+            code = "translation_failed"
         }
         await emit(
             .error(
-                code: "translation_authentication_failed",
-                message: clientError.localizedDescription
+                code: code,
+                message: error.localizedDescription
             )
         )
-        return true
     }
 
-    private func translateWithOneRetry(_ text: String) async throws -> String {
+    private func translateWithRetry(_ text: String) async throws -> String {
         let memory = Array(translationMemory.suffix(3))
-        do {
-            return try await mtClient.translate(text, translationMemory: memory)
-        } catch {
-            guard shouldRetry(error) else { throw error }
-            PipelineDiagnostics.log(
-                "mt plus final retrying error=\(PipelineDiagnostics.errorLabel(error))"
-            )
-            try await Task.sleep(for: .milliseconds(600))
-            return try await mtClient.translate(text, translationMemory: memory)
-        }
-    }
+        var attempt = 1
 
-    private func shouldRetry(_ error: Error) -> Bool {
-        guard let clientError = error as? QwenMTClientError else { return false }
-        switch clientError {
-        case .requestTimedOut, .invalidHTTPResponse:
-            return true
-        case let .requestFailed(statusCode, _):
-            return statusCode == 408 || statusCode == 429 || statusCode >= 500
-        case .missingAPIKey:
-            return false
+        while true {
+            do {
+                return try await mtClient.translate(text, translationMemory: memory)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let clientError as QwenMTClientError {
+                guard let delay = QwenMTRetryPolicy.delay(
+                    after: clientError,
+                    attempt: attempt
+                ) else {
+                    throw clientError
+                }
+                PipelineDiagnostics.log(
+                    "mt plus final retrying attempt=\(attempt) delayMs=\(PipelineDiagnostics.milliseconds(delay)) error=\(PipelineDiagnostics.errorLabel(clientError))"
+                )
+                try await Task.sleep(for: delay)
+                attempt += 1
+            } catch {
+                throw error
+            }
         }
     }
 

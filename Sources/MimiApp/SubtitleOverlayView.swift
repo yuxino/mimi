@@ -36,6 +36,8 @@ struct SubtitleOverlayView: View {
 
             Spacer(minLength: 4)
 
+            pauseControl
+
             OverlayControlButton(
                 systemImage: "chevron.down",
                 label: "展开字幕"
@@ -127,8 +129,8 @@ struct SubtitleOverlayView: View {
                     HStack(spacing: 4) {
                         RecognitionActivityIndicator(phase: activityPhase)
 
-                        if isWaitingForFinalTranslation {
-                            Text("翻译中")
+                        if model.isPaused || isWaitingForFinalTranslation {
+                            Text(model.isPaused ? "已暂停" : "翻译中")
                                 .foregroundStyle(activityPhase.color.opacity(0.96))
                             Text("·")
                                 .foregroundStyle(.white.opacity(0.34))
@@ -171,7 +173,7 @@ struct SubtitleOverlayView: View {
                 }
                 .buttonStyle(.plain)
                 .fixedSize(horizontal: true, vertical: false)
-                .disabled(model.state.status != .listening)
+                .disabled(model.state.status != .listening || model.isPaused)
                 .help(languagePickerHelp)
                 .accessibilityLabel(
                     languagePickerAccessibilityLabel(languageStatus)
@@ -221,6 +223,8 @@ struct SubtitleOverlayView: View {
         .overlay(alignment: .topTrailing) {
             if model.isActive, !settings.isOverlayLocked {
                 HStack(spacing: 4) {
+                    pauseControl
+
                     OverlayControlButton(
                         systemImage: "chevron.up",
                         label: "收起字幕"
@@ -347,6 +351,10 @@ struct SubtitleOverlayView: View {
     }
 
     private var activityPhase: OverlayActivityPhase {
+        if model.isPaused {
+            return .paused
+        }
+
         switch model.state.status {
         case .connecting, .stopping:
             return .connecting
@@ -365,7 +373,11 @@ struct SubtitleOverlayView: View {
     }
 
     private var emptyStateText: String {
-        switch model.state.status {
+        if model.isPaused {
+            return "已暂停"
+        }
+
+        return switch model.state.status {
         case .connecting:
             "正在连接"
         case .listening:
@@ -391,6 +403,17 @@ struct SubtitleOverlayView: View {
         return model.state.isTranslationPending
     }
 
+    private var pauseControl: some View {
+        OverlayControlButton(
+            systemImage: model.isPaused ? "play.fill" : "pause.fill",
+            label: model.isPaused ? "继续翻译" : "暂停翻译"
+        ) {
+            Task {
+                await model.togglePaused(using: settings)
+            }
+        }
+    }
+
     private func sourceLanguageButtonTitle(_ language: SourceLanguage) -> String {
         language == .chinese ? "中文原文" : language.displayName
     }
@@ -414,6 +437,7 @@ private enum OverlayActivityPhase {
     case listening
     case recognizing
     case translating
+    case paused
 
     var accessibilityLabel: String {
         switch self {
@@ -425,6 +449,8 @@ private enum OverlayActivityPhase {
             "正在识别"
         case .translating:
             "正在翻译"
+        case .paused:
+            "已暂停"
         }
     }
 
@@ -438,6 +464,8 @@ private enum OverlayActivityPhase {
             Color(red: 0.48, green: 0.66, blue: 1)
         case .translating:
             Color(red: 0.72, green: 0.58, blue: 1)
+        case .paused:
+            Color(red: 1, green: 0.72, blue: 0.32)
         }
     }
 
@@ -451,6 +479,8 @@ private enum OverlayActivityPhase {
             7.2
         case .translating:
             4.4
+        case .paused:
+            0
         }
     }
 
@@ -464,6 +494,8 @@ private enum OverlayActivityPhase {
             6
         case .translating:
             4
+        case .paused:
+            0
         }
     }
 }
@@ -475,7 +507,9 @@ private struct RecognitionActivityIndicator: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / 24)) { timeline in
-            let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
+            let time = reduceMotion || phase == .paused
+                ? 0
+                : timeline.date.timeIntervalSinceReferenceDate
             ZStack {
                 if case .translating = phase {
                     Circle()

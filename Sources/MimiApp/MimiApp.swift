@@ -33,7 +33,11 @@ struct MimiApplication: App {
     }
 
     private var menuBarIcon: String {
-        switch model.state.status {
+        if model.isPaused {
+            return "pause.circle.fill"
+        }
+
+        return switch model.state.status {
         case .listening:
             "ear.badge.waveform"
         case .connecting, .stopping:

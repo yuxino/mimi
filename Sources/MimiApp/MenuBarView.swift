@@ -36,7 +36,7 @@ struct MenuBarView: View {
                     Text(sourceLanguageTitle(language)).tag(language)
                 }
             }
-            .disabled(isChangingSession)
+            .disabled(isChangingSession || model.isPaused)
 
             Label(
                 settings.targetLanguage.translatesAudio ? "高质量翻译" : "只显示中文原文",
@@ -81,7 +81,11 @@ struct MenuBarView: View {
     }
 
     private var statusText: String {
-        switch model.state.status {
+        if model.isPaused {
+            return "Paused"
+        }
+
+        return switch model.state.status {
         case .idle:
             settings.workspaceID.isEmpty || settings.apiKey.isEmpty ? "Setup required" : "Ready"
         case .connecting:
@@ -144,7 +148,11 @@ struct MenuBarView: View {
     }
 
     private var statusColor: Color {
-        switch model.state.status {
+        if model.isPaused {
+            return .orange
+        }
+
+        return switch model.state.status {
         case .listening:
             .green
         case .error:

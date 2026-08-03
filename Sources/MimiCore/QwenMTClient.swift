@@ -31,6 +31,27 @@ public enum QwenMTClientError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
+public enum QwenMTRetryPolicy {
+    public static func delay(
+        after error: QwenMTClientError,
+        attempt: Int
+    ) -> Duration? {
+        let isTransient = switch error {
+        case .requestTimedOut, .invalidHTTPResponse:
+            true
+        case let .requestFailed(statusCode, _):
+            statusCode == 408 || statusCode == 429 || statusCode >= 500
+        case .missingAPIKey:
+            false
+        }
+        guard isTransient else { return nil }
+
+        let exponent = min(max(attempt - 1, 0), 4)
+        let milliseconds = min(8_000, 600 * (1 << exponent))
+        return .milliseconds(milliseconds)
+    }
+}
+
 public actor QwenMTClient {
     private let endpoint: QwenMTEndpoint
     private let apiKey: String

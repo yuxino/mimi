@@ -175,6 +175,44 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
             "QwenMTClientError.requestFailed(status=429)"
         )
     }
+
+    runner.run("Qwen-MT retry policy backs off only for transient failures") {
+        try expectEqual(
+            QwenMTRetryPolicy.delay(
+                after: .requestTimedOut,
+                attempt: 1
+            ),
+            .milliseconds(600)
+        )
+        try expectEqual(
+            QwenMTRetryPolicy.delay(
+                after: .requestFailed(statusCode: 429, message: "busy"),
+                attempt: 3
+            ),
+            .milliseconds(2_400)
+        )
+        try expectEqual(
+            QwenMTRetryPolicy.delay(
+                after: .requestFailed(statusCode: 503, message: "down"),
+                attempt: 8
+            ),
+            .seconds(8)
+        )
+        try expectEqual(
+            QwenMTRetryPolicy.delay(
+                after: .requestFailed(statusCode: 401, message: "bad key"),
+                attempt: 1
+            ),
+            nil
+        )
+        try expectEqual(
+            QwenMTRetryPolicy.delay(
+                after: .requestFailed(statusCode: 400, message: "bad request"),
+                attempt: 1
+            ),
+            nil
+        )
+    }
 }
 
 private func mtJSONObject(_ data: Data) throws -> [String: Any] {

@@ -52,7 +52,7 @@ struct SettingsView: View {
                 HStack(spacing: 7) {
                     SettingsStatusIndicator(
                         color: sessionStatusColor,
-                        isActive: model.state.status == .listening
+                        isActive: model.state.status == .listening && !model.isPaused
                     )
                     Text(sessionStatusText)
                         .font(.system(size: 12.5, weight: .medium))
@@ -392,7 +392,11 @@ struct SettingsView: View {
     }
 
     private var sessionStatusText: String {
-        switch model.state.status {
+        if model.isPaused {
+            return "已暂停"
+        }
+
+        return switch model.state.status {
         case .idle:
             "准备就绪"
         case .connecting:
@@ -414,7 +418,11 @@ struct SettingsView: View {
     }
 
     private var sessionStatusColor: Color {
-        switch model.state.status {
+        if model.isPaused {
+            return .orange
+        }
+
+        return switch model.state.status {
         case .listening:
             .green
         case .connecting:
