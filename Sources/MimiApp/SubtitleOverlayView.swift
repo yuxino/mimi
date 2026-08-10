@@ -115,6 +115,14 @@ struct SubtitleOverlayView: View {
                         fontSize: settings.fontSize
                     )
                 }
+
+                if !visibleRows.isEmpty, model.state.status.isActive {
+                    WaveformIndicator(phase: activityPhase, compact: true)
+                        .frame(height: 18)
+                        .padding(.top, 4)
+                        .padding(.bottom, 6)
+                        .opacity(0.65)
+                }
             }
             .padding(5)
         }
@@ -515,19 +523,24 @@ private enum OverlayActivityPhase {
 
 private struct WaveformIndicator: View {
     let phase: OverlayActivityPhase
+    var compact: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var barCount: Int {
+        compact ? 5 : 9
+    }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / 24)) { timeline in
             let time = reduceMotion || phase == .paused
                 ? 0
                 : timeline.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 3) {
-                ForEach(0..<9, id: \.self) { index in
+            HStack(alignment: .center, spacing: compact ? 2.5 : 3) {
+                ForEach(0..<barCount, id: \.self) { index in
                     Capsule()
                         .fill(phase.color.opacity(barOpacity(at: index)))
-                        .frame(width: 3, height: barHeight(at: index, time: time))
+                        .frame(width: compact ? 2 : 3, height: barHeight(at: index, time: time))
                 }
             }
         }
@@ -536,15 +549,20 @@ private struct WaveformIndicator: View {
 
     private func barHeight(at index: Int, time: TimeInterval) -> Double {
         if reduceMotion {
-            return [8, 13, 19, 24, 28, 24, 19, 13, 8][index]
+            return compact
+                ? [5, 9, 12, 9, 5][index]
+                : [8, 13, 19, 24, 28, 24, 19, 13, 8][index]
         }
-        let wave = (sin(time * phase.animationSpeed + Double(index) * 0.85) + 1) / 2
-        let base = 7 + Double(abs(index - 4)) * 1.6
-        return base + wave * phase.amplitude * 2.4
+        let wave = (sin(time * phase.animationSpeed + Double(index) * (compact ? 1.2 : 0.85)) + 1) / 2
+        let base = compact
+            ? 4 + Double(abs(index - 2)) * 1.4
+            : 7 + Double(abs(index - 4)) * 1.6
+        return base + wave * phase.amplitude * (compact ? 1.6 : 2.4)
     }
 
     private func barOpacity(at index: Int) -> Double {
-        0.92 - Double(abs(index - 4)) * 0.09
+        let center = compact ? abs(index - 2) : abs(index - 4)
+        return 0.92 - Double(center) * 0.09
     }
 }
 
