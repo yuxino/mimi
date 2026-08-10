@@ -97,11 +97,17 @@ struct SubtitleOverlayView: View {
 
                 if visibleRows.isEmpty {
                     Spacer(minLength: 0)
-                    Text(emptyStateText)
-                        .font(.system(size: max(12, settings.fontSize * 0.68), weight: .medium))
-                        .foregroundStyle(emptyStateColor)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                    VStack(spacing: 12) {
+                        if model.state.status.isActive {
+                            WaveformIndicator(phase: activityPhase)
+                                .frame(height: 42)
+                        }
+                        Text(emptyStateText)
+                            .font(.system(size: max(12, settings.fontSize * 0.68), weight: .medium))
+                            .foregroundStyle(emptyStateColor)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
                     Spacer(minLength: 0)
                 } else {
                     SubtitleTimeline(
@@ -504,6 +510,41 @@ private enum OverlayActivityPhase {
         case .paused:
             0
         }
+    }
+}
+
+private struct WaveformIndicator: View {
+    let phase: OverlayActivityPhase
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / 24)) { timeline in
+            let time = reduceMotion || phase == .paused
+                ? 0
+                : timeline.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0..<9, id: \.self) { index in
+                    Capsule()
+                        .fill(phase.color.opacity(barOpacity(at: index)))
+                        .frame(width: 3, height: barHeight(at: index, time: time))
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func barHeight(at index: Int, time: TimeInterval) -> Double {
+        if reduceMotion {
+            return [8, 13, 19, 24, 28, 24, 19, 13, 8][index]
+        }
+        let wave = (sin(time * phase.animationSpeed + Double(index) * 0.85) + 1) / 2
+        let base = 7 + Double(abs(index - 4)) * 1.6
+        return base + wave * phase.amplitude * 2.4
+    }
+
+    private func barOpacity(at index: Int) -> Double {
+        0.92 - Double(abs(index - 4)) * 0.09
     }
 }
 
