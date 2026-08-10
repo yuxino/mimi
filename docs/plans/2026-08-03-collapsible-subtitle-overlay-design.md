@@ -15,3 +15,10 @@ The expanded frame continues to be remembered.
 Resize interactions and resize cursors are disabled while compact. Existing lock
 behavior is unchanged. Geometry tests verify anchoring and moved-bar restoration;
 the full core test suite and a seeded UI screenshot verify behavior and appearance.
+
+The collapse and expand window animation can be interrupted by a live SwiftUI
+layout pass or an in-flight drag, which used to leave the panel stuck at an
+intermediate height such as a taller-than-expected compact bar. The controller
+re-asserts the exact target frame shortly after the animated resize finishes, so
+the compact bar always settles at its fixed compact size and expansion always
+restores the saved expanded size.

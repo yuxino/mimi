@@ -21,6 +21,7 @@ final class OverlayWindowController {
     private let panel: ResizeCursorPanel
     private let hostingView: ResizeCursorHostingView
     private var expandedSize = SubtitleOverlayMetrics.referenceSize
+    private var frameSettleTask: Task<Void, Never>?
 
     init(model: AppModel, settings: AppSettings) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -100,6 +101,7 @@ final class OverlayWindowController {
 
     func setCollapsed(_ collapsed: Bool) {
         panel.resetResizeCursor()
+        frameSettleTask?.cancel()
 
         if collapsed {
             expandedSize = panel.frame.size
@@ -115,7 +117,7 @@ final class OverlayWindowController {
                 from: panel.frame,
                 compactSize: Self.collapsedSize
             )
-            panel.setFrame(constrainedFrame(frame), display: true, animate: true)
+            settleFrame(frame)
         } else {
             panel.minSize = Self.minimumSize
             panel.maxSize = Self.maximumSize
@@ -127,9 +129,28 @@ final class OverlayWindowController {
                 expandedSize: expandedSize
             )
             panel.setFrameAutosaveName(Self.frameAutosaveName)
-            panel.setFrame(constrainedFrame(frame), display: true, animate: true)
+            settleFrame(frame)
             panel.saveFrame(usingName: Self.frameAutosaveName)
             setResizeInteractionEnabled(true)
+        }
+    }
+
+    /// Animates to `frame`, then re-asserts the exact target once the animation
+    /// has had time to finish. The collapse/expand animation can be interrupted
+    /// (for example by a live SwiftUI layout pass or an in-flight window drag),
+    /// which used to leave the panel stuck at an intermediate height such as a
+    /// taller-than-expected collapsed bar. Settling the frame keeps the panel at
+    /// exactly the compact or expanded size.
+    private func settleFrame(_ frame: NSRect) {
+        let target = constrainedFrame(frame)
+        panel.setFrame(target, display: true, animate: true)
+
+        frameSettleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let self, !Task.isCancelled else { return }
+            if self.panel.frame != target {
+                self.panel.setFrame(target, display: true, animate: false)
+            }
         }
     }
 
