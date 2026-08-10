@@ -163,7 +163,11 @@ public actor HighQualityTranslationClient {
     }
 
     private func scheduleDraftFinalization() {
-        draftStabilityTask?.cancel()
+        // Keep one running timer instead of resetting it on every draft so
+        // complete sentences are confirmed on a steady cadence while the
+        // speaker keeps talking. commitPendingDraft clears the timer, and the
+        // next draft schedules a fresh one.
+        guard draftStabilityTask == nil else { return }
         draftStabilityTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(1_200))
@@ -188,7 +192,13 @@ public actor HighQualityTranslationClient {
 
     private func commitPendingDraft(boundary: String) async {
         cancelDraftTimers()
-        guard let text = draftCommitter.commitLatestDraft() else { return }
+        let text: String?
+        if boundary == "maximum-wait" || boundary == "session-finish" {
+            text = draftCommitter.commitLatestDraft(commitLongIncomplete: true)
+        } else {
+            text = draftCommitter.commitCompleteSentences()
+        }
+        guard let text else { return }
         cancelDraftTranslations()
         let language = latestDraftLanguage
         PipelineDiagnostics.log(
