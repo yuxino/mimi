@@ -131,10 +131,13 @@ public actor HighQualityTranslationClient {
                 await emit(.sourceDraft(text: uncommittedText, language: language))
                 await emit(.translationDraft(uncommittedText))
             } else {
+                // High-quality mode shows only confirmed finals. The flash
+                // draft preview rewrote the visible line continuously and was
+                // then replaced by the higher-quality final, which read as
+                // subtitles that kept changing until they became correct.
                 if finalWorker == nil, finalQueue.isEmpty {
                     await emit(.sourceDraft(text: uncommittedText, language: language))
                 }
-                enqueueDraftTranslation(uncommittedText, language: language)
             }
 
         case let .sourceFinal(text, language):
