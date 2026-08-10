@@ -135,4 +135,41 @@ func runOverlayResizeInteractionTests(using runner: inout TestRunner) {
         try expectEqual(expanded.maxY, movedCompactBar.maxY)
         try expectEqual(expanded.size, CGSize(width: 700, height: 180))
     }
+
+    runner.run("collapsing and expanding restores the original frame") {
+        let expanded = CGRect(x: 200, y: 72, width: 640, height: 136)
+        let collapsed = SubtitleOverlayCollapseLayout.collapsedFrame(
+            from: expanded,
+            compactSize: CGSize(width: 280, height: 54)
+        )
+        let restored = SubtitleOverlayCollapseLayout.expandedFrame(
+            from: collapsed,
+            expandedSize: expanded.size
+        )
+
+        try expectEqual(restored, expanded)
+    }
+
+    runner.run("collapsing a bottom-docked overlay keeps the compact bar on screen") {
+        let expanded = CGRect(x: 400, y: 10, width: 640, height: 136)
+        let collapsed = SubtitleOverlayCollapseLayout.collapsedFrame(
+            from: expanded,
+            compactSize: CGSize(width: 280, height: 54)
+        )
+
+        try expect(collapsed.minY >= 0, "compact bar should stay on screen at the bottom")
+        try expectEqual(collapsed.maxY, expanded.maxY)
+    }
+
+    runner.run("expanding from a bar at the screen top stays on screen") {
+        let screenHeight = 982.0
+        let movedBar = CGRect(x: 400, y: screenHeight - 54, width: 280, height: 54)
+        let expanded = SubtitleOverlayCollapseLayout.expandedFrame(
+            from: movedBar,
+            expandedSize: CGSize(width: 640, height: 136)
+        )
+
+        try expect(expanded.maxY <= screenHeight, "expanded window should stay on screen at the top")
+        try expectEqual(expanded.maxY, movedBar.maxY)
+    }
 }
