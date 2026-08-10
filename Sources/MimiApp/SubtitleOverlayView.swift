@@ -100,7 +100,7 @@ struct SubtitleOverlayView: View {
                     VStack(spacing: 12) {
                         if model.state.status.isActive {
                             WaveformIndicator(phase: activityPhase)
-                                .frame(height: 42)
+                                .frame(height: 56)
                         }
                         Text(emptyStateText)
                             .font(.system(size: max(12, settings.fontSize * 0.68), weight: .medium))
@@ -118,9 +118,9 @@ struct SubtitleOverlayView: View {
 
                 if !visibleRows.isEmpty, model.state.status.isActive {
                     WaveformIndicator(phase: activityPhase, compact: true)
-                        .frame(height: 18)
-                        .padding(.top, 4)
-                        .padding(.bottom, 6)
+                        .frame(height: 24)
+                        .padding(.top, 5)
+                        .padding(.bottom, 7)
                         .opacity(0.65)
                 }
             }
@@ -536,11 +536,11 @@ private struct WaveformIndicator: View {
             let time = reduceMotion || phase == .paused
                 ? 0
                 : timeline.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: compact ? 2.5 : 3) {
+            HStack(alignment: .center, spacing: compact ? 3.25 : 4) {
                 ForEach(0..<barCount, id: \.self) { index in
                     Capsule()
                         .fill(phase.color.opacity(barOpacity(at: index)))
-                        .frame(width: compact ? 2 : 3, height: barHeight(at: index, time: time))
+                        .frame(width: compact ? 2.75 : 4, height: barHeight(at: index, time: time))
                 }
             }
         }
@@ -550,14 +550,14 @@ private struct WaveformIndicator: View {
     private func barHeight(at index: Int, time: TimeInterval) -> Double {
         if reduceMotion {
             return compact
-                ? [5, 9, 12, 9, 5][index]
-                : [8, 13, 19, 24, 28, 24, 19, 13, 8][index]
+                ? [6, 11, 15, 11, 6][index]
+                : [11, 18, 26, 33, 38, 33, 26, 18, 11][index]
         }
         let wave = (sin(time * phase.animationSpeed + Double(index) * (compact ? 1.2 : 0.85)) + 1) / 2
         let base = compact
-            ? 4 + Double(abs(index - 2)) * 1.4
-            : 7 + Double(abs(index - 4)) * 1.6
-        return base + wave * phase.amplitude * (compact ? 1.6 : 2.4)
+            ? 5.5 + Double(abs(index - 2)) * 1.9
+            : 10 + Double(abs(index - 4)) * 2.2
+        return base + wave * phase.amplitude * (compact ? 2.1 : 3.2)
     }
 
     private func barOpacity(at index: Int) -> Double {
@@ -587,26 +587,26 @@ private struct RecognitionActivityIndicator: View {
                         .frame(width: outerRingSize(time: time), height: outerRingSize(time: time))
                 }
 
-                HStack(alignment: .center, spacing: 1.25) {
+                HStack(alignment: .center, spacing: 1.75) {
                     ForEach(0..<3, id: \.self) { index in
                         Capsule()
                             .fill(phase.color)
-                            .frame(width: 1.75, height: barHeight(index: index, time: time))
+                            .frame(width: 2.25, height: barHeight(index: index, time: time))
                     }
                 }
-                .frame(width: 8, height: 10)
+                .frame(width: 11, height: 14)
             }
-            .frame(width: 18, height: 18)
+            .frame(width: 22, height: 22)
         }
         .accessibilityHidden(true)
     }
 
     private func barHeight(index: Int, time: TimeInterval) -> Double {
         if reduceMotion {
-            return [3.0, 6.0, 4.0][index]
+            return [4.0, 8.0, 5.5][index]
         }
         let wave = (sin(time * phase.animationSpeed + Double(index) * 1.7) + 1) / 2
-        return 2 + wave * phase.amplitude
+        return 2.5 + wave * phase.amplitude * 1.3
     }
 
     private func pulseProgress(time: TimeInterval) -> Double {
