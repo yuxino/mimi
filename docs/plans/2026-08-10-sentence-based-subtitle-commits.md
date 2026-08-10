@@ -41,3 +41,13 @@ cadence rather than in 4.5s bursts.
 - Real-speech run of a five-sentence Japanese phrase produced five clean
   complete-sentence history entries with no fragments, duplicates, or dropped
   words.
+
+## Follow-up: hide flash draft previews in high-quality mode
+
+Users still saw the live subtitle line continuously rewrite during speech: the
+flash draft preview streamed a low-quality version of the pending tail, and the
+high-quality final then replaced it with different wording ("字幕在变，最后才变
+对"). High-quality mode now emits only confirmed finals; source drafts still
+update the recognition indicator, and the sentence-based committer confirms each
+complete sentence on a steady cadence. The draft-preview machinery remains
+available for the original-subtitles path.
