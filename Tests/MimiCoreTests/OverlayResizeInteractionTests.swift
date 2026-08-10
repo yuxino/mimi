@@ -120,7 +120,7 @@ func runOverlayResizeInteractionTests(using runner: inout TestRunner) {
         )
 
         try expectEqual(collapsed.midX, expanded.midX)
-        try expectEqual(collapsed.minY, expanded.minY)
+        try expectEqual(collapsed.maxY, expanded.maxY)
         try expectEqual(collapsed.size, CGSize(width: 280, height: 54))
     }
 
@@ -132,7 +132,7 @@ func runOverlayResizeInteractionTests(using runner: inout TestRunner) {
         )
 
         try expectEqual(expanded.midX, movedCompactBar.midX)
-        try expectEqual(expanded.minY, movedCompactBar.minY)
+        try expectEqual(expanded.maxY, movedCompactBar.maxY)
         try expectEqual(expanded.size, CGSize(width: 700, height: 180))
     }
 }

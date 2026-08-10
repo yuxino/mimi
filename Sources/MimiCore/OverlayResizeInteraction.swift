@@ -150,9 +150,11 @@ public enum SubtitleOverlayCollapseLayout {
         from expandedFrame: CGRect,
         compactSize: CGSize
     ) -> CGRect {
+        // Keep the bottom edge anchored: the compact bar appears where the
+        // subtitles were and the window shrinks upward.
         CGRect(
             x: expandedFrame.midX - compactSize.width / 2,
-            y: expandedFrame.minY,
+            y: expandedFrame.maxY - compactSize.height,
             width: compactSize.width,
             height: compactSize.height
         )
@@ -162,9 +164,10 @@ public enum SubtitleOverlayCollapseLayout {
         from collapsedFrame: CGRect,
         expandedSize: CGSize
     ) -> CGRect {
+        // Grow upward from the compact bar's bottom edge.
         CGRect(
             x: collapsedFrame.midX - expandedSize.width / 2,
-            y: collapsedFrame.minY,
+            y: collapsedFrame.maxY - expandedSize.height,
             width: expandedSize.width,
             height: expandedSize.height
         )
