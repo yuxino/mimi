@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="Mimi">
+  <rect width="128" height="128" rx="34" fill="#F7F1E9"/>
+  <path d="M28 62 25 22l29 21M100 62l3-40-29 21" fill="#EF725F" stroke="#25222D" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M22 66c0-25 21-43 42-43s42 18 42 43v9c0 25-19 39-42 39S22 100 22 75v-9Z" fill="#EF725F" stroke="#25222D" stroke-width="5"/>
+  <circle cx="48" cy="67" r="6" fill="#25222D"/>
+  <circle cx="80" cy="67" r="6" fill="#25222D"/>
+  <circle cx="34" cy="82" r="6" fill="#F7AAA0"/>
+  <circle cx="94" cy="82" r="6" fill="#F7AAA0"/>
+  <path d="m60 77 4 3 4-3M61 84c2 3 5 3 7 0" stroke="#25222D" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
