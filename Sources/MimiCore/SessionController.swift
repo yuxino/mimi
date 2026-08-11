@@ -88,6 +88,8 @@ public struct TranslationSessionController: Sendable {
         case let .translationFinal(text):
             state.isTranslationPending = false
             subtitleReducer.apply(.translationFinal(text))
+        case .subtitleRevoked:
+            subtitleReducer.apply(.revokeLastConfirmed)
         case .sessionFinished:
             didStop()
         case let .error(_, message):

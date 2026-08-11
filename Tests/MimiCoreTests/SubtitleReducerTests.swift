@@ -90,6 +90,25 @@ func runSubtitleReducerTests(using runner: inout TestRunner) {
         try expectEqual(reducer.snapshot.history.count, 1)
     }
 
+    runner.run("revoking removes only the last confirmed pair") {
+        var reducer = SubtitleReducer()
+        reducer.apply(.sourceFinal("First."))
+        reducer.apply(.translationFinal("第一句。"))
+        reducer.apply(.sourceFinal("Second."))
+        reducer.apply(.translationFinal("第二句。"))
+
+        reducer.apply(.revokeLastConfirmed)
+
+        try expectEqual(reducer.snapshot.history.count, 1)
+        try expectEqual(reducer.snapshot.history[0].translation, "第一句。")
+    }
+
+    runner.run("revoking an empty history is a no-op") {
+        var reducer = SubtitleReducer()
+        reducer.apply(.revokeLastConfirmed)
+        try expectEqual(reducer.snapshot.history, [])
+    }
+
     runner.run("identical source and translation remain in history") {
         var reducer = SubtitleReducer()
         reducer.apply(.sourceFinal("嗯啊"))
