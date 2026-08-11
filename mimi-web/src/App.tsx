@@ -2,6 +2,8 @@ import { useState } from 'react'
 
 const downloadUrl = 'https://github.com/yuxino/mimi/releases/latest'
 const repositoryUrl = 'https://github.com/yuxino/mimi'
+const apiKeyUrl = 'https://help.aliyun.com/zh/model-studio/get-api-key'
+const workspaceUrl = 'https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id'
 
 function ArrowUpRight() {
   return (
@@ -52,7 +54,13 @@ const scenes = [
   { image: '/mimi/film-real.jpg', label: '海外影视', copy: '看懂没有字幕的夜晚' },
   { image: '/mimi/game-real.jpg', label: '剧情游戏', copy: '跟上每一句对白' },
   { image: '/mimi/live-real.jpg', label: '直播与播客', copy: '把远方的声音听清楚' },
-  { image: '/mimi/romance-real.jpg', label: '成熟向内容', copy: '不再错过关键情节' },
+  { image: '/mimi/romance-real.jpg', label: '外语短剧', copy: '不再错过关键情节' },
+]
+
+const setupSteps = [
+  { index: '01', title: '下载并打开', copy: '从 GitHub Releases 获取最新版。首次打开若被拦截，可在“隐私与安全性”中选择仍要打开。' },
+  { index: '02', title: '填入凭证', copy: '准备同一华北 2（北京）业务空间下的 Workspace ID 与 API Key，凭证只保存在钥匙串。' },
+  { index: '03', title: '开始听', copy: '播放视频后点击 Start Listening，把字幕窗放到舒服的位置，就可以继续看了。' },
 ]
 
 function App() {
@@ -82,6 +90,7 @@ function App() {
         <nav id="site-navigation" className={`site-navigation${menuOpen ? ' site-navigation--open' : ''}`} aria-label="主导航">
           <a href="#features" onClick={closeMenu}>能力</a>
           <a href="#scenes" onClick={closeMenu}>适合什么</a>
+          <a href="#start" onClick={closeMenu}>开始使用</a>
           <a href="#privacy" onClick={closeMenu}>隐私</a>
           <a href={repositoryUrl} target="_blank" rel="noreferrer" onClick={closeMenu}>GitHub</a>
         </nav>
@@ -115,9 +124,20 @@ function App() {
               <div className="hero-media-shine" />
             </div>
             <div className="listening-pill"><span className="listening-pulse" /><WaveIcon /><span>mimi 正在听</span></div>
-            <div className="cat-float"><img src="/mimi/mimi-cat.png" alt="mimi 黑猫形象" /></div>
+            <div className="companion-card">
+              <img src="/mimi/mimi-icon.png" alt="mimi 角色头像" />
+              <div><span>mimi · みみ</span><strong>我在听哦</strong></div>
+              <WaveIcon />
+            </div>
             <div className="hero-caption"><span>字幕只是陪伴</span><strong>不抢你的注意力</strong></div>
           </div>
+        </section>
+
+        <section className="trust-strip" aria-label="mimi 产品特点">
+          <div><span>01</span><strong>系统声音</strong><small>不使用麦克风</small></div>
+          <div><span>02</span><strong>无需账号</strong><small>打开就能开始</small></div>
+          <div><span>03</span><strong>钥匙串保存</strong><small>凭证留在这台 Mac</small></div>
+          <div><span>04</span><strong>原生体验</strong><small>macOS 14+</small></div>
         </section>
 
         <section className="statement-section" aria-labelledby="statement-title">
@@ -193,9 +213,40 @@ function App() {
           </div>
         </section>
 
+        <section className="start-section" id="start" aria-labelledby="start-title">
+          <div className="start-heading">
+            <div className="section-label">05 / 三步开始</div>
+            <h2 id="start-title">把语言门槛，<br /><em>留在三分钟以前。</em></h2>
+            <p>mimi 是开源项目，目前需要你自己的阿里云百炼凭证。配置只做一次，之后它会安静地记住。</p>
+          </div>
+          <div className="setup-grid">
+            {setupSteps.map((step) => (
+              <article className="setup-step" key={step.index}>
+                <span>{step.index}</span>
+                <div><h3>{step.title}</h3><p>{step.copy}</p></div>
+              </article>
+            ))}
+          </div>
+          <aside className="start-card">
+            <div className="start-card-character">
+              <img src="/mimi/mimi-icon.png" alt="mimi 角色" />
+              <span className="start-card-bubble">准备好就叫我 ♫</span>
+            </div>
+            <div className="start-card-copy">
+              <span className="start-card-kicker">READY WHEN YOU ARE</span>
+              <h3>下载，填好凭证，<br />然后继续看你的。</h3>
+              <div className="start-card-links">
+                <a className="button button--ink" href={downloadUrl} target="_blank" rel="noreferrer">下载最新版 <ArrowUpRight /></a>
+                <a href={apiKeyUrl} target="_blank" rel="noreferrer">创建 API Key</a>
+                <a href={workspaceUrl} target="_blank" rel="noreferrer">查找 Workspace ID</a>
+              </div>
+            </div>
+          </aside>
+        </section>
+
         <section className="privacy-section" id="privacy" aria-labelledby="privacy-title">
           <div className="privacy-copy">
-            <div className="section-label">05 / 不多打扰</div>
+            <div className="section-label">06 / 不多打扰</div>
             <h2 id="privacy-title">你的声音，<br /><em>只经过，不留下。</em></h2>
             <p>mimi 不使用麦克风，不需要注册账号，也不会保存音频和字幕记录。API Key 保存在 Mac 的钥匙串中。</p>
             <a className="inline-link" href={repositoryUrl} target="_blank" rel="noreferrer">在 GitHub 查看更多 <ArrowUpRight /></a>
@@ -208,9 +259,12 @@ function App() {
         </section>
 
         <section className="download-section" aria-labelledby="download-title">
-          <div className="download-cat"><img src="/mimi/mimi-cat.png" alt="mimi 黑猫形象" /></div>
+          <div className="download-character">
+            <img className="download-character-main" src="/mimi/mimi-icon.png" alt="mimi 角色形象" />
+            <img className="download-cat-sticker" src="/mimi/mimi-cat.png" alt="mimi 黑猫伙伴" />
+          </div>
           <div className="download-copy">
-            <div className="section-label section-label--light">06 / 现在就听</div>
+            <div className="section-label section-label--light">07 / 现在就听</div>
             <h2 id="download-title">给耳朵<br /><em>多一个选择。</em></h2>
             <p>开源、原生、轻轻地待在你的 Mac 上。</p>
             <div className="download-actions">
