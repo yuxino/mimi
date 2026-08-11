@@ -44,8 +44,6 @@ mimi 这个名字来自日语「耳（みみ）」的读音，写成罗马字就
 
 开会时也不用一直打开设置：字幕窗上可以直接 **暂停 / 继续**、**收起成一条小状态栏**，点左上角的语言状态还能马上切换识别语言。网络偶尔抖一下时，mimi 也会自己尝试重新连接，并保留已经显示出来的字幕。
 
-> 会议场景图先不放。仓库里原来的 `mimi-interview.png` 和 `mimi-overlay-current.png` 都是旧版字幕 UI，等换成当前版本的真实截图再补回来。
-
 ## 开始使用
 
 1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载最新版
