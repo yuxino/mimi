@@ -11,7 +11,7 @@
 
 The name mimi comes from the reading of the Japanese word 耳（みみ, “ear”）, written in roman letters as *mimi*.
 
-It listens to audio playing on your Mac and turns Japanese, English, or Korean into live subtitles in Simplified Chinese, English, or Japanese. It works with browsers, media players, and desktop apps.
+It listens to audio playing on your Mac and turns Chinese, Japanese, English, or Korean into live original-language subtitles, or translates it into Simplified Chinese, English, or Japanese. It works with browsers, media players, online meetings, and desktop apps.
 
 Move the subtitle window, resize it freely from any edge, or lock it to click through. The current line stays clear while earlier dialogue fades back with a quiet timestamp. When someone keeps talking, mimi breaks the passage into readable subtitle-sized lines and updates only the active tail.
 
@@ -34,13 +34,27 @@ Move the subtitle window, resize it freely from any edge, or lock it to click th
   </tr>
 </table>
 
+### Keep it open during a meeting
+
+Zoom, Google Meet, Teams, Feishu, browser-based webinars, or online classes all work the same way: if the other person’s voice is playing through your Mac, mimi can turn it into subtitles floating over the window. It is useful for overseas interviews, cross-language meetings, or simply when an accent is hard to catch.
+
+mimi captures system audio rather than your microphone, so it helps you understand what the computer is playing. It does not record your own voice and it is not a meeting recorder or note-taking app.
+
+<div align="center">
+  <img src="docs/images/mimi-overlay-current-en.png" width="68%" alt="The current mimi subtitle overlay UI">
+  <br>
+  <sub>The current subtitle panel keeps language status, recent confirmed lines, and the active line in one small floating window.</sub>
+</div>
+
 ## Get started
 
 1. Download the latest version from [Releases](https://github.com/yuxino/mimi/releases/latest)
 2. Add your Alibaba Cloud Model Studio Workspace ID and API key
-3. Play a video and select **Start Listening**
+3. Play a video or join a meeting, then select **Start Listening**
 
-mimi understands English, Japanese, and Korean. Let it detect what is playing, then show the original words or translate them into Simplified Chinese, English, or Japanese.
+mimi can detect the language automatically or let you choose Chinese, English, Japanese, or Korean manually. Subtitles can show the original words directly, or translate them into Simplified Chinese, English, or Japanese.
+
+Two translation modes are available: **Low Latency** and **High Quality**. Low Latency fits meetings and interviews where keeping up matters most; for films and longer content, choose whichever feels better.
 
 > mimi is not yet notarized by Apple. If macOS blocks the first launch, open System Settings → Privacy & Security and select **Open Anyway**.
 
@@ -61,7 +75,7 @@ For translated subtitles, mimi shows a stable preview before the final translati
 - Continuous speech is split by punctuation and length, with new lines appended as they become readable
 - The top-left label shows the detected and subtitle languages
 - Faint timestamps mark confirmed lines while the current line stays prominent
-- Lock the panel to click through it
+- Lock the panel to click through it and keep using the video or meeting underneath
 - Use the eraser in the top-right corner to clear the current subtitles
 - If two subtitle panels appear, disable Chrome Live Caption / Live Translate
 
