@@ -3,12 +3,20 @@ import Foundation
 /// Splits a cumulative ASR draft into complete sentences so subtitles are never
 /// committed mid-sentence, and so a later server final cannot duplicate text
 /// that was already committed.
+///
+/// Local commits (stable-draft and maximum-wait) are treated as replaceable
+/// previews: when the server later finalizes a sentence that structurally
+/// covers the last local commit, the committer reports a replacement so the
+/// client can revoke the provisional history entry and commit the authoritative
+/// final exactly once.
 public struct ASRDraftCommitter: Sendable {
     private static let sentenceDelimiters: Set<Character> = ["。", "！", "？", ".", "!", "?", "\n"]
     private static let longIncompleteCommitThreshold = 20
 
     private var latestDraft = ""
     private var committedText = ""
+    private var lastCommittedChunk = ""
+    private var lastCommitWasProvisional = false
 
     public init() {}
 
@@ -31,6 +39,8 @@ public struct ASRDraftCommitter: Sendable {
         let (complete, tail) = Self.splitSentences(pending)
         guard Self.isMeaningful(complete) else { return nil }
         committedText = String(latestDraft.dropLast(tail.count))
+        lastCommittedChunk = complete
+        lastCommitWasProvisional = true
         return complete
     }
 
@@ -50,31 +60,73 @@ public struct ASRDraftCommitter: Sendable {
             return nil
         }
         committedText = latestDraft
+        lastCommittedChunk = pending
+        lastCommitWasProvisional = true
         return pending
     }
 
-    /// Handles a server-final sentence. Returns nil when the final is already
-    /// covered by committed text, otherwise commits and returns the new portion.
-    public mutating func finishSentence(_ text: String) -> String? {
+    /// The outcome of handling a server-final sentence.
+    public enum FinishOutcome: Equatable, Sendable {
+        /// The final is already covered by committed text; nothing new to show.
+        case none
+        /// New authoritative content was appended to the committed boundary.
+        case appended(String)
+        /// The final supersedes the last local (provisional) commit; the client
+        /// should revoke that history entry and commit the full final once.
+        case replaced(String)
+    }
+
+    /// Handles a server-final sentence. Returns `.none` when the final is already
+    /// covered by committed text, `.appended` when the final adds new content,
+    /// and `.replaced` when the final supersedes the last local commit so the
+    /// provisional history entry can be revoked and committed exactly once.
+    public mutating func finishSentence(_ text: String) -> FinishOutcome {
         let finalText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isMeaningful(finalText) else { return nil }
+        guard Self.isMeaningful(finalText) else { return .none }
 
         if !committedText.isEmpty, finalText.count >= 2, committedText.contains(finalText) {
-            return nil
+            // The final matches text that is already committed (including a
+            // locally committed sentence the server just confirmed verbatim).
+            lastCommitWasProvisional = false
+            lastCommittedChunk = ""
+            return .none
+        }
+
+        if lastCommitWasProvisional, !lastCommittedChunk.isEmpty, finalText.count >= 2 {
+            let chunk = lastCommittedChunk
+            let supersedes = finalText != chunk
+                && (finalText.hasPrefix(chunk) || finalText.contains(chunk))
+            if supersedes {
+                committedText = committedText.hasSuffix(chunk)
+                    ? String(committedText.dropLast(chunk.count))
+                    : ""
+                committedText += finalText
+                lastCommitWasProvisional = false
+                lastCommittedChunk = ""
+                return .replaced(finalText)
+            }
         }
 
         let overlap = Self.suffixOverlap(of: committedText, prefix: finalText)
         let newText = String(finalText.dropFirst(overlap))
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isMeaningful(newText) else { return nil }
+        guard Self.isMeaningful(newText) else {
+            lastCommitWasProvisional = false
+            lastCommittedChunk = ""
+            return .none
+        }
 
         committedText += newText
-        return newText
+        lastCommitWasProvisional = false
+        lastCommittedChunk = ""
+        return .appended(newText)
     }
 
     public mutating func reset() {
         latestDraft = ""
         committedText = ""
+        lastCommittedChunk = ""
+        lastCommitWasProvisional = false
     }
 
     private func pendingText(in text: String) -> String {

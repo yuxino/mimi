@@ -54,10 +54,14 @@ func runASRDraftCommitterTests(using runner: inout TestRunner) {
 
         _ = committer.updateDraft("こんにちは。今日は")
         try expectEqual(committer.commitCompleteSentences(), "こんにちは。")
-        // The same sentence arriving later as a server final must be dropped.
-        try expectEqual(committer.finishSentence("こんにちは。"), nil)
+        // The same sentence arriving later as a server final is already
+        // committed verbatim, so it must be dropped.
+        try expectEqual(committer.finishSentence("こんにちは。"), .none)
         // A genuinely new final is committed.
-        try expectEqual(committer.finishSentence("今日は天気がいいですね。"), "今日は天気がいいですね。")
+        try expectEqual(
+            committer.finishSentence("今日は天気がいいですね。"),
+            .appended("今日は天気がいいですね。")
+        )
     }
 
     runner.run("ASR draft committer commits a clean server final after drafts") {
@@ -67,7 +71,7 @@ func runASRDraftCommitterTests(using runner: inout TestRunner) {
         _ = committer.commitCompleteSentences()
         try expectEqual(
             committer.finishSentence("今日は晴れですが、寒いです"),
-            "今日は晴れですが、寒いです"
+            .appended("今日は晴れですが、寒いです")
         )
         try expectEqual(committer.updateDraft("次の文です"), "次の文です")
     }
@@ -79,10 +83,11 @@ func runASRDraftCommitterTests(using runner: inout TestRunner) {
         let longDraft = String(repeating: "あいうえお", count: 10)
         _ = committer.updateDraft(longDraft)
         try expectEqual(committer.commitLatestDraft(commitLongIncomplete: true), longDraft)
-        // The server final overlaps the committed chunk; only the new tail is returned.
+        // The server final extends the locally committed chunk, so the whole
+        // authoritative final replaces it and history holds the sentence once.
         try expectEqual(
             committer.finishSentence(longDraft + "かきくけこ"),
-            "かきくけこ"
+            .replaced(longDraft + "かきくけこ")
         )
     }
 
@@ -91,7 +96,50 @@ func runASRDraftCommitterTests(using runner: inout TestRunner) {
 
         _ = committer.updateDraft("今日は晴れです")
         _ = committer.commitCompleteSentences()
-        try expectEqual(committer.finishSentence("。"), nil)
+        try expectEqual(committer.finishSentence("。"), .none)
+    }
+
+    runner.run("server final replaces a locally committed sentence it extends") {
+        var committer = ASRDraftCommitter()
+
+        _ = committer.updateDraft("こんにちは。今日は")
+        _ = committer.commitCompleteSentences()
+        // The server finalizes the locally committed sentence together with its
+        // continuation; the full final replaces the provisional entry instead of
+        // splitting into a fragment plus a tail.
+        try expectEqual(
+            committer.finishSentence("こんにちは。今日は天気がいいですね。"),
+            .replaced("こんにちは。今日は天気がいいですね。")
+        )
+        // The authoritative final becomes the new committed boundary.
+        try expectEqual(
+            committer.updateDraft("こんにちは。今日は天気がいいですね。次の話です"),
+            "次の話です"
+        )
+    }
+
+    runner.run("server final with leading words replaces the provisional commit") {
+        var committer = ASRDraftCommitter()
+
+        _ = committer.updateDraft("行きます。まだ")
+        _ = committer.commitCompleteSentences()
+        try expectEqual(
+            committer.finishSentence("私は東京に行きます。"),
+            .replaced("私は東京に行きます。")
+        )
+    }
+
+    runner.run("revised server final is appended when it no longer covers the local commit") {
+        var committer = ASRDraftCommitter()
+
+        _ = committer.updateDraft("私は東京に行きます。")
+        _ = committer.commitCompleteSentences()
+        // The wording differs, so structural supersede detection does not fire;
+        // the revised final is still committed so it is never dropped.
+        try expectEqual(
+            committer.finishSentence("私は東京へ行きます。"),
+            .appended("私は東京へ行きます。")
+        )
     }
 
     runner.run("ASR draft committer keeps subtitles flowing with long incomplete speech") {
