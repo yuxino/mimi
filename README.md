@@ -36,6 +36,10 @@ mimi 这个名字来自日语「耳（みみ）」的读音，写成罗马字就
 
 ### 开会的时候也能用
 
+<div align="center">
+  <img src="docs/images/mimi-meeting.svg" width="78%" alt="mimi 在跨语言线上会议中显示实时字幕">
+</div>
+
 后来发现 mimi 不只是拿来看视频。
 
 开 Zoom、Meet、飞书这些会议的时候，只要声音是从 Mac 里出来的，它一样能听。碰到英文会议、海外面试，或者对方口音有点重的时候，挂在下面当字幕还挺方便。
