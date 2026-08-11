@@ -41,6 +41,7 @@ public actor HighQualityTranslationClient {
     private var finalQueue: [TranslationRequest] = []
     private var translationMemory: [QwenMTMemoryPair] = []
     private var finalWorker: Task<Void, Never>?
+    private var pendingRevokeCount = 0
 
     public init(
         workspaceID: String,
@@ -146,13 +147,34 @@ public actor HighQualityTranslationClient {
             cancelDraftTimers()
             cancelDraftTranslations()
             latestDraftLanguage = nil
-            let uncommittedText = draftCommitter.finishSentence(text)
+            let outcome = draftCommitter.finishSentence(text)
+            let uncommittedText: String?
+            switch outcome {
+            case .none:
+                uncommittedText = nil
+            case let .appended(newText), let .replaced(newText):
+                uncommittedText = newText
+            }
             PipelineDiagnostics.log(
                 "audio3 asr final length=\(text.count) pendingLength=\(uncommittedText?.count ?? 0) language=\(language ?? sourceLanguage.rawValue) queuedFinals=\(finalQueue.count)"
             )
             guard let uncommittedText else {
                 PipelineDiagnostics.log("audio3 asr final deduplicated")
                 return
+            }
+            if case .replaced = outcome {
+                PipelineDiagnostics.log("audio3 asr final superseded provisional")
+                if translatesAudio {
+                    // Translated mode commits through the serial final worker;
+                    // revoke there, right before the authoritative replacement,
+                    // so the provisional history entry has already landed.
+                    pendingRevokeCount += 1
+                } else {
+                    // Original-subtitle mode emits finals synchronously in event
+                    // order, so the revocation belongs immediately before the
+                    // replacement pair.
+                    await emit(.subtitleRevoked)
+                }
             }
             await enqueueConfirmedSource(
                 uncommittedText,
@@ -380,6 +402,7 @@ public actor HighQualityTranslationClient {
         cancelDraftTimers()
         draftCommitter.reset()
         latestDraftLanguage = nil
+        pendingRevokeCount = 0
     }
 
     private func startFinalWorkerIfNeeded() {
@@ -402,6 +425,14 @@ public actor HighQualityTranslationClient {
             do {
                 let translation = try await translateWithRetry(request.text)
                 guard !Task.isCancelled else { return }
+                if pendingRevokeCount > 0 {
+                    // The previous item was a provisional local commit that the
+                    // server final superseded. Revoke it immediately before the
+                    // authoritative replacement lands so history holds the
+                    // sentence once and the line never visibly disappears.
+                    pendingRevokeCount -= 1
+                    await emit(.subtitleRevoked)
+                }
                 PipelineDiagnostics.log(
                     "mt plus final completed requestMs=\(PipelineDiagnostics.milliseconds(startedAt.duration(to: clock.now))) remaining=\(finalQueue.count)"
                 )
@@ -481,6 +512,7 @@ public actor HighQualityTranslationClient {
         finalWorker = nil
         finalQueue = []
         translationMemory = []
+        pendingRevokeCount = 0
     }
 
     private func waitForFinalTranslations(timeout: Duration) async {

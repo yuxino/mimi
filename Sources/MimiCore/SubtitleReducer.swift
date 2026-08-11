@@ -42,6 +42,11 @@ public struct SubtitleReducer: Sendable {
                 translation: translation
             )
 
+        case .revokeLastConfirmed:
+            if !snapshot.history.isEmpty {
+                snapshot.history.removeLast()
+            }
+
         case .clear:
             snapshot = .empty
             pendingFinalSources = []

@@ -87,6 +87,10 @@ public enum LiveTranslateServerEvent: Equatable, Sendable {
     case translationFinal(String)
     case sessionFinished
     case error(code: String, message: String)
+    /// Client-internal signal: the last confirmed subtitle entry is a
+    /// provisional local commit and should be revoked before the authoritative
+    /// server final for the same sentence is committed.
+    case subtitleRevoked
     case ignored(type: String)
 
     public static func decode(_ text: String) throws -> Self {
