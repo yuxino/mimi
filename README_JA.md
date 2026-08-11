@@ -11,38 +11,38 @@
 
 mimiは、日本語の「耳（みみ）」という読みをローマ字にした名前です。
 
-Macで再生中の音声を聞き取り、中国語・日本語・英語・韓国語をそのまま原文字幕として表示したり、簡体字中国語・英語・日本語へリアルタイム翻訳したりできます。ブラウザ、動画プレイヤー、オンライン会議、デスクトップアプリで使えます。
+Macで再生中の音声を聞き取り、中国語・日本語・英語・韓国語をそのまま原文字幕として表示したり、簡体字中国語・英語・日本語へリアルタイム翻訳したりできます。ブラウザ、動画プレイヤー、オンライン会議、オンライン授業、デスクトップアプリで使えます。
 
 字幕ウィンドウは移動でき、上下左右どの辺からでも自由にサイズを変えられます。固定すれば、字幕の上からそのまま動画を操作できます。現在の台詞ははっきりと、少し前の台詞は時刻とともに静かに薄く表示されます。話し続ける場面では、長い文章を読みやすい字幕単位に分け、末尾だけを更新します。
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/mimi-film-real-ja.jpg" alt="海外ドラマにリアルタイム日本語字幕を表示するmimi"></td>
-    <td width="50%"><img src="docs/images/mimi-game-real-ja.jpg" alt="写実的なストーリーゲームにリアルタイム日本語字幕を表示するmimi"></td>
+    <td width="33.33%"><img src="docs/images/mimi-film-real-ja.jpg" alt="海外ドラマにリアルタイム日本語字幕を表示するmimi"></td>
+    <td width="33.33%"><img src="docs/images/mimi-game-real-ja.jpg" alt="写実的なストーリーゲームにリアルタイム日本語字幕を表示するmimi"></td>
+    <td width="33.33%"><img src="docs/images/mimi-live-real-ja.jpg" alt="旅行ライブ配信にリアルタイム日本語字幕を表示するmimi"></td>
   </tr>
   <tr>
     <td align="center">字幕のない海外映画を楽しむ</td>
     <td align="center">台詞の多いストーリーゲームを楽しむ</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/mimi-romance-real-ja.jpg" alt="大人向けの夜のドラマにリアルタイム日本語字幕を表示するmimi"></td>
-    <td width="50%"><img src="docs/images/mimi-live-real-ja.jpg" alt="旅行ライブ配信にリアルタイム日本語字幕を表示するmimi"></td>
-  </tr>
-  <tr>
-    <td align="center">大人向け・深夜の物語を追いかける</td>
     <td align="center">ライブ、ポッドキャスト、旅動画を理解する</td>
+  </tr>
+  <tr>
+    <td width="33.33%"><img src="docs/images/mimi-romance-real-ja.jpg" alt="海外のショートドラマにリアルタイム日本語字幕を表示するmimi"></td>
+    <td width="33.33%"><img src="docs/images/mimi-meeting-real-ja.jpg" alt="多言語のオンライン会議にリアルタイム日本語字幕を表示するmimi"></td>
+    <td width="33.33%"><img src="docs/images/mimi-course-real-ja.jpg" alt="海外のオンライン授業にリアルタイム日本語字幕を表示するmimi"></td>
+  </tr>
+  <tr>
+    <td align="center">海外のショートドラマや会話を追いかける</td>
+    <td align="center">多言語のオンライン会議に参加する</td>
+    <td align="center">海外のオンライン授業や講義を理解する</td>
   </tr>
 </table>
 
-### 会議中にも使えます
-
-<div align="center">
-  <img src="docs/images/mimi-meeting.svg" width="78%" alt="オンライン会議でリアルタイム字幕を表示するmimi">
-</div>
+### 動画だけではありません
 
 mimiは動画を見るときだけのものではありません。
 
-Zoom、Meet、Teams、Feishu、Webinar、オンライン授業などで、相手の声がMacから再生されていれば、そのまま字幕にできます。海外面接、多言語ミーティング、聞き取りにくいアクセントの会話にも便利です。
+Zoom、Meet、Teams、Feishuでの会議や、Webinar、オンライン授業でも、相手や講師の声がMacから再生されていれば、そのまま字幕にできます。海外面接、多言語ミーティング、外国語の講義、聞き取りにくいアクセントにも便利です。
 
 mimiが取得するのはシステム音声で、マイクではありません。自分の声を録音せず、字幕ウィンドウから一時停止 / 再開、コンパクト表示への折りたたみ、左上からの認識言語切り替えができます。短い通信エラーなら、表示済みの字幕を残したまま自動で再接続を試みます。
 
@@ -50,7 +50,7 @@ mimiが取得するのはシステム音声で、マイクではありません�
 
 1. [Releases](https://github.com/yuxino/mimi/releases/latest)から最新版をダウンロード
 2. Alibaba Cloud Model StudioのWorkspace IDとAPI Keyを入力
-3. 動画を再生するか会議に入り、**Start Listening**をクリック
+3. 動画を再生するか、会議・オンライン授業に入り、**Start Listening**をクリック
 
 現在のUIでは、中国語原文・英語・日本語・韓国語から認識言語を手動で選べます。字幕は原文のまま表示するか、簡体字中国語・英語・日本語へ翻訳できます。翻訳を使う場合、現在のビルドでは高品質モードを使用します。
 
