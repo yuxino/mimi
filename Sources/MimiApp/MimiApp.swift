@@ -18,6 +18,21 @@ struct MimiApplication: App {
                     appDelegate.installShowSettingsHandler { [weak model] in
                         model?.showSettings()
                     }
+                    appDelegate.installGlobalHotKeyHandler { [weak model, weak settings] in
+                        guard let model, let settings else { return }
+                        guard model.state.status != .connecting,
+                            model.state.status != .stopping
+                        else { return }
+
+                        Task {
+                            if model.isActive {
+                                await model.stop()
+                            } else {
+                                settings.prepareForListening()
+                                await model.start(using: settings)
+                            }
+                        }
+                    }
                 }
         }
         .menuBarExtraStyle(.window)

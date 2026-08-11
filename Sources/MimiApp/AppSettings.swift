@@ -124,4 +124,15 @@ final class AppSettings: ObservableObject {
         defaults.set(fontSize, forKey: Keys.fontSize)
         defaults.set(isOverlayLocked, forKey: Keys.overlayLocked)
     }
+
+    func prepareForListening() {
+        if sourceLanguage == .automatic {
+            sourceLanguage = .japanese
+        }
+        if sourceLanguage == .chinese {
+            targetLanguage = .original
+        }
+        translationMode = .highQuality
+        persistPreferences()
+    }
 }
