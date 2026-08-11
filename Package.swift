@@ -21,6 +21,7 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("AVFoundation"),
+                .linkedFramework("Carbon"),
                 .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("Security"),
                 .linkedFramework("SwiftUI")
