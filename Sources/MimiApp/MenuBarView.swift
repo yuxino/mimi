@@ -133,14 +133,7 @@ struct MenuBarView: View {
     }
 
     private func prepareLanguagePreferences() {
-        if settings.sourceLanguage == .automatic {
-            settings.sourceLanguage = .japanese
-        }
-        if settings.sourceLanguage == .chinese {
-            settings.targetLanguage = .original
-        }
-        settings.translationMode = .highQuality
-        settings.persistPreferences()
+        settings.prepareForListening()
     }
 
     private var isChangingSession: Bool {

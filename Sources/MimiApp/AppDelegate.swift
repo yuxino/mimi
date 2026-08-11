@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var showSettingsHandler: (() -> Void)?
+    private var globalHotKeyController: GlobalHotKeyController?
     private var shouldShowSettingsWhenReady = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -27,6 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             shouldShowSettingsWhenReady = false
             handler()
         }
+    }
+
+    func installGlobalHotKeyHandler(_ handler: @escaping @MainActor @Sendable () -> Void) {
+        guard globalHotKeyController == nil else { return }
+        globalHotKeyController = GlobalHotKeyController(action: handler)
     }
 
     private func requestSettings() {
