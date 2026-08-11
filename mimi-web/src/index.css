@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,7 +5,7 @@
 :root {
   color: #e9eef7;
   background: #0b0e15;
-  font-family: 'Manrope', 'Noto Sans SC', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --ink: #0b0e15;
@@ -56,7 +54,7 @@
 .eyebrow--light, .section-label--light { color: rgba(247, 248, 251, 0.58); }
 .eyebrow-dot { width: 0.48rem; height: 0.48rem; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 0.28rem rgba(112, 229, 192, 0.12); }
 h1, h2, h3, p { margin: 0; }
-h1, h2, h3 { font-family: 'Noto Serif SC', serif; font-weight: 600; letter-spacing: -0.07em; }
+h1, h2, h3 { font-family: ui-serif, 'Songti SC', STSong, 'Noto Serif SC', serif; font-weight: 600; letter-spacing: -0.07em; }
 h1 { max-width: 40rem; font-size: clamp(4.25rem, 6.8vw, 6.9rem); line-height: 0.94; }
 h2 { font-size: clamp(3.1rem, 5vw, 5.35rem); line-height: 0.98; }
 h1 em, h2 em { color: var(--mint); font-style: normal; }
@@ -83,15 +81,15 @@ h1 em, h2 em { color: var(--mint); font-style: normal; }
 .companion-card > img { width: 4.2rem; height: 4.2rem; border-radius: 0.92rem; object-fit: cover; }
 .companion-card div { display: flex; min-width: 0; flex-direction: column; gap: 0.2rem; }
 .companion-card div span { color: rgba(247, 248, 251, 0.46); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.companion-card div strong { font-family: 'Noto Serif SC', serif; font-size: 0.9rem; font-weight: 600; }
+.companion-card div strong { font-family: ui-serif, 'Songti SC', STSong, serif; font-size: 0.9rem; font-weight: 600; }
 .companion-card > svg { width: 1.3rem; color: var(--mint); }
 .hero-caption { position: absolute; right: 3.5rem; bottom: 7.4rem; display: flex; flex-direction: column; align-items: end; color: rgba(247, 248, 251, 0.5); font-size: 0.68rem; line-height: 1.45; }
-.hero-caption strong { color: var(--white); font-family: 'Noto Serif SC', serif; font-size: 1.05rem; font-weight: 600; }
+.hero-caption strong { color: var(--white); font-family: ui-serif, 'Songti SC', STSong, serif; font-size: 1.05rem; font-weight: 600; }
 
 .trust-strip { display: grid; grid-template-columns: repeat(4, 1fr); width: min(100% - 7rem, 1240px); margin: -1.75rem auto 0; border: 1px solid rgba(74, 86, 113, 0.14); border-radius: 1.4rem; background: rgba(250, 249, 246, 0.94); box-shadow: 0 1.4rem 4rem rgba(31, 43, 74, 0.1); }
 .trust-strip > div { display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 0.7rem; padding: 1.35rem 1.5rem; border-right: 1px solid rgba(74, 86, 113, 0.12); }
 .trust-strip > div:last-child { border-right: 0; }
-.trust-strip span { grid-row: 1 / 3; color: #8f9aca; font-family: 'Noto Serif SC', serif; font-size: 0.7rem; font-weight: 700; }
+.trust-strip span { grid-row: 1 / 3; color: #8f9aca; font-family: ui-serif, 'Songti SC', STSong, serif; font-size: 0.7rem; font-weight: 700; }
 .trust-strip strong { color: #252b38; font-size: 0.76rem; }
 .trust-strip small { color: #8992a3; font-size: 0.64rem; }
 
@@ -103,8 +101,8 @@ h1 em, h2 em { color: var(--mint); font-style: normal; }
 .statement-grid h2 { color: var(--ink); }
 .statement-grid h2 em { color: #6877b7; }
 .statement-copy { max-width: 24rem; color: #697487; font-size: 1rem; line-height: 1.8; }
-.statement-note { display: flex; align-items: center; gap: 0.55rem; margin-top: 1.5rem; color: #8993a6; font-family: 'Noto Serif SC', serif; }
-.statement-note span { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; color: var(--ink); background: var(--lilac); font-family: 'Noto Sans SC', sans-serif; font-size: 0.75rem; font-style: normal; }
+.statement-note { display: flex; align-items: center; gap: 0.55rem; margin-top: 1.5rem; color: #8993a6; font-family: ui-serif, 'Songti SC', STSong, serif; }
+.statement-note span { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; color: var(--ink); background: var(--lilac); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; font-size: 0.75rem; font-style: normal; }
 
 .features-section { padding-bottom: 9rem; }
 .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 3rem; margin-bottom: 3.5rem; }
@@ -150,7 +148,7 @@ h1 em, h2 em { color: var(--mint); font-style: normal; }
 .scene-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11, 14, 21, 0.02) 20%, rgba(11, 14, 21, 0.86) 100%); }
 .scene-content { position: absolute; right: 1rem; bottom: 1rem; left: 1rem; color: var(--white); }
 .scene-content span { display: block; margin-bottom: 0.45rem; color: var(--mint); font-size: 0.67rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.scene-content strong { display: block; font-family: 'Noto Serif SC', serif; font-size: 1.4rem; font-weight: 600; line-height: 1.15; }
+.scene-content strong { display: block; font-family: ui-serif, 'Songti SC', STSong, serif; font-size: 1.4rem; font-weight: 600; line-height: 1.15; }
 
 .start-section { width: min(100% - 7rem, 1240px); margin: 0 auto; padding: 0 0 9rem; }
 .start-heading { display: grid; grid-template-columns: 1fr 0.42fr; gap: 1rem 7rem; align-items: end; margin-bottom: 3.4rem; }
@@ -201,7 +199,7 @@ h1 em, h2 em { color: var(--mint); font-style: normal; }
 .site-footer { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 2rem; padding: 1.35rem max(7vw, calc((100vw - 1240px) / 2)); color: var(--white); background: #080a10; }
 .brand--footer { font-size: 1rem; }
 .brand--footer .cat-mark { width: 1.65rem; height: 1.65rem; border-radius: 0.52rem; }
-.site-footer p { color: rgba(247, 248, 251, 0.46); font-family: 'Noto Serif SC', serif; font-size: 0.82rem; }
+.site-footer p { color: rgba(247, 248, 251, 0.46); font-family: ui-serif, 'Songti SC', STSong, serif; font-size: 0.82rem; }
 
 @keyframes hero-rise {
   from { opacity: 0; transform: translateY(1.4rem); }

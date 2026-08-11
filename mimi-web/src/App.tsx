@@ -24,7 +24,7 @@ function WaveIcon() {
 function CatMark({ dark = false }: { dark?: boolean }) {
   return (
     <span className={`cat-mark${dark ? ' cat-mark--dark' : ''}`} aria-hidden="true">
-      <img src="/mimi/mimi-icon.png" alt="" />
+      <img src="/mimi/mimi-icon-512.jpg" alt="" width={512} height={512} decoding="async" />
     </span>
   )
 }
@@ -51,10 +51,10 @@ const features = [
 ]
 
 const scenes = [
-  { image: '/mimi/film-real.jpg', label: '海外影视', copy: '看懂没有字幕的夜晚' },
-  { image: '/mimi/game-real.jpg', label: '剧情游戏', copy: '跟上每一句对白' },
-  { image: '/mimi/live-real.jpg', label: '直播与播客', copy: '把远方的声音听清楚' },
-  { image: '/mimi/romance-real.jpg', label: '外语短剧', copy: '不再错过关键情节' },
+  { image: '/mimi/film-960.jpg', label: '海外影视', copy: '看懂没有字幕的夜晚' },
+  { image: '/mimi/game-960.jpg', label: '剧情游戏', copy: '跟上每一句对白' },
+  { image: '/mimi/live-960.jpg', label: '直播与播客', copy: '把远方的声音听清楚' },
+  { image: '/mimi/romance-960.jpg', label: '外语短剧', copy: '不再错过关键情节' },
 ]
 
 const setupSteps = [
@@ -120,12 +120,19 @@ function App() {
 
           <div className="hero-media" aria-label="mimi 在日本车站场景上显示实时中文字幕" role="img">
             <div className="hero-media-frame">
-              <img src="/mimi/product-hero.png" alt="mimi 在日本车站场景上显示实时中文字幕" />
+              <img
+                src="/mimi/product-hero-1440.jpg"
+                alt="mimi 在日本车站场景上显示实时中文字幕"
+                width={1440}
+                height={810}
+                decoding="async"
+                fetchPriority="high"
+              />
               <div className="hero-media-shine" />
             </div>
             <div className="listening-pill"><span className="listening-pulse" /><WaveIcon /><span>mimi 正在听</span></div>
             <div className="companion-card">
-              <img src="/mimi/mimi-icon.png" alt="mimi 角色头像" />
+              <img src="/mimi/mimi-icon-512.jpg" alt="mimi 角色头像" width={512} height={512} decoding="async" />
               <div><span>mimi · みみ</span><strong>我在听哦</strong></div>
               <WaveIcon />
             </div>
@@ -177,7 +184,7 @@ function App() {
         <section className="overlay-section" aria-labelledby="overlay-title">
           <div className="overlay-visual">
             <div className="overlay-window">
-              <img src="/mimi/overlay-current.png" alt="mimi 实时字幕窗界面" />
+              <img src="/mimi/overlay-current.png" alt="mimi 实时字幕窗界面" width={1280} height={272} loading="lazy" decoding="async" />
             </div>
             <div className="overlay-orbit overlay-orbit--one" />
             <div className="overlay-orbit overlay-orbit--two" />
@@ -205,7 +212,7 @@ function App() {
           <div className="scene-grid">
             {scenes.map((scene) => (
               <article className="scene-card" key={scene.label}>
-                <img src={scene.image} alt={`${scene.label} 使用场景`} />
+                <img src={scene.image} alt={`${scene.label} 使用场景`} width={960} height={540} loading="lazy" decoding="async" />
                 <div className="scene-shade" />
                 <div className="scene-content"><span>{scene.label}</span><strong>{scene.copy}</strong></div>
               </article>
@@ -229,7 +236,7 @@ function App() {
           </div>
           <aside className="start-card">
             <div className="start-card-character">
-              <img src="/mimi/mimi-icon.png" alt="mimi 角色" />
+              <img src="/mimi/mimi-icon-512.jpg" alt="mimi 角色" width={512} height={512} loading="lazy" decoding="async" />
               <span className="start-card-bubble">准备好就叫我 ♫</span>
             </div>
             <div className="start-card-copy">
@@ -253,15 +260,15 @@ function App() {
           </div>
           <div className="settings-card">
             <div className="settings-card-top"><span>mimi Settings</span><span className="settings-lights"><i /><i /><i /></span></div>
-            <img src="/mimi/settings.png" alt="mimi 设置界面，API Key 保存在 Keychain" />
+            <img src="/mimi/settings-560.jpg" alt="mimi 设置界面，API Key 保存在 Keychain" width={560} height={492} loading="lazy" decoding="async" />
             <span className="settings-caption">credentials stay on this Mac</span>
           </div>
         </section>
 
         <section className="download-section" aria-labelledby="download-title">
           <div className="download-character">
-            <img className="download-character-main" src="/mimi/mimi-icon.png" alt="mimi 角色形象" />
-            <img className="download-cat-sticker" src="/mimi/mimi-cat.png" alt="mimi 黑猫伙伴" />
+            <img className="download-character-main" src="/mimi/mimi-icon-512.jpg" alt="mimi 角色形象" width={512} height={512} loading="lazy" decoding="async" />
+            <img className="download-cat-sticker" src="/mimi/mimi-cat-256.png" alt="mimi 黑猫伙伴" width={256} height={256} loading="lazy" decoding="async" />
           </div>
           <div className="download-copy">
             <div className="section-label section-label--light">07 / 现在就听</div>
