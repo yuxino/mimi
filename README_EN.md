@@ -65,8 +65,6 @@ mimi never uses your microphone, asks for an account, or saves recordings and su
 - Double-click the top handle to collapse or expand it
 - Lock the panel to click through it and keep using the video or meeting underneath
 - Switch languages from the top left; pause or clear subtitles from the top right
-- If two subtitle panels appear, disable Chrome Live Caption / Live Translate
-
 <details>
 <summary>Build from source</summary>
 
