@@ -34,17 +34,17 @@ Move the subtitle window, resize it freely from any edge, or lock it to click th
   </tr>
 </table>
 
-### Keep it open during a meeting
-
-Zoom, Google Meet, Teams, Feishu, browser-based webinars, or online classes all work the same way: if the other person’s voice is playing through your Mac, mimi can turn it into subtitles floating over the window. It is useful for overseas interviews, cross-language meetings, or simply when an accent is hard to catch.
-
-mimi captures system audio rather than your microphone, so it helps you understand what the computer is playing. It does not record your own voice and it is not a meeting recorder or note-taking app.
+### It works in meetings too
 
 <div align="center">
-  <img src="docs/images/mimi-overlay-current-en.png" width="68%" alt="The current mimi subtitle overlay UI">
-  <br>
-  <sub>The current subtitle panel keeps language status, recent confirmed lines, and the active line in one small floating window.</sub>
+  <img src="docs/images/mimi-meeting.svg" width="78%" alt="mimi showing live subtitles during an online meeting">
 </div>
+
+mimi turned out to be useful for more than videos.
+
+If the other person’s voice is playing through your Mac in Zoom, Meet, Teams, Feishu, a webinar, or an online class, mimi can subtitle it the same way. It is handy for overseas interviews, cross-language meetings, or simply when an accent is hard to catch.
+
+mimi captures system audio rather than your microphone, so it does not record your own voice. During a meeting you can pause and resume from the subtitle panel, collapse it into a small status bar, switch the recognition language from the top-left control, and let mimi reconnect automatically after a brief network interruption.
 
 ## Get started
 
@@ -52,9 +52,7 @@ mimi captures system audio rather than your microphone, so it helps you understa
 2. Add your Alibaba Cloud Model Studio Workspace ID and API key
 3. Play a video or join a meeting, then select **Start Listening**
 
-mimi can detect the language automatically or let you choose Chinese, English, Japanese, or Korean manually. Subtitles can show the original words directly, or translate them into Simplified Chinese, English, or Japanese.
-
-Two translation modes are available: **Low Latency** and **High Quality**. Low Latency fits meetings and interviews where keeping up matters most; for films and longer content, choose whichever feels better.
+The current UI lets you choose Chinese original audio, English, Japanese, or Korean as the recognition language. Subtitles can show the original words directly or translate them into Simplified Chinese, English, or Japanese. When translation is enabled, the current build uses the high-quality mode.
 
 > mimi is not yet notarized by Apple. If macOS blocks the first launch, open System Settings → Privacy & Security and select **Open Anyway**.
 
@@ -62,7 +60,7 @@ Two translation modes are available: **Low Latency** and **High Quality**. Low L
 
 mimi never uses your microphone, asks for an account, or saves recordings and subtitle history. Your API key stays in macOS Keychain.
 
-For translated subtitles, mimi shows a stable preview before the final translation takes over. Completed subtitle-sized lines stay put while only the active tail changes, avoiding constant full-paragraph reflow.
+Confirmed lines stay in the subtitle panel while older dialogue gently fades back and the active line remains prominent. Continuous speech is split by punctuation and length into readable subtitle-sized chunks so the whole paragraph does not keep jumping around.
 
 [Create an API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Find your Workspace ID](https://help.aliyun.com/en/model-studio/obtain-the-app-id-and-workspace-id)
 
@@ -70,13 +68,16 @@ For translated subtitles, mimi shows a stable preview before the final translati
 
 ## A few useful details
 
+- `⌘ ⇧ Space` quickly starts or stops live subtitles
 - Drag the short handle at the top center to move the window; resize freely from any edge or corner
-- Choose a subtitle size from 14–20; narrower windows wrap text naturally
-- Continuous speech is split by punctuation and length, with new lines appended as they become readable
-- The top-left label shows the detected and subtitle languages
+- Double-click the top handle to collapse the panel into a compact status bar; double-click again or use the expand button to restore it
+- Pause or resume directly from the top-right controls without clearing the subtitles already on screen
+- Select the top-left language status to switch the recognition language without opening Settings
+- The language indicator and bottom waveform distinguish listening, recognizing, translating, and paused states
 - Faint timestamps mark confirmed lines while the current line stays prominent
 - Lock the panel to click through it and keep using the video or meeting underneath
 - Use the eraser in the top-right corner to clear the current subtitles
+- Brief connection failures trigger automatic recovery without intentionally clearing the existing subtitles
 - If two subtitle panels appear, disable Chrome Live Caption / Live Translate
 
 <details>
