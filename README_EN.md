@@ -11,38 +11,38 @@
 
 The name mimi comes from the reading of the Japanese word 耳（みみ, “ear”）, written in roman letters as *mimi*.
 
-It listens to audio playing on your Mac and turns Chinese, Japanese, English, or Korean into live original-language subtitles, or translates it into Simplified Chinese, English, or Japanese. It works with browsers, media players, online meetings, and desktop apps.
+It listens to audio playing on your Mac and turns Chinese, Japanese, English, or Korean into live original-language subtitles, or translates it into Simplified Chinese, English, or Japanese. It works with browsers, media players, online meetings, online courses, and desktop apps.
 
 Move the subtitle window, resize it freely from any edge, or lock it to click through. The current line stays clear while earlier dialogue fades back with a quiet timestamp. When someone keeps talking, mimi breaks the passage into readable subtitle-sized lines and updates only the active tail.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/mimi-film-real-en.jpg" alt="mimi showing live English subtitles over a Japanese drama"></td>
-    <td width="50%"><img src="docs/images/mimi-game-real-en.jpg" alt="mimi showing live English subtitles over a realistic narrative game"></td>
+    <td width="33.33%"><img src="docs/images/mimi-film-real-en.jpg" alt="mimi showing live English subtitles over a Japanese drama"></td>
+    <td width="33.33%"><img src="docs/images/mimi-game-real-en.jpg" alt="mimi showing live English subtitles over a realistic narrative game"></td>
+    <td width="33.33%"><img src="docs/images/mimi-live-real-en.jpg" alt="mimi showing live English subtitles over a Japanese livestream"></td>
   </tr>
   <tr>
     <td align="center">Watch films without native subtitles</td>
     <td align="center">Follow dialogue-heavy narrative games</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/mimi-romance-real-en.jpg" alt="mimi showing live English subtitles over a mature late-night drama"></td>
-    <td width="50%"><img src="docs/images/mimi-live-real-en.jpg" alt="mimi showing live English subtitles over a Japanese livestream"></td>
-  </tr>
-  <tr>
-    <td align="center">Keep up with mature and late-night stories</td>
     <td align="center">Understand livestreams, podcasts, and travel videos</td>
+  </tr>
+  <tr>
+    <td width="33.33%"><img src="docs/images/mimi-romance-real-en.jpg" alt="mimi showing live English subtitles over a foreign-language short drama"></td>
+    <td width="33.33%"><img src="docs/images/mimi-meeting-real-en.jpg" alt="mimi showing live English subtitles during a cross-language online meeting"></td>
+    <td width="33.33%"><img src="docs/images/mimi-course-real-en.jpg" alt="mimi showing live English subtitles during an online course"></td>
+  </tr>
+  <tr>
+    <td align="center">Keep up with foreign-language short dramas</td>
+    <td align="center">Join cross-language online meetings</td>
+    <td align="center">Learn from online courses and lectures</td>
   </tr>
 </table>
 
-### It works in meetings too
-
-<div align="center">
-  <img src="docs/images/mimi-meeting.svg" width="78%" alt="mimi showing live subtitles during an online meeting">
-</div>
+### More than video
 
 mimi turned out to be useful for more than videos.
 
-If the other person’s voice is playing through your Mac in Zoom, Meet, Teams, Feishu, a webinar, or an online class, mimi can subtitle it the same way. It is handy for overseas interviews, cross-language meetings, or simply when an accent is hard to catch.
+If the speaker's voice is playing through your Mac in Zoom, Meet, Teams, Feishu, a webinar, or an online course, mimi can subtitle it the same way. It is handy for overseas interviews, cross-language meetings, foreign-language lectures, or simply when an accent is hard to catch.
 
 mimi captures system audio rather than your microphone, so it does not record your own voice. During a meeting you can pause and resume from the subtitle panel, collapse it into a small status bar, switch the recognition language from the top-left control, and let mimi reconnect automatically after a brief network interruption.
 
@@ -50,7 +50,7 @@ mimi captures system audio rather than your microphone, so it does not record yo
 
 1. Download the latest version from [Releases](https://github.com/yuxino/mimi/releases/latest)
 2. Add your Alibaba Cloud Model Studio Workspace ID and API key
-3. Play a video or join a meeting, then select **Start Listening**
+3. Play a video, join a meeting, or open an online course, then select **Start Listening**
 
 The current UI lets you choose Chinese original audio, English, Japanese, or Korean as the recognition language. Subtitles can show the original words directly or translate them into Simplified Chinese, English, or Japanese. When translation is enabled, the current build uses the high-quality mode.
 
