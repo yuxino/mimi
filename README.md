@@ -34,15 +34,17 @@ mimi 这个名字来自日语「耳（みみ）」的读音，写成罗马字就
   </tr>
 </table>
 
-### 开会时也可以挂着
+### 开会的时候也能用
 
 <div align="center">
   <img src="docs/images/mimi-interview.png" width="78%" alt="mimi 在跨语言线上面试或会议中显示实时字幕">
 </div>
 
-Zoom、Google Meet、Teams、飞书，或者浏览器里的 Webinar、网课，只要对方的声音正在 Mac 上播放，mimi 就可以把它变成浮在窗口上的实时字幕。海外面试、跨语言会议，或者单纯碰到一个口音很重的人时，都挺有用。
+后来发现 mimi 不只是拿来看视频。
 
-mimi 抓的是系统音频，不是麦克风，所以它只负责帮你听懂电脑里传出来的声音，不会录你自己说的话，也不是会议录音或纪要工具。
+开 Zoom、Meet、飞书这些会议的时候，只要声音是从 Mac 里出来的，它一样能听。碰到英文会议、海外面试，或者对方口音有点重的时候，挂在下面当字幕还挺方便。
+
+它只听系统声音，不碰麦克风，所以也不会把自己说的话录进去。就是一个安安静静挂在旁边的字幕。
 
 <div align="center">
   <img src="docs/images/mimi-overlay-current.png" width="68%" alt="mimi 当前版本的字幕悬浮窗 UI">
