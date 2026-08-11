@@ -1,0 +1,35 @@
+name: Initialize Project from Template
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  initialize-project:
+    if: github.event.repository.name != 'web-template' && github.actor != 'github-actions[bot]'  # 只在非模板仓库首次初始化时运行
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run initialization script
+        run: npm run init
+
+      - name: Commit changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .
+          git commit -m "chore: auto-initialize project from template" || echo "No changes to commit"
+          git push

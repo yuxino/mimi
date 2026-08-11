@@ -1,0 +1,70 @@
+name: Deploy to OSS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    if: github.event.repository.name != 'web-template'
+    runs-on: ubuntu-latest
+    env:
+      MEOW_API_TIMEOUT_MS: '30000'
+      MEOW_API_RETRIES: '5'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check initialization state
+        id: guard
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          REPO_NAME="${{ github.event.repository.name }}"
+
+          if [ "$PACKAGE_NAME" = "web-template" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "模板初始化尚未完成，跳过发布"
+            exit 0
+          fi
+
+          if [ "$PACKAGE_NAME" != "$REPO_NAME" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "仓库名与 package.json 项目名尚未对齐，跳过发布"
+            exit 0
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        if: steps.guard.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Reserve build in meow
+        id: reserve
+        if: steps.guard.outputs.ready == 'true'
+        uses: yuxino-labs/meow-release@main
+        with:
+          command: reserve
+          dir: dist
+
+      - name: Build
+        if: steps.guard.outputs.ready == 'true'
+        run: npm run build
+        env:
+          BUILD_PUBLIC_BASE_URL: ${{ steps.reserve.outputs.public-url }}
+
+      - name: Release artifact
+        if: steps.guard.outputs.ready == 'true'
+        uses: yuxino-labs/meow-release@main
+        with:
+          command: release
+          dir: dist
+
+      - name: Report release failure
+        if: ${{ failure() && steps.guard.outputs.ready == 'true' }}
+        uses: yuxino-labs/meow-release@main
+        with:
+          command: fail-pending
