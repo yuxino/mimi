@@ -116,4 +116,15 @@ func runSessionControllerTests(using runner: inout TestRunner) {
         controller.handle(.ignored(type: "response.created"))
         try expectEqual(controller.state, before)
     }
+
+    runner.run("subtitle revocation removes the last history pair") {
+        var controller = TranslationSessionController()
+        controller.didConnect()
+        controller.handle(.sourceFinal(text: "Hello.", language: "en"))
+        controller.handle(.translationFinal("你好。"))
+
+        controller.handle(.subtitleRevoked)
+
+        try expectEqual(controller.state.subtitles.history, [])
+    }
 }
