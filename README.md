@@ -11,38 +11,38 @@
 
 mimi 这个名字来自日语「耳（みみ）」的读音，写成罗马字就是 mimi。
 
-它听取 Mac 正在播放的声音，把中文、日语、英语或韩语实时变成原文字幕，或翻译成简体中文、英语或日语。浏览器、播放器、线上会议和桌面应用都可以使用。
+它听取 Mac 正在播放的声音，把中文、日语、英语或韩语实时变成原文字幕，或翻译成简体中文、英语或日语。浏览器、播放器、线上会议、在线课程和桌面应用都可以使用。
 
 字幕窗可以移动、自由调整宽高，也可以锁定后让鼠标直接穿过。当前对白保持清楚，刚刚说过的内容会带着时间慢慢淡去。人物持续说话时，mimi 会把长段落切成容易阅读的小句，只让最后一小段继续更新。
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/mimi-film-real.jpg" alt="mimi 为日本剧情片显示实时中文字幕"></td>
-    <td width="50%"><img src="docs/images/mimi-game-real.jpg" alt="mimi 为写实剧情游戏显示实时中文字幕"></td>
+    <td width="33.33%"><img src="docs/images/mimi-film-real.jpg" alt="mimi 为日本剧情片显示实时中文字幕"></td>
+    <td width="33.33%"><img src="docs/images/mimi-game-real.jpg" alt="mimi 为写实剧情游戏显示实时中文字幕"></td>
+    <td width="33.33%"><img src="docs/images/mimi-live-real.jpg" alt="mimi 为日本直播显示实时中文字幕"></td>
   </tr>
   <tr>
     <td align="center">看懂没有字幕的海外影视</td>
     <td align="center">玩懂对白很多的剧情游戏</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/mimi-romance-real.jpg" alt="mimi 为成熟向夜间剧情显示实时中文字幕"></td>
-    <td width="50%"><img src="docs/images/mimi-live-real.jpg" alt="mimi 为日本直播显示实时中文字幕"></td>
-  </tr>
-  <tr>
-    <td align="center">跟上成熟向影片与夜间剧情</td>
     <td align="center">听懂直播、播客和旅行分享</td>
+  </tr>
+  <tr>
+    <td width="33.33%"><img src="docs/images/mimi-romance-real.jpg" alt="mimi 为外语短剧和人物对白显示实时中文字幕"></td>
+    <td width="33.33%"><img src="docs/images/mimi-meeting-real.jpg" alt="mimi 为跨语言线上会议显示实时中文字幕"></td>
+    <td width="33.33%"><img src="docs/images/mimi-course-real.jpg" alt="mimi 为海外网课和公开课显示实时中文字幕"></td>
+  </tr>
+  <tr>
+    <td align="center">跟上外语短剧和人物对白</td>
+    <td align="center">参加跨语言线上会议</td>
+    <td align="center">听懂海外网课和公开课</td>
   </tr>
 </table>
 
-### 开会的时候也能用
-
-<div align="center">
-  <img src="docs/images/mimi-meeting.svg" width="78%" alt="mimi 在跨语言线上会议中显示实时字幕">
-</div>
+### 不只是视频
 
 后来发现 mimi 不只是拿来看视频。
 
-开 Zoom、Meet、飞书这些会议的时候，只要声音是从 Mac 里出来的，它一样能听。碰到英文会议、海外面试，或者对方口音有点重的时候，挂在下面当字幕还挺方便。
+开 Zoom、Meet、飞书这些会议，或者上网课、公开课的时候，只要声音是从 Mac 里出来的，它一样能听。碰到英文会议、海外面试、外语课程，或者讲者口音有点重的时候，挂在下面当字幕很方便。
 
 它只听系统声音，不碰麦克风，所以也不会把自己说的话录进去。就是一个安安静静挂在旁边的字幕。
 
@@ -52,7 +52,7 @@ mimi 这个名字来自日语「耳（みみ）」的读音，写成罗马字就
 
 1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载最新版
 2. 填入阿里云百炼的 Workspace ID 和 API Key
-3. 播放视频或进入会议，点击 **Start Listening**
+3. 播放视频、进入会议或打开网课，点击 **Start Listening**
 
 当前界面可以手动选择 **中文原文、English、日本語、한국어** 作为识别语言。字幕可以显示原文，或翻译成简体中文、英语或日语；需要翻译时，当前版本使用高质量翻译。
 
