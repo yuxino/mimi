@@ -432,7 +432,10 @@ public actor HighQualityTranslationClient {
             await emit(.sourceFinal(text: request.text, language: request.language))
 
             do {
-                let translation = try await translateWithRetry(request.text)
+                let translation = try await translateWithRetry(
+                    request.text,
+                    language: request.language
+                )
                 guard !Task.isCancelled else { return }
                 if pendingRevokeCount > 0 {
                     // The previous item was a provisional local commit that the
@@ -481,13 +484,24 @@ public actor HighQualityTranslationClient {
         )
     }
 
-    private func translateWithRetry(_ text: String) async throws -> String {
-        let memory = Array(translationMemory.suffix(3))
+    private func translateWithRetry(
+        _ text: String,
+        language: String?
+    ) async throws -> String {
+        let memory = Array(translationMemory.suffix(6))
+        let sourceOverride: SourceLanguage? =
+            sourceLanguage == .automatic
+                ? language.flatMap { SourceLanguage(detectedLanguage: $0) }
+                : nil
         var attempt = 1
 
         while true {
             do {
-                return try await mtClient.translate(text, translationMemory: memory)
+                return try await mtClient.translate(
+                    text,
+                    sourceLanguageOverride: sourceOverride,
+                    translationMemory: memory
+                )
             } catch is CancellationError {
                 throw CancellationError()
             } catch let clientError as QwenMTClientError {
@@ -511,8 +525,8 @@ public actor HighQualityTranslationClient {
     private func remember(source: String, translation: String) {
         translationMemory.removeAll { $0.source == source }
         translationMemory.append(.init(source: source, target: translation))
-        if translationMemory.count > 6 {
-            translationMemory.removeFirst(translationMemory.count - 6)
+        if translationMemory.count > 12 {
+            translationMemory.removeFirst(translationMemory.count - 12)
         }
     }
 
