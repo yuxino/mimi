@@ -59,6 +59,7 @@ public actor QwenMTClient {
     private let targetLanguage: TargetLanguage
     private let model: QwenMTModel
     private let domainHint: String?
+    private let terms: [QwenMTTerm]
     private let session: URLSession
     private let streamingTimeout: Duration
 
@@ -69,6 +70,7 @@ public actor QwenMTClient {
         targetLanguage: TargetLanguage = .simplifiedChinese,
         model: QwenMTModel = .lite,
         domainHint: String? = nil,
+        terms: [QwenMTTerm] = [],
         streamingTimeout: Duration = .seconds(8),
         session: URLSession = .shared
     ) throws {
@@ -83,6 +85,7 @@ public actor QwenMTClient {
         self.targetLanguage = targetLanguage
         self.model = model
         self.domainHint = domainHint
+        self.terms = terms
         self.streamingTimeout = streamingTimeout
         self.session = session
     }
@@ -211,6 +214,7 @@ public actor QwenMTClient {
             model: model,
             stream: stream,
             domainHint: domainHint,
+            terms: terms,
             translationMemory: translationMemory
         )
         return request
