@@ -28,6 +28,14 @@ them away.
    - preserves every vocalization (interjections, breaths, gasps, moans, cries)
      and does not sanitize or censor explicit dialogue;
    - outputs only the translation text, without quotes or explanations.
+3. **Glossary force-maps tone words.** Prose guidance alone was not enough:
+   Qwen-MT still flattened えっと/うーん/あぁ into nothing. The domain hint now
+   also emits `translation_options.terms`, a forced glossary whose entries pin
+   filler sounds to natural counterparts (`えっと→那个`, `うーん→嗯`,
+   `あぁ→啊`, `まあ→嘛`, `um→嗯`, `oh→哦`, and so on). Terms are selected per
+   source→target pair; when the source is set to automatic, the Japanese,
+   English, and Korean glossaries are combined because the scripts cannot
+   cross-match.
 
 ## Trade-off
 
@@ -39,5 +47,7 @@ to the original-subtitle mode, which does no translation.
 
 - Protocol tests assert the guidance keeps Chinese particles, Japanese fillers,
   polite-Japanese handling, output-only constraint, vocal sounds, and explicit
-  dialogue.
+  dialogue; the filler glossary pins えっと→那个 and うーん→嗯, combines
+  languages for automatic source, encodes into `translation_options.terms`,
+  and is omitted when no terms apply.
 - The full core suite and strict release build pass via `./scripts/check.sh`.
