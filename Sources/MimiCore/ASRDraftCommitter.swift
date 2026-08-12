@@ -11,14 +11,16 @@ import Foundation
 /// final exactly once.
 public struct ASRDraftCommitter: Sendable {
     private static let sentenceDelimiters: Set<Character> = ["。", "！", "？", ".", "!", "?", "\n"]
-    private static let longIncompleteCommitThreshold = 20
+    private let longIncompleteCommitThreshold: Int
 
     private var latestDraft = ""
     private var committedText = ""
     private var lastCommittedChunk = ""
     private var lastCommitWasProvisional = false
 
-    public init() {}
+    public init(longIncompleteCommitThreshold: Int = 20) {
+        self.longIncompleteCommitThreshold = max(1, longIncompleteCommitThreshold)
+    }
 
     public var hasPendingText: Bool {
         Self.isMeaningful(pendingText(in: latestDraft))
@@ -54,7 +56,7 @@ public struct ASRDraftCommitter: Sendable {
         let pending = pendingText(in: latestDraft)
         guard
             commitLongIncomplete,
-            pending.count >= Self.longIncompleteCommitThreshold,
+            pending.count >= longIncompleteCommitThreshold,
             Self.isMeaningful(pending)
         else {
             return nil
