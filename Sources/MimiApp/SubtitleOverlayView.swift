@@ -288,9 +288,24 @@ struct SubtitleOverlayView: View {
             }
         }
 
-        let currentLine = subtitles.translation
+        // While translating, the live line shows the original text as it is
+        // being recognized, then becomes the Chinese translation once the
+        // translation is available — same font size throughout.
+        let showsOriginalWhileRecognizing = settings.targetLanguage.translatesAudio
+        let displayingSource = showsOriginalWhileRecognizing
+            && subtitles.translation.text.isEmpty
+        let currentLine: SubtitleLine
+        if showsOriginalWhileRecognizing, !subtitles.source.isFinal {
+            currentLine = subtitles.source
+        } else if displayingSource {
+            currentLine = subtitles.source
+        } else {
+            currentLine = subtitles.translation
+        }
         let currentIsAlreadyInHistory = currentLine.isFinal
-            && visibleHistory.last?.translation == currentLine.text
+            && (displayingSource
+                ? visibleHistory.last?.source == currentLine.text
+                : visibleHistory.last?.translation == currentLine.text)
         if shouldShowCurrentSubtitle(currentLine), !currentIsAlreadyInHistory {
             let currentSegments = currentLine.isFinal
                 ? SubtitleTextSegmenter.segments(
