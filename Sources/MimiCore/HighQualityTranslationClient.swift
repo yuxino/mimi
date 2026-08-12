@@ -56,7 +56,14 @@ public actor HighQualityTranslationClient {
             sourceLanguage: sourceLanguage,
             session: session
         )
-        let domainHint = QwenMTDomainHint.spokenDialogue(for: targetLanguage)
+        let domainHint = QwenMTDomainHint.spokenDialogue(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        )
+        let fillerTerms = QwenMTDomainHint.fillerTerms(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        )
         self.draftMTClient = try QwenMTClient(
             workspaceID: workspaceID,
             apiKey: apiKey,
@@ -64,6 +71,7 @@ public actor HighQualityTranslationClient {
             targetLanguage: targetLanguage,
             model: .flash,
             domainHint: domainHint,
+            terms: fillerTerms,
             streamingTimeout: .seconds(5),
             session: session
         )
@@ -74,6 +82,7 @@ public actor HighQualityTranslationClient {
             targetLanguage: targetLanguage,
             model: .plus,
             domainHint: domainHint,
+            terms: fillerTerms,
             session: session
         )
         self.sourceLanguage = sourceLanguage
