@@ -261,6 +261,36 @@ final class AppModel: ObservableObject {
         _ = await establishSession(using: settings, clearSubtitles: false)
     }
 
+    func switchTranslationMode(
+        to mode: TranslationMode,
+        using settings: AppSettings
+    ) async {
+        guard settings.translationMode != mode else { return }
+        settings.translationMode = mode
+        settings.persistPreferences()
+        if isPaused {
+            activeSettings = settings
+            return
+        }
+        guard state.status == .listening else { return }
+
+        PipelineDiagnostics.log(
+            "session translation mode switch source=\(settings.sourceLanguage.rawValue) target=\(settings.targetLanguage.rawValue) mode=\(mode.rawValue)"
+        )
+        stopHealthChecks()
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        activeSettings = settings
+        controller.beginConnecting()
+        publishState()
+        audioSender?.stop()
+        audioSender = nil
+        await audioCapture.stop()
+        await client?.disconnect()
+        client = nil
+        _ = await establishSession(using: settings, clearSubtitles: false)
+    }
+
     func setOverlayLocked(_ locked: Bool) {
         overlayController?.updateLocked(locked)
     }

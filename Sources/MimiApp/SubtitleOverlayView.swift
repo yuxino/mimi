@@ -237,9 +237,48 @@ struct SubtitleOverlayView: View {
                                     : "切换到 \(sourceLanguageButtonTitle(language))"
                             )
                         }
+
+                        Divider()
+                            .padding(.vertical, 5)
+
+                        Text("翻译模式")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 2)
+
+                        ForEach(TranslationMode.allCases) { mode in
+                            Button {
+                                showsLanguagePicker = false
+                                Task {
+                                    await model.switchTranslationMode(
+                                        to: mode,
+                                        using: settings
+                                    )
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Text(mode.displayName)
+                                    Spacer(minLength: 12)
+                                    if settings.translationMode == mode {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(accentColor)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 8)
+                            .frame(height: 26)
+                            .accessibilityLabel(
+                                settings.translationMode == mode
+                                    ? "\(mode.displayName)翻译，当前模式"
+                                    : "切换到\(mode.displayName)翻译"
+                            )
+                        }
                     }
                     .padding(8)
-                    .frame(width: 156)
+                    .frame(width: 168)
                 }
                 .padding(.leading, 12)
                 .padding(.top, 10)
@@ -452,7 +491,7 @@ struct SubtitleOverlayView: View {
 
     private var languagePickerHelp: String {
         settings.targetLanguage.translatesAudio
-            ? "切换识别语言（保持\(settings.translationMode.displayName)翻译）"
+            ? "切换识别语言和翻译模式"
             : "切换识别语言"
     }
 
