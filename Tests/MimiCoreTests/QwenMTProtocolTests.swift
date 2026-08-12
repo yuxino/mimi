@@ -88,6 +88,18 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
             "guidance should constrain the response to the translation"
         )
         try expect(
+            guidance.contains("tm_list"),
+            "guidance should tell the model to use translation memory as context"
+        )
+        try expect(
+            guidance.contains("ongoing dialogue"),
+            "guidance should frame translation memory as the ongoing dialogue"
+        )
+        try expect(
+            guidance.contains("translate only the new input"),
+            "guidance should forbid re-translating remembered lines"
+        )
+        try expect(
             guidance.contains("Do not sanitize, euphemize, censor, or omit"),
             "guidance should preserve explicit dialogue"
         )
