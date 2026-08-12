@@ -290,8 +290,12 @@ struct SubtitleOverlayView: View {
 
         // While translating, the live line shows the original text as it is
         // being recognized, then becomes the Chinese translation once the
-        // translation is available — same font size throughout.
+        // translation is available — same font size throughout. When the
+        // spoken language is the same as the target, the original would only
+        // look like a slightly wrong subtitle, so the line waits for the
+        // translation instead.
         let showsOriginalWhileRecognizing = settings.targetLanguage.translatesAudio
+            && !isSameLanguageMode
         let displayingSource = showsOriginalWhileRecognizing
             && subtitles.translation.text.isEmpty
         let currentLine: SubtitleLine
@@ -322,7 +326,8 @@ struct SubtitleOverlayView: View {
                     SubtitleRow(
                         id: "current-\(index)",
                         text: text,
-                        createdAt: nil
+                        createdAt: nil,
+                        isLiveOriginal: displayingSource
                     )
                 }
             )
@@ -669,6 +674,14 @@ private struct SubtitleRow: Identifiable, Equatable {
     let id: String
     let text: String
     let createdAt: Date?
+    let isLiveOriginal: Bool
+
+    init(id: String, text: String, createdAt: Date?, isLiveOriginal: Bool = false) {
+        self.id = id
+        self.text = text
+        self.createdAt = createdAt
+        self.isLiveOriginal = isLiveOriginal
+    }
 }
 
 private struct SubtitleTimeline: View {
@@ -701,7 +714,7 @@ private struct SubtitleTimeline: View {
                             Text(row.text)
                                 .font(.system(
                                     size: rowFontSize(at: index),
-                                    weight: index == rows.count - 1 ? .medium : .regular
+                                    weight: isCurrentTranslation(at: index) ? .medium : .regular
                                 ))
                                 .foregroundStyle(.white.opacity(rowOpacity(at: index)))
                                 .multilineTextAlignment(.leading)
@@ -734,11 +747,19 @@ private struct SubtitleTimeline: View {
 
     private func rowOpacity(at index: Int) -> Double {
         let distance = rows.count - 1 - index
-        return switch distance {
-        case 0: 1
+        let opacity = switch distance {
+        case 0: 1.0
         case 1: 0.58
         default: 0.34
         }
+        // The live original is a preview: readable, but clearly not the
+        // confirmed subtitle yet. It brightens to full weight when the
+        // translation lands in the same row.
+        return rows[index].isLiveOriginal ? opacity * 0.6 : opacity
+    }
+
+    private func isCurrentTranslation(at index: Int) -> Bool {
+        index == rows.count - 1 && !rows[index].isLiveOriginal
     }
 
     private func timestampColor(at index: Int) -> Color {
