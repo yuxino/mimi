@@ -38,7 +38,14 @@ public actor LowLatencyTranslationClient {
         targetLanguage: TargetLanguage = .simplifiedChinese,
         session: URLSession = .shared
     ) throws {
-        let domainHint = QwenMTDomainHint.spokenDialogue(for: targetLanguage)
+        let domainHint = QwenMTDomainHint.spokenDialogue(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        )
+        let fillerTerms = QwenMTDomainHint.fillerTerms(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        )
         self.asrClient = try RealtimeASRClient(
             workspaceID: workspaceID,
             apiKey: apiKey,
@@ -54,6 +61,7 @@ public actor LowLatencyTranslationClient {
             targetLanguage: targetLanguage,
             model: .flash,
             domainHint: domainHint,
+            terms: fillerTerms,
             streamingTimeout: .seconds(5),
             session: session
         )
@@ -66,6 +74,7 @@ public actor LowLatencyTranslationClient {
             // Plus model; only transient draft previews stay on Flash.
             model: .plus,
             domainHint: domainHint,
+            terms: fillerTerms,
             session: session
         )
     }
