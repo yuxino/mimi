@@ -127,4 +127,54 @@ func runSessionControllerTests(using runner: inout TestRunner) {
 
         try expectEqual(controller.state.subtitles.history, [])
     }
+
+    runner.run("translated mode replaces the provisional line when the final translation completes") {
+        var controller = TranslationSessionController()
+        controller.didConnect()
+
+        // The local commit lands first and its translation completes, showing a
+        // provisional history entry.
+        controller.handle(.sourceFinal(text: "こんにちは。今日は天気がいいですね。", language: "ja"))
+        controller.handle(.translationFinal("你好。今天天气很好。"))
+        try expectEqual(controller.state.subtitles.history.count, 1)
+
+        // The server final supersedes that local commit: revoke, then commit the
+        // authoritative source and its freshly completed translation.
+        controller.handle(.subtitleRevoked)
+        controller.handle(.sourceFinal(text: "こんにちは。今日は天気がいいですね。明日も晴れるといいです。", language: "ja"))
+        controller.handle(.translationFinal("你好。今天天气很好。希望明天也放晴。"))
+
+        try expectEqual(controller.state.subtitles.history.count, 1)
+        try expectEqual(
+            controller.state.subtitles.history[0].source,
+            "こんにちは。今日は天気がいいですね。明日も晴れるといいです。"
+        )
+        try expectEqual(
+            controller.state.subtitles.history[0].translation,
+            "你好。今天天气很好。希望明天也放晴。"
+        )
+    }
+
+    runner.run("original mode replaces the provisional line when the final translation completes") {
+        var controller = TranslationSessionController()
+        controller.didConnect()
+
+        controller.handle(.sourceFinal(text: "こんにちは。今日は天気がいいですね。", language: "ja"))
+        controller.handle(.translationFinal("こんにちは。今日は天気がいいですね。"))
+        try expectEqual(controller.state.subtitles.history.count, 1)
+
+        controller.handle(.subtitleRevoked)
+        controller.handle(.sourceFinal(text: "こんにちは。今日は天気がいいですね。明日も晴れるといいです。", language: "ja"))
+        controller.handle(.translationFinal("こんにちは。今日は天気がいいですね。明日も晴れるといいです。"))
+
+        try expectEqual(controller.state.subtitles.history.count, 1)
+        try expectEqual(
+            controller.state.subtitles.history[0].source,
+            "こんにちは。今日は天気がいいですね。明日も晴れるといいです。"
+        )
+        try expectEqual(
+            controller.state.subtitles.history[0].translation,
+            "こんにちは。今日は天気がいいですね。明日も晴れるといいです。"
+        )
+    }
 }
