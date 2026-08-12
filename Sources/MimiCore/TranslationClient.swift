@@ -35,6 +35,20 @@ public actor TranslationClient {
                     session: session
                 )
             )
+        case .turbo:
+            self.backend = .highQuality(
+                try HighQualityTranslationClient(
+                    workspaceID: configuration.workspaceID,
+                    apiKey: configuration.apiKey,
+                    sourceLanguage: configuration.sourceLanguage,
+                    targetLanguage: configuration.targetLanguage,
+                    finalModel: .flash,
+                    stableDraftDelay: .milliseconds(500),
+                    maximumWaitDelay: .milliseconds(2_000),
+                    longIncompleteCommitThreshold: 12,
+                    session: session
+                )
+            )
         }
     }
 

@@ -28,7 +28,7 @@ public actor HighQualityTranslationClient {
     private let translatesAudio: Bool
     private let clock = ContinuousClock()
     private var eventHandler: EventHandler?
-    private var draftCommitter = ASRDraftCommitter()
+    private var draftCommitter: ASRDraftCommitter
     private var latestDraftLanguage: String?
     private var draftStabilityTask: Task<Void, Never>?
     private var draftMaximumWaitTask: Task<Void, Never>?
@@ -42,12 +42,19 @@ public actor HighQualityTranslationClient {
     private var translationMemory: [QwenMTMemoryPair] = []
     private var finalWorker: Task<Void, Never>?
     private var pendingRevokeCount = 0
+    private let stableDraftDelay: Duration
+    private let maximumWaitDelay: Duration
+    private let streamsFinals: Bool
 
     public init(
         workspaceID: String,
         apiKey: String,
         sourceLanguage: SourceLanguage,
         targetLanguage: TargetLanguage = .simplifiedChinese,
+        finalModel: QwenMTModel = .plus,
+        stableDraftDelay: Duration = .milliseconds(1_200),
+        maximumWaitDelay: Duration = .milliseconds(4_500),
+        longIncompleteCommitThreshold: Int = 20,
         session: URLSession = .shared
     ) throws {
         self.asrClient = try Audio3ASRClient(
@@ -56,6 +63,12 @@ public actor HighQualityTranslationClient {
             sourceLanguage: sourceLanguage,
             session: session
         )
+        self.draftCommitter = ASRDraftCommitter(
+            longIncompleteCommitThreshold: longIncompleteCommitThreshold
+        )
+        self.stableDraftDelay = stableDraftDelay
+        self.maximumWaitDelay = maximumWaitDelay
+        self.streamsFinals = finalModel != .plus
         let domainHint = QwenMTDomainHint.spokenDialogue(
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage
@@ -80,7 +93,7 @@ public actor HighQualityTranslationClient {
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
-            model: .plus,
+            model: finalModel,
             domainHint: domainHint,
             terms: fillerTerms,
             session: session
@@ -204,7 +217,9 @@ public actor HighQualityTranslationClient {
         guard draftStabilityTask == nil else { return }
         draftStabilityTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: .milliseconds(1_200))
+                try await Task.sleep(
+                    for: self?.stableDraftDelay ?? .milliseconds(1_200)
+                )
                 guard !Task.isCancelled else { return }
                 await self?.commitPendingDraft(boundary: "stable-draft")
             } catch {
@@ -215,7 +230,9 @@ public actor HighQualityTranslationClient {
         guard draftMaximumWaitTask == nil else { return }
         draftMaximumWaitTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: .milliseconds(4_500))
+                try await Task.sleep(
+                    for: self?.maximumWaitDelay ?? .milliseconds(4_500)
+                )
                 guard !Task.isCancelled else { return }
                 await self?.commitPendingDraft(boundary: "maximum-wait")
             } catch {
@@ -497,6 +514,15 @@ public actor HighQualityTranslationClient {
 
         while true {
             do {
+                if streamsFinals {
+                    return try await mtClient.translateStreaming(
+                        text,
+                        sourceLanguageOverride: sourceOverride,
+                        translationMemory: memory
+                    ) { [weak self] partial in
+                        await self?.emit(.translationDraft(partial))
+                    }
+                }
                 return try await mtClient.translate(
                     text,
                     sourceLanguageOverride: sourceOverride,
