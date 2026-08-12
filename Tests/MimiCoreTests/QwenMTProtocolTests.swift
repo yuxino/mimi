@@ -51,7 +51,10 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
     }
 
     runner.run("Qwen-MT request preserves vocal sounds in natural-dialogue guidance") {
-        let guidance = QwenMTDomainHint.spokenDialogue(for: .simplifiedChinese)
+        let guidance = QwenMTDomainHint.spokenDialogue(
+            sourceLanguage: .japanese,
+            targetLanguage: .simplifiedChinese
+        )
         let data = try QwenMTRequestEncoder.request(
             text: "今日は晴れです。",
             sourceLanguage: .japanese,
@@ -91,6 +94,79 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
         try expect(
             !guidance.contains("do not mechanically translate every filler"),
             "guidance should not filter filler sounds"
+        )
+    }
+
+    runner.run("Qwen-MT filler glossary pins Japanese tone words for Chinese") {
+        let terms = QwenMTDomainHint.fillerTerms(
+            sourceLanguage: .japanese,
+            targetLanguage: .simplifiedChinese
+        )
+        try expect(
+            terms.contains(.init(source: "えっと", target: "那个")),
+            "えっと should map to 那个"
+        )
+        try expect(
+            terms.contains(.init(source: "うーん", target: "嗯")),
+            "うーん should map to 嗯"
+        )
+        try expect(
+            terms.contains(.init(source: "あぁ", target: "啊")),
+            "あぁ should map to 啊"
+        )
+        try expect(
+            terms.contains(.init(source: "まあ", target: "嘛")),
+            "まあ should map to 嘛"
+        )
+    }
+
+    runner.run("Qwen-MT filler glossary combines languages for automatic source") {
+        let terms = QwenMTDomainHint.fillerTerms(
+            sourceLanguage: .automatic,
+            targetLanguage: .simplifiedChinese
+        )
+        try expect(
+            terms.contains(.init(source: "えっと", target: "那个")),
+            "automatic source should include Japanese fillers"
+        )
+        try expect(
+            terms.contains(.init(source: "um", target: "嗯")),
+            "automatic source should include English fillers"
+        )
+    }
+
+    runner.run("Qwen-MT request encodes the filler glossary in translation_options") {
+        let terms = QwenMTDomainHint.fillerTerms(
+            sourceLanguage: .japanese,
+            targetLanguage: .simplifiedChinese
+        )
+        let data = try QwenMTRequestEncoder.request(
+            text: "えっと、うーん、あぁ。",
+            sourceLanguage: .japanese,
+            model: .flash,
+            stream: true,
+            terms: terms
+        )
+        let json = try mtJSONObject(data)
+        let options = try mtRequiredObject(json["translation_options"])
+        let encodedTerms = options["terms"] as? [[String: Any]]
+
+        try expectEqual(encodedTerms?.count, terms.count)
+        try expectEqual(encodedTerms?.first?["source"] as? String, "えっと")
+        try expectEqual(encodedTerms?.first?["target"] as? String, "那个")
+    }
+
+    runner.run("Qwen-MT request omits terms when none are provided") {
+        let data = try QwenMTRequestEncoder.request(
+            text: "今日は晴れです。",
+            sourceLanguage: .japanese
+        )
+        let json = try mtJSONObject(data)
+        let options = try mtRequiredObject(json["translation_options"])
+
+        try expect(
+            options["terms"] == nil,
+            "terms should be omitted when none are provided"
         )
     }
 
