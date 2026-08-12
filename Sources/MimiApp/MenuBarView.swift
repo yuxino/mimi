@@ -39,7 +39,9 @@ struct MenuBarView: View {
             .disabled(isChangingSession || model.isPaused)
 
             Label(
-                settings.targetLanguage.translatesAudio ? "高质量翻译" : "只显示中文原文",
+                settings.targetLanguage.translatesAudio
+                    ? "\(settings.translationMode.displayName)翻译"
+                    : "只显示中文原文",
                 systemImage: settings.targetLanguage.translatesAudio ? "sparkles" : "text.quote"
             )
             .font(.caption)

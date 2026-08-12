@@ -132,7 +132,6 @@ final class AppSettings: ObservableObject {
         if sourceLanguage == .chinese {
             targetLanguage = .original
         }
-        translationMode = .highQuality
         persistPreferences()
     }
 }

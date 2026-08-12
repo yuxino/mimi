@@ -22,7 +22,7 @@ struct SettingsView: View {
         .frame(width: 560, height: 570)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
-            prepareHighQualityPreferences()
+            prepareListeningPreferences()
             showsServiceSettings = settings.workspaceID.isEmpty
                 || settings.apiKey.isEmpty
                 || settings.credentialLoadError != nil
@@ -135,6 +135,26 @@ struct SettingsView: View {
                     settings.persistPreferences()
                 }
             }
+
+            Divider()
+
+            settingsRow("翻译模式") {
+                Picker("翻译模式", selection: $settings.translationMode) {
+                    ForEach(TranslationMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 168)
+                .disabled(model.isActive)
+                .onChange(of: settings.translationMode) {
+                    settings.persistPreferences()
+                }
+            }
+
+            Text(translationModeHelp)
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Divider()
 
@@ -316,19 +336,18 @@ struct SettingsView: View {
             .foregroundStyle(isError ? Color.red : Color.green)
     }
 
-    private func prepareHighQualityPreferences() {
+    private func prepareListeningPreferences() {
         if settings.sourceLanguage == .automatic {
             settings.sourceLanguage = .japanese
         }
         if settings.sourceLanguage == .chinese {
             settings.targetLanguage = .original
         }
-        settings.translationMode = .highQuality
         settings.persistPreferences()
     }
 
     private func startListening() {
-        prepareHighQualityPreferences()
+        prepareListeningPreferences()
         model.setOverlayLocked(settings.isOverlayLocked)
         Task {
             await model.start(using: settings)
@@ -336,7 +355,7 @@ struct SettingsView: View {
     }
 
     private func saveCredentials() {
-        prepareHighQualityPreferences()
+        prepareListeningPreferences()
         do {
             try settings.save()
             credentialMessage = "凭证已安全保存。"
@@ -363,7 +382,7 @@ struct SettingsView: View {
                 : "只识别并显示中文原文，不发送翻译请求。"
         }
         if model.state.status == .listening {
-            return "切换后会自动重新连接，继续使用整句高质量翻译。"
+            return "切换后会自动重新连接，继续使用当前翻译模式。"
         } else {
             return "选择主要语种，整句翻译更准确。"
         }
@@ -376,13 +395,13 @@ struct SettingsView: View {
     private func sourceLanguageButtonHelp(_ language: SourceLanguage) -> String {
         language == .chinese
             ? "切换到中文识别，只显示原文"
-            : "切换到 \(language.displayName) 识别，保持高质量翻译"
+            : "切换到 \(language.displayName) 识别，保持当前翻译模式"
     }
 
     private var translationBadgeText: String {
         settings.sourceLanguage == .chinese && settings.targetLanguage == .original
             ? "仅显示原文"
-            : "高质量翻译"
+            : "\(settings.translationMode.displayName)翻译"
     }
 
     private var translationBadgeIcon: String {
@@ -400,7 +419,7 @@ struct SettingsView: View {
         case .idle:
             "准备就绪"
         case .connecting:
-            "正在连接高质量翻译…"
+            "正在连接\(settings.translationMode.displayName)翻译…"
         case .listening:
             "正在识别并翻译"
         case .stopping:
@@ -415,6 +434,17 @@ struct SettingsView: View {
             return message
         }
         return sessionStatusText
+    }
+
+    private var translationModeHelp: String {
+        switch settings.translationMode {
+        case .turbo:
+            "极速：边识别边用快模型翻译，速度优先，一句话说完即定稿。"
+        case .highQuality:
+            "高质量：整句翻译完成后再显示，最准确，稍有延迟。"
+        case .lowLatency:
+            "低延迟：快速预览 + 高质量定稿，速度和准确度兼顾。"
+        }
     }
 
     private var sessionStatusColor: Color {

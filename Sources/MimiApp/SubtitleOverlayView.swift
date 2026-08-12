@@ -176,7 +176,7 @@ struct SubtitleOverlayView: View {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 7, weight: .semibold))
                                 .foregroundStyle(accentColor.opacity(0.74))
-                            Text("高质量")
+                            Text(settings.translationMode.displayName)
                                 .foregroundStyle(.white.opacity(isHovering ? 0.72 : 0.52))
                         }
                         Image(systemName: "chevron.down")
@@ -452,14 +452,16 @@ struct SubtitleOverlayView: View {
 
     private var languagePickerHelp: String {
         settings.targetLanguage.translatesAudio
-            ? "切换识别语言（保持高质量翻译）"
+            ? "切换识别语言（保持\(settings.translationMode.displayName)翻译）"
             : "切换识别语言"
     }
 
     private func languagePickerAccessibilityLabel(
         _ status: (source: String, separator: String, target: String)
     ) -> String {
-        let mode = settings.targetLanguage.translatesAudio ? "高质量翻译" : "只显示原文"
+        let mode = settings.targetLanguage.translatesAudio
+            ? "\(settings.translationMode.displayName)翻译"
+            : "只显示原文"
         return "\(activityPhase.accessibilityLabel)，当前语言：\(status.source) \(status.separator) \(status.target)，\(mode)。打开以切换识别语言。"
     }
 }
