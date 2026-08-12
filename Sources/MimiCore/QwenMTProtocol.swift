@@ -53,20 +53,39 @@ public enum QwenMTDomainHint {
         case .original:
             ""
         case .simplifiedChinese:
-            "Use concise, idiomatic Simplified Chinese and preserve natural particles such as 嗯、啊、呢、吧、嘛."
+            """
+            Use concise, idiomatic Simplified Chinese, like subtitles for a TV \
+            drama, and keep every natural particle: 嗯、啊、呢、吧、嘛、哦、唉. \
+            Render Japanese fillers (えっと、あの、うーん、あぁ) and English \
+            fillers (um, uh, oh, hmm) with their natural Chinese equivalents; \
+            never drop a meaningful filler.
+            """
         case .english:
-            "Use concise, idiomatic conversational English with natural contractions and interjections."
+            """
+            Use concise, idiomatic conversational English with natural \
+            contractions and interjections (um, uh, oh, hmm, yeah). Keep \
+            Japanese fillers (えっと、あの、うーん、あぁ) as natural English \
+            equivalents; never drop a meaningful filler.
+            """
         case .japanese:
-            "Use natural conversational Japanese with appropriate register, particles, and sentence endings."
+            """
+            Use natural conversational Japanese with appropriate register, \
+            particles, and sentence endings (ね、よ、な、じゃん). Keep Chinese \
+            and English fillers as natural Japanese equivalents; never drop a \
+            meaningful filler.
+            """
         }
         return """
-        Natural spoken dialogue. \(languageGuidance) Preserve the speaker's tone and \
-        implied subjects from context. Avoid literal, explanatory, or translation-like \
-        wording. Faithfully preserve every vocalization represented in the source, \
-        including interjections, hesitation, breaths, gasps, moans, and cries. Render \
-        non-lexical sounds naturally in the target language. Do not sanitize, euphemize, \
-        censor, or omit explicit dialogue or vocal sounds. Collapse only clear accidental \
-        ASR repetition.
+        Natural spoken dialogue for watching TV dramas and films. \(languageGuidance) \
+        Preserve the speaker's tone, emotion, and implied subjects from context; render \
+        polite or formal Japanese (です/ます、敬語) as naturally courteous Chinese, never \
+        stiff or literal. Avoid literal, explanatory, or translation-like wording. \
+        Prefer short, complete sentences that fit one subtitle line. Faithfully \
+        preserve every vocalization represented in the source, including interjections, \
+        hesitation, breaths, gasps, moans, and cries, rendered naturally in the target \
+        language. Do not sanitize, euphemize, censor, or omit explicit dialogue or vocal \
+        sounds. Keep deliberate repetition for emphasis; collapse only clear accidental \
+        ASR repetition. Output only the translation text.
         """
     }
 }
