@@ -85,13 +85,19 @@ public enum QwenMTDomainHint {
         return """
         Natural spoken dialogue for watching TV dramas and films. \(languageGuidance) \
         \(sourceGuidance) Preserve the speaker's tone, emotion, and implied subjects \
-        from context; render polite or formal Japanese (です/ます、敬語) as naturally \
-        courteous Chinese, never stiff or literal. Avoid literal, explanatory, or \
-        translation-like wording. Prefer short, complete sentences that fit one \
-        subtitle line. Faithfully preserve every vocalization represented in the \
-        source, including interjections, hesitation, breaths, gasps, moans, and cries, \
-        rendered naturally in the target language. Do not sanitize, euphemize, censor, \
-        or omit explicit dialogue or vocal sounds. Keep deliberate repetition for \
+        from context. The translation memory (tm_list) is the ongoing dialogue: \
+        each pair is one finished subtitle line and its translation. Use it as \
+        context — keep names, pronouns, and implied subjects consistent with \
+        earlier lines, keep the same speaker's tone and register, and resolve \
+        ambiguous or truncated phrases from what came before. Never repeat or \
+        re-translate anything already in the memory; translate only the new input. \
+        Render polite or formal Japanese (です/ます、敬語) as naturally courteous \
+        Chinese, never stiff or literal. Avoid literal, explanatory, or translation-like \
+        wording. Prefer short, complete sentences that fit one subtitle line. \
+        Faithfully preserve every vocalization represented in the source, including \
+        interjections, hesitation, breaths, gasps, moans, and cries, rendered \
+        naturally in the target language. Do not sanitize, euphemize, censor, or \
+        omit explicit dialogue or vocal sounds. Keep deliberate repetition for \
         emphasis; collapse only clear accidental ASR repetition. Output only the \
         translation text.
         """

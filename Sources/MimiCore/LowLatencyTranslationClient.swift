@@ -265,7 +265,7 @@ public actor LowLatencyTranslationClient {
             do {
                 let recentMemory = translationMemory
                     .filter { $0.language == request.detectedLanguage }
-                    .suffix(3)
+                    .suffix(5)
                     .map(\.pair)
                 let translation = try await finalMTClient.translateStreaming(
                     request.text,
