@@ -41,6 +41,7 @@ It works with browsers, media players, online meetings, courses, and desktop app
 - Move, resize, lock, or collapse the subtitle panel
 - Keep the current line prominent while confirmed subtitles fade with timestamps
 - Pause, clear, switch recognition languages, and recover from brief disconnects
+- Three translation modes — Turbo, Low latency, and High quality — switchable right from the subtitle panel
 - Press **⌘ ⇧ Space** to start or stop live subtitles
 
 ## Get started
@@ -64,7 +65,7 @@ mimi never uses your microphone, asks for an account, or saves recordings and su
 - Drag the short handle at the top center to move the window; resize freely from any edge or corner
 - Double-click the top handle to collapse or expand it
 - Lock the panel to click through it and keep using the video or meeting underneath
-- Switch languages from the top left; pause or clear subtitles from the top right
+- Switch recognition languages or translation modes from the top left; pause or clear subtitles from the top right
 <details>
 <summary>Build from source</summary>
 
