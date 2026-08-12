@@ -14,6 +14,8 @@ running the slow flagship Plus model. Turbo removes both waits.
 1. **New mode.** `TranslationMode.turbo` with display name 极速. It is exposed
    in the Settings 翻译模式 picker, persisted, shown in the overlay language
    pill and menu bar, and survives language switching.
+   The floating subtitle window's language pill popover also lists the three
+   modes; picking one while listening reconnects with the new mode.
 2. **Fast model for finals.** Turbo uses the high-quality pipeline
    (`Audio3ASR` + local sentence commits) but translates finals with
    `qwen-mt-flash`, which supports incremental streaming. The final translation
