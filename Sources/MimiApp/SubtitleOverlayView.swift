@@ -118,6 +118,8 @@ struct SubtitleOverlayView: View {
 
                 if !visibleRows.isEmpty, model.state.status.isActive {
                     HStack(spacing: 7) {
+                        Spacer(minLength: 0)
+
                         WaveformIndicator(phase: activityPhase, compact: true)
                             .opacity(0.65)
 
