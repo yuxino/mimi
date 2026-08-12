@@ -28,6 +28,15 @@ An earlier attempt rendered the original as a small dim line above the
 translation; that was rejected — the original is a temporary live line that
 becomes the translation, not a permanent second line.
 
+## Polish (follow-up)
+
+The live original is styled as a preview so it never reads like a finished
+subtitle: it renders at reduced brightness and regular weight (same font size),
+then brightens to full weight in the same row when the translation lands. The
+original is skipped entirely when the spoken language equals the target — in
+that case showing it would only look like a slightly wrong subtitle before the
+translation takes over.
+
 ## Verification
 
 - The strict release build passes with warnings treated as errors; the change is
