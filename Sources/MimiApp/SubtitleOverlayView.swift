@@ -117,11 +117,20 @@ struct SubtitleOverlayView: View {
                 }
 
                 if !visibleRows.isEmpty, model.state.status.isActive {
-                    WaveformIndicator(phase: activityPhase, compact: true)
-                        .frame(height: 24)
-                        .padding(.top, 5)
-                        .padding(.bottom, 7)
-                        .opacity(0.65)
+                    HStack(spacing: 7) {
+                        WaveformIndicator(phase: activityPhase, compact: true)
+                            .opacity(0.65)
+
+                        Text(activityPhase.accessibilityLabel)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.6))
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(height: 24)
+                    .padding(.top, 5)
+                    .padding(.bottom, 7)
+                    .padding(.horizontal, 18)
                 }
             }
             .padding(5)
