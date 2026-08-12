@@ -234,11 +234,9 @@ final class AppModel: ObservableObject {
         )
         let needsReconnect = state.status == .listening
             && (settings.sourceLanguage != language
-                || settings.targetLanguage != targetLanguage
-                || settings.translationMode != .highQuality)
+                || settings.targetLanguage != targetLanguage)
         settings.sourceLanguage = language
         settings.targetLanguage = targetLanguage
-        settings.translationMode = .highQuality
         settings.persistPreferences()
         if isPaused {
             activeSettings = settings
@@ -247,7 +245,7 @@ final class AppModel: ObservableObject {
         guard needsReconnect else { return }
 
         PipelineDiagnostics.log(
-            "session language switch source=\(language.rawValue) target=\(targetLanguage.rawValue) mode=highQuality"
+            "session language switch source=\(language.rawValue) target=\(targetLanguage.rawValue) mode=\(settings.translationMode.rawValue)"
         )
         stopHealthChecks()
         recoveryTask?.cancel()

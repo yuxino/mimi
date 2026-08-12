@@ -153,6 +153,23 @@ func runConfigurationTests(using runner: inout TestRunner) {
         try expectEqual(validated.targetLanguage, .english)
     }
 
+    runner.run("turbo mode stays turbo even with automatic source") {
+        let configuration = LiveTranslationConfiguration(
+            workspaceID: "ws-abc123",
+            apiKey: "sk-test",
+            sourceLanguage: .automatic,
+            translationMode: .turbo
+        )
+
+        try expectEqual(configuration.effectiveTranslationMode, .turbo)
+    }
+
+    runner.run("translation modes expose short display names") {
+        try expectEqual(TranslationMode.turbo.displayName, "极速")
+        try expectEqual(TranslationMode.lowLatency.displayName, "低延迟")
+        try expectEqual(TranslationMode.highQuality.displayName, "高质量")
+    }
+
     runner.run("configuration requires an API key") {
         let configuration = LiveTranslationConfiguration(
             workspaceID: "ws-abc123",
