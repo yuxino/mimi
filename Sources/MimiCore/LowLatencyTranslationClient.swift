@@ -62,7 +62,9 @@ public actor LowLatencyTranslationClient {
             apiKey: apiKey,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
-            model: .flash,
+            // Finals are the durable subtitle history, so they use the flagship
+            // Plus model; only transient draft previews stay on Flash.
+            model: .plus,
             domainHint: domainHint,
             session: session
         )

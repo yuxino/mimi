@@ -69,6 +69,22 @@ func runQwenMTProtocolTests(using runner: inout TestRunner) {
             "guidance should preserve vocal sounds"
         )
         try expect(
+            guidance.contains("嗯、啊、呢、吧、嘛"),
+            "guidance should preserve Chinese particles"
+        )
+        try expect(
+            guidance.contains("えっと"),
+            "guidance should preserve Japanese fillers"
+        )
+        try expect(
+            guidance.contains("polite or formal Japanese"),
+            "guidance should keep polite Japanese natural"
+        )
+        try expect(
+            guidance.contains("Output only the translation text"),
+            "guidance should constrain the response to the translation"
+        )
+        try expect(
             guidance.contains("Do not sanitize, euphemize, censor, or omit"),
             "guidance should preserve explicit dialogue"
         )
