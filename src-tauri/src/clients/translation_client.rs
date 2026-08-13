@@ -4,7 +4,7 @@
 use crate::clients::high_quality_client::HighQualityTranslationClient;
 use crate::clients::live_translate_client::{LiveTranslateClient, LiveTranslateClientError};
 use crate::core::configuration::LiveTranslationConfiguration;
-use crate::core::models::TranslationMode;
+use crate::core::models::{SourceLanguage, TranslationMode};
 use crate::core::protocols::live_translate::LiveTranslateServerEvent;
 use crate::core::protocols::qwen_mt::{QwenMTClientError, QwenMTModel};
 use std::collections::BTreeMap;
@@ -22,12 +22,20 @@ impl TranslationClient {
         configuration: &LiveTranslationConfiguration,
         events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
     ) -> Result<Self, QwenMTClientError> {
+        // Automatic source recognition runs the Japanese recognition engine
+        // and the Japanese live-translate stream (the original app prepared
+        // auto→ja before every session). The preference itself stays "auto"
+        // so the user can keep the automatic setting across sessions.
+        let engine_source_language = match configuration.source_language {
+            SourceLanguage::Automatic => SourceLanguage::Japanese,
+            other => other,
+        };
         match configuration.effective_translation_mode() {
             TranslationMode::LowLatency => {
                 let client = LiveTranslateClient::new(
                     &configuration.workspace_id,
                     &configuration.api_key,
-                    configuration.source_language,
+                    engine_source_language,
                     configuration.target_language,
                     BTreeMap::new(),
                     events,
@@ -39,7 +47,7 @@ impl TranslationClient {
                 let client = HighQualityTranslationClient::new(
                     &configuration.workspace_id,
                     &configuration.api_key,
-                    configuration.source_language,
+                    engine_source_language,
                     configuration.target_language,
                     QwenMTModel::Plus,
                     Duration::from_millis(1_200),
@@ -53,7 +61,7 @@ impl TranslationClient {
                 let client = HighQualityTranslationClient::new(
                     &configuration.workspace_id,
                     &configuration.api_key,
-                    configuration.source_language,
+                    engine_source_language,
                     configuration.target_language,
                     QwenMTModel::Flash,
                     Duration::from_millis(500),

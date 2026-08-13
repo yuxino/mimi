@@ -10,7 +10,7 @@ import {
 import { useStore } from "../../lib/store";
 import {
   SOURCE_LANGUAGE_DISPLAY_NAMES,
-  SOURCE_LANGUAGE_MANUAL_CASES,
+  SOURCE_LANGUAGE_QUICK_CASES,
   TARGET_LANGUAGE_CASES,
   TARGET_LANGUAGE_DISPLAY_NAMES,
   TRANSLATION_MODE_CASES,
@@ -212,7 +212,7 @@ export function SettingsView() {
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               <SectionLabel>{I18N.settings.sourceLanguage}</SectionLabel>
               <div style={{ display: "flex", gap: 8 }}>
-                {SOURCE_LANGUAGE_MANUAL_CASES.map((language) => (
+                {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
                   <SourceLanguageButton
                     key={language}
                     language={language}
