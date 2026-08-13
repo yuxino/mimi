@@ -31,6 +31,8 @@ pub enum Audio3ASRClientError {
     UnsupportedMessage,
     #[error("{0}")]
     Task(String),
+    #[error("{0}")]
+    Other(String),
 }
 
 type Sink = futures_util::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
@@ -109,7 +111,7 @@ impl Audio3ASRClient {
 
         let (socket, _response) = connect_async(request)
             .await
-            .map_err(|_| Audio3ASRClientError::NotConnected)?;
+            .map_err(|error| Audio3ASRClientError::Other(error.to_string()))?;
         let (sink, mut stream) = socket.split();
         *self.inner.sink.lock().await = Some(sink);
         self.inner.task_started.store(false, Ordering::SeqCst);

@@ -23,17 +23,37 @@ pub enum QwenMTProtocolError {
     MissingTranslation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QwenMTClientError {
-    #[error("Add an Alibaba Cloud Model Studio API key in Settings.")]
     MissingAPIKey,
-    #[error("Qwen-MT returned an invalid HTTP response.")]
     InvalidHTTPResponse,
-    #[error("Qwen-MT took too long to respond.")]
     RequestTimedOut,
-    #[error("Qwen-MT request failed with HTTP {status_code}.")]
     RequestFailed { status_code: u16, message: String },
 }
+
+impl std::fmt::Display for QwenMTClientError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingAPIKey => {
+                write!(f, "Add an Alibaba Cloud Model Studio API key in Settings.")
+            }
+            Self::InvalidHTTPResponse => write!(f, "Qwen-MT returned an invalid HTTP response."),
+            Self::RequestTimedOut => write!(f, "Qwen-MT took too long to respond."),
+            Self::RequestFailed {
+                status_code,
+                message,
+            } => {
+                if message.is_empty() {
+                    write!(f, "Qwen-MT request failed with HTTP {status_code}.")
+                } else {
+                    write!(f, "{message}")
+                }
+            }
+        }
+    }
+}
+
+impl std::error::Error for QwenMTClientError {}
 
 impl QwenMTClientError {
     pub fn is_authentication_failure(&self) -> bool {

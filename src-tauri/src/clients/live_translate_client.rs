@@ -29,6 +29,8 @@ pub enum LiveTranslateClientError {
     HealthCheckTimedOut,
     #[error("The live translation service returned an unsupported WebSocket message.")]
     UnsupportedMessage,
+    #[error("{0}")]
+    Other(String),
 }
 
 type Sink = futures_util::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
@@ -101,7 +103,7 @@ impl LiveTranslateClient {
 
         let (socket, _response) = connect_async(request)
             .await
-            .map_err(|_| LiveTranslateClientError::NotConnected)?;
+            .map_err(|error| LiveTranslateClientError::Other(error.to_string()))?;
         let (sink, mut stream) = socket.split();
         *self.inner.sink.lock().await = Some(sink);
         self.inner

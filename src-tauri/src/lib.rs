@@ -46,6 +46,19 @@ pub fn run() {
             setup_tray(&app_handle)?;
             setup_global_shortcut(&app_handle, Arc::clone(&session))?;
 
+            // Test-only probe: with MIMI_UI_TEST=1 and MIMI_AUTO_START=1, start a
+            // session automatically so the pipeline (connect → error handling →
+            // state events) can be exercised without UI interaction. The fake
+            // API key makes the service reject the connection, exercising the
+            // full failure path deterministically.
+            if is_ui_test && std::env::var("MIMI_AUTO_START").as_deref() == Ok("1") {
+                let session_for_probe = Arc::clone(&session);
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    let _ = session_for_probe.start(true).await;
+                });
+            }
+
             app.manage(AppState { settings, session });
             Ok(())
         })

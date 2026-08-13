@@ -102,10 +102,13 @@ impl SettingsStore {
     /// Loads preferences from `app_config_dir()/preferences.json`.
     pub fn load(app_config_dir: PathBuf, is_ui_test: bool) -> Self {
         let prefs_path = app_config_dir.join("preferences.json");
-        let prefs = std::fs::read_to_string(&prefs_path)
+        let mut prefs = std::fs::read_to_string(&prefs_path)
             .ok()
             .and_then(|text| serde_json::from_str::<Preferences>(&text).ok())
             .unwrap_or_default();
+        if is_ui_test {
+            prefs.workspace_id = "your-workspace-id".into();
+        }
         let font_size = prefs
             .font_size
             .clamp(*FONT_SIZE_RANGE.start(), *FONT_SIZE_RANGE.end());
