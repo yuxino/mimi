@@ -7,6 +7,11 @@ use crate::settings_store::{OverlayFrame, SettingsStore};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
+/// Logical-coordinate frame layout version. Frames saved before this version
+/// stored physical pixels and must be discarded (they restore off-screen on
+/// Retina displays).
+pub const OVERLAY_FRAME_LAYOUT_VERSION: u64 = 1;
+
 pub struct SubtitleOverlayMetrics;
 
 impl SubtitleOverlayMetrics {
@@ -28,13 +33,18 @@ impl OverlayWindowManager {
             return;
         }
         let prefs = settings.preferences();
-        let frame = prefs.overlay_frame.clone().unwrap_or(OverlayFrame {
+        // Frames from before the logical-coordinate migration are unreliable
+        // and can sit off-screen; fall back to the default placement.
+        let trusted_frame = (prefs.frame_layout_version >= OVERLAY_FRAME_LAYOUT_VERSION)
+            .then(|| prefs.overlay_frame.clone())
+            .flatten();
+        let frame = trusted_frame.clone().unwrap_or(OverlayFrame {
             x: 0.0,
             y: 0.0,
             width: SubtitleOverlayMetrics::REFERENCE_WIDTH,
             height: SubtitleOverlayMetrics::REFERENCE_HEIGHT,
         });
-        let (x, y) = default_overlay_origin(app, frame.width, frame.height, &prefs.overlay_frame);
+        let (x, y) = default_overlay_origin(app, frame.width, frame.height, &trusted_frame);
 
         let builder =
             WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("index.html".into()))
@@ -100,8 +110,16 @@ impl OverlayWindowManager {
             return;
         };
         if collapsed {
-            if let Ok(size) = window.inner_size() {
-                remember_frame(settings, window.outer_position().ok(), size);
+            if let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) {
+                let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+                remember_frame(
+                    settings,
+                    Some(tauri::LogicalPosition::new(
+                        position.x as f64 / scale,
+                        position.y as f64 / scale,
+                    )),
+                    tauri::LogicalSize::new(size.width as f64 / scale, size.height as f64 / scale),
+                );
             }
             let _ = window.set_min_size(Some(tauri::LogicalSize::new(
                 SubtitleOverlayMetrics::COLLAPSED_WIDTH,
@@ -182,15 +200,25 @@ impl OverlayWindowManager {
             return;
         };
         if let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) {
-            remember_frame(settings, Some(position), size);
+            // Store logical coordinates: `set_position`/`set_size` (used when
+            // restoring) interpret their arguments in logical pixels.
+            let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+            remember_frame(
+                settings,
+                Some(tauri::LogicalPosition::new(
+                    position.x as f64 / scale,
+                    position.y as f64 / scale,
+                )),
+                tauri::LogicalSize::new(size.width as f64 / scale, size.height as f64 / scale),
+            );
         }
     }
 }
 
 fn remember_frame(
     settings: &SettingsStore,
-    position: Option<tauri::PhysicalPosition<i32>>,
-    size: tauri::PhysicalSize<u32>,
+    position: Option<tauri::LogicalPosition<f64>>,
+    size: tauri::LogicalSize<f64>,
 ) {
     let prefs = settings.preferences();
     if prefs.overlay_locked {
@@ -199,11 +227,12 @@ fn remember_frame(
     if let Some(position) = position {
         settings.update_preferences(|prefs| {
             prefs.overlay_frame = Some(OverlayFrame {
-                x: position.x as f64,
-                y: position.y as f64,
-                width: size.width as f64,
-                height: size.height as f64,
+                x: position.x,
+                y: position.y,
+                width: size.width,
+                height: size.height,
             });
+            prefs.frame_layout_version = OVERLAY_FRAME_LAYOUT_VERSION;
         });
         settings.persist();
     }

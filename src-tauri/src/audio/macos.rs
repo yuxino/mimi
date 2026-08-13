@@ -26,6 +26,8 @@ use objc2_core_audio_types::{
     kAudioFormatFlagIsFloat, kAudioFormatFlagIsSignedInteger, AudioStreamBasicDescription,
 };
 use objc2_foundation::{NSArray, NSObjectProtocol, NSString};
+use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+use rubato::Resampler;
 use screen_capture_kit::shareable_content::{SCDisplay, SCRunningApplication, SCShareableContent};
 use screen_capture_kit::stream::{
     SCContentFilter, SCStream, SCStreamConfiguration, SCStreamDelegate, SCStreamOutput,
@@ -50,6 +52,14 @@ struct AudioHandlerState {
     audio_tx: AudioSender,
     error_tx: ErrorSender,
     last_audio_buffer_at: Mutex<Option<Instant>>,
+    /// Decoded-buffer counter used to throttle diagnostics.
+    decoded_buffers: Mutex<u64>,
+    /// 16 kHz resampler; rebuilt when the stream sample rate changes.
+    /// SCStream delivers the device rate (typically 48 kHz) regardless of the
+    /// requested configuration, so the samples must be resampled before the
+    /// ASR pipeline (which expects 16 kHz PCM).
+    resampler: Mutex<Option<rubato::Fft<f32>>>,
+    pending_frames: Mutex<Vec<f32>>,
 }
 
 /// A pointer that is only ever dereferenced on the main thread, inside the
@@ -103,8 +113,25 @@ define_class!(
             }
             *state.last_audio_buffer_at.lock().unwrap() = Some(now);
 
-            match extract_pcm16(sample_buffer) {
+            match capture_to_pcm16(state, sample_buffer) {
                 Ok(Some(data)) if !data.is_empty() => {
+                    // Content-free capture diagnostics: report decoded-buffer
+                    // statistics every 200 buffers.
+                    let count = {
+                        let mut count = state.decoded_buffers.lock().unwrap();
+                        *count += 1;
+                        *count
+                    };
+                    if count % 200 == 1 {
+                        let nonzero = data.iter().filter(|byte| **byte != 0).count();
+                        pipeline_log!(
+                            "capture decode buffers={} bytes={} nonzero={}/{}",
+                            count,
+                            data.len(),
+                            nonzero,
+                            data.len()
+                        );
+                    }
                     let _ = state.audio_tx.send(data);
                 }
                 Ok(None) | Ok(Some(_)) => {}
@@ -129,6 +156,11 @@ define_class!(
         }
     }
 );
+
+/// Tracks the last reported stream format so the capture diagnostics only
+/// print when the format changes (avoids log spam at 50 buffers/second).
+pub static FORMAT_SIGNATURE: std::sync::Mutex<Option<(u32, u32, u32)>> =
+    std::sync::Mutex::new(None);
 
 // Main-thread-only live capture state. Only ever accessed from main-thread
 // closures (see `MainThreadDispatcher`).
@@ -334,6 +366,9 @@ fn start_capture_on_main(
         audio_tx,
         error_tx,
         last_audio_buffer_at: Mutex::new(None),
+        decoded_buffers: Mutex::new(0),
+        resampler: Mutex::new(None),
+        pending_frames: Mutex::new(Vec::new()),
     });
     let state_ptr: *mut c_void = (&*state as *const AudioHandlerState) as *mut c_void;
     let this = MimiAudioStreamHandler::alloc().set_ivars(MimiAudioStreamHandlerIvars { state_ptr });
@@ -386,12 +421,14 @@ fn own_bundle_identifier() -> Option<String> {
         .map(|id| id.to_string())
 }
 
-/// Extracts the sample buffer as mono PCM16, honoring the stream's audio
-/// format description (float or signed-integer linear PCM).
-fn extract_pcm16(
+/// Extracts the sample buffer as f32 mono samples (honoring the stream's
+/// format description), resamples them to 16 kHz with `rubato` when needed,
+/// and quantizes to PCM16 for the ASR pipeline.
+fn capture_to_pcm16(
+    state: &AudioHandlerState,
     sample_buffer: CMSampleBufferRef,
 ) -> Result<Option<Vec<u8>>, SystemAudioCaptureError> {
-    unsafe {
+    let (samples, sample_rate) = unsafe {
         let block_buffer = CMSampleBufferGetDataBuffer(sample_buffer);
         if block_buffer.is_null() {
             return Ok(None);
@@ -420,29 +457,123 @@ fn extract_pcm16(
             return Err(SystemAudioCaptureError::UnsupportedAudioFormat);
         }
         let asbd = &*asbd;
-
         let bytes = std::slice::from_raw_parts(data_ptr as *const u8, length_at_offset);
-        decode_linear_pcm(bytes, asbd)
+
+        // Log the stream format once per format change.
+        let signature = (
+            asbd.mBitsPerChannel,
+            asbd.mChannelsPerFrame,
+            asbd.mFormatFlags as u32,
+        );
+        let mut last_format = FORMAT_SIGNATURE.lock().unwrap();
+        if *last_format != Some(signature) {
+            *last_format = Some(signature);
+            let nonzero = bytes.iter().filter(|byte| **byte != 0).count();
+            pipeline_log!(
+                "capture format bytes={} asbd={}Hz {}ch {}bit flags={:#x} nonzero={}/{}",
+                bytes.len(),
+                asbd.mSampleRate as u64,
+                asbd.mChannelsPerFrame,
+                asbd.mBitsPerChannel,
+                asbd.mFormatFlags,
+                nonzero,
+                bytes.len()
+            );
+        }
+
+        (decode_to_f32_mono(bytes, asbd)?, asbd.mSampleRate)
+    };
+
+    if samples.is_empty() {
+        return Ok(None);
     }
+
+    // Resample to 16 kHz when the device rate differs from the ASR pipeline.
+    let pcm = if (sample_rate - TARGET_SAMPLE_RATE).abs() < 0.5 {
+        PCM16Encoder::encode(&[samples])
+    } else {
+        let mut pending = state.pending_frames.lock().unwrap();
+        pending.extend_from_slice(&samples);
+        let mut resampler_guard = state.resampler.lock().unwrap();
+        if resampler_guard.is_none() {
+            let resampler = rubato::Fft::<f32>::new(
+                sample_rate as usize,
+                TARGET_SAMPLE_RATE as usize,
+                RESAMPLE_CHUNK_FRAMES,
+                1,
+                rubato::FixedSync::Input,
+            )
+            .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?;
+            *resampler_guard = Some(resampler);
+        }
+        let mut out = Vec::new();
+        let resampler = resampler_guard.as_mut().unwrap();
+        while pending.len() >= RESAMPLE_CHUNK_FRAMES {
+            let chunk: Vec<f32> = pending.drain(..RESAMPLE_CHUNK_FRAMES).collect();
+            let chunk_refs = [chunk];
+            let input = SequentialSliceOfVecs::new(&chunk_refs, 1, RESAMPLE_CHUNK_FRAMES)
+                .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?;
+            match resampler.process(&input, None) {
+                Ok(output) => out.extend_from_slice(&output.take_data()),
+                Err(_) => break,
+            }
+        }
+        if out.is_empty() {
+            return Ok(None);
+        }
+        PCM16Encoder::encode(&[out])
+    };
+
+    Ok(Some(pcm))
 }
 
-fn decode_linear_pcm(
+const TARGET_SAMPLE_RATE: f64 = 16_000.0;
+const RESAMPLE_CHUNK_FRAMES: usize = 1024;
+
+/// Decodes interleaved/planar linear PCM into mono f32 samples. Both the
+/// float and signed-integer branches handle multi-channel buffers by
+/// averaging channels, matching `PCM16Encoder::encode`.
+fn decode_to_f32_mono(
     bytes: &[u8],
     asbd: &AudioStreamBasicDescription,
-) -> Result<Option<Vec<u8>>, SystemAudioCaptureError> {
+) -> Result<Vec<f32>, SystemAudioCaptureError> {
     let channels = asbd.mChannelsPerFrame.max(1) as usize;
     let is_float = asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0;
     let is_signed_int = asbd.mFormatFlags & kAudioFormatFlagIsSignedInteger != 0;
+    let is_planar = asbd.mFormatFlags & (1 << 6) != 0; // kAudioFormatFlagIsNonInterleaved
 
-    if is_float && asbd.mBitsPerChannel == 32 {
+    if is_planar {
+        // Planar layout: channel data is contiguous per channel.
+        let frames_per_channel = if is_float && asbd.mBitsPerChannel == 32 {
+            bytes.len() / (4 * channels)
+        } else if is_signed_int && asbd.mBitsPerChannel == 16 {
+            bytes.len() / (2 * channels)
+        } else if is_signed_int && asbd.mBitsPerChannel == 32 {
+            bytes.len() / (4 * channels)
+        } else {
+            return Err(SystemAudioCaptureError::UnsupportedAudioFormat);
+        };
+        let bytes_per_sample = (asbd.mBitsPerChannel / 8) as usize;
+        let mut mono = Vec::with_capacity(frames_per_channel);
+        for frame in 0..frames_per_channel {
+            let mut mixed = 0.0f64;
+            for channel in 0..channels {
+                let offset = (frame + channel * frames_per_channel) * bytes_per_sample;
+                mixed += sample_to_f32(bytes, offset, is_float, asbd.mBitsPerChannel)? as f64;
+            }
+            mono.push((mixed / channels as f64) as f32);
+        }
+        Ok(mono)
+    } else if is_float && asbd.mBitsPerChannel == 32 {
         let bytes_per_sample = 4;
         let frames = bytes.len() / (bytes_per_sample * channels);
         if frames == 0 {
-            return Ok(None);
+            return Ok(Vec::new());
         }
-        let mut channel_data: Vec<Vec<f32>> = vec![Vec::with_capacity(frames); channels];
+        let mut mono = Vec::with_capacity(frames);
         for frame in 0..frames {
-            for (channel, channel_samples) in channel_data.iter_mut().enumerate() {
+            let mut mixed = 0.0f64;
+            for channel in 0..channels {
                 let offset = (frame * channels + channel) * bytes_per_sample;
                 let sample = f32::from_le_bytes([
                     bytes[offset],
@@ -450,50 +581,77 @@ fn decode_linear_pcm(
                     bytes[offset + 2],
                     bytes[offset + 3],
                 ]);
-                channel_samples.push(sample);
+                mixed += sample as f64;
             }
+            mono.push((mixed / channels as f64) as f32);
         }
-        Ok(Some(PCM16Encoder::encode(&channel_data)))
+        Ok(mono)
     } else if is_signed_int && asbd.mBitsPerChannel == 16 {
         let bytes_per_sample = 2;
         let frames = bytes.len() / (bytes_per_sample * channels);
         if frames == 0 {
-            return Ok(None);
+            return Ok(Vec::new());
         }
-        let mut pcm = Vec::with_capacity(frames * 2);
+        let mut mono = Vec::with_capacity(frames);
         for frame in 0..frames {
-            let mut mixed: i32 = 0;
+            let mut mixed = 0.0f64;
             for channel in 0..channels {
                 let offset = (frame * channels + channel) * bytes_per_sample;
-                mixed += i16::from_le_bytes([bytes[offset], bytes[offset + 1]]) as i32;
+                mixed += i16::from_le_bytes([bytes[offset], bytes[offset + 1]]) as f64;
             }
-            let sample = (mixed / channels as i32) as i16;
-            pcm.extend_from_slice(&sample.to_le_bytes());
+            mono.push((mixed / channels as f64 / 32_768.0) as f32);
         }
-        Ok(Some(pcm))
+        Ok(mono)
     } else if is_signed_int && asbd.mBitsPerChannel == 32 {
         let bytes_per_sample = 4;
         let frames = bytes.len() / (bytes_per_sample * channels);
         if frames == 0 {
-            return Ok(None);
+            return Ok(Vec::new());
         }
-        let mut pcm = Vec::with_capacity(frames * 2);
+        let mut mono = Vec::with_capacity(frames);
         for frame in 0..frames {
-            let mut mixed: i64 = 0;
+            let mut mixed = 0.0f64;
             for channel in 0..channels {
                 let offset = (frame * channels + channel) * bytes_per_sample;
-                mixed += i32::from_le_bytes([
+                let sample = i32::from_le_bytes([
                     bytes[offset],
                     bytes[offset + 1],
                     bytes[offset + 2],
                     bytes[offset + 3],
-                ]) as i64;
+                ]);
+                mixed += sample as f64;
             }
-            let sample = (mixed / channels as i64) as i32;
-            let clamped = sample.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
-            pcm.extend_from_slice(&clamped.to_le_bytes());
+            mono.push((mixed / channels as f64 / 2_147_483_648.0) as f32);
         }
-        Ok(Some(pcm))
+        Ok(mono)
+    } else {
+        Err(SystemAudioCaptureError::UnsupportedAudioFormat)
+    }
+}
+
+fn sample_to_f32(
+    bytes: &[u8],
+    offset: usize,
+    is_float: bool,
+    bits: u32,
+) -> Result<f32, SystemAudioCaptureError> {
+    if is_float && bits == 32 {
+        Ok(f32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]))
+    } else if !is_float && bits == 16 {
+        Ok(i16::from_le_bytes([bytes[offset], bytes[offset + 1]]) as f32 / 32_768.0)
+    } else if !is_float && bits == 32 {
+        Ok(i32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as f32
+            / 2_147_483_648.0)
     } else {
         Err(SystemAudioCaptureError::UnsupportedAudioFormat)
     }

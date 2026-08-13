@@ -6,9 +6,9 @@
 use crate::audio::SystemAudioCaptureError;
 use crate::core::pcm16::PCM16Encoder;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use rubato::{
-    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
-};
+use rubato::audioadapter::Adapter as _;
+use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+use rubato::{FixedSync, Resampler};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -157,17 +157,15 @@ impl Default for WindowsSystemAudioCapture {
 fn build_resampler(
     sample_rate: f64,
     channel_count: usize,
-) -> Result<SincFixedIn<f32>, SystemAudioCaptureError> {
-    let ratio = TARGET_SAMPLE_RATE / sample_rate;
-    let params = SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: 0.95,
-        interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 256,
-        window: WindowFunction::BlackmanHarris2,
-    };
-    SincFixedIn::<f32>::new(ratio, 2.0, params, CHUNK_SIZE_IN, channel_count)
-        .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))
+) -> Result<rubato::Fft<f32>, SystemAudioCaptureError> {
+    rubato::Fft::<f32>::new(
+        sample_rate as usize,
+        TARGET_SAMPLE_RATE as usize,
+        CHUNK_SIZE_IN,
+        channel_count,
+        FixedSync::Input,
+    )
+    .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))
 }
 
 /// Buffers interleaved frames, resamples in `CHUNK_SIZE_IN`-frame windows, and
@@ -175,7 +173,7 @@ fn build_resampler(
 fn process_frames_f32(
     data: &[f32],
     channel_count: usize,
-    resampler: &Arc<Mutex<SincFixedIn<f32>>>,
+    resampler: &Arc<Mutex<rubato::Fft<f32>>>,
     audio_tx: &mpsc::UnboundedSender<Vec<u8>>,
 ) {
     // Accumulate frames in the resampler's expected interleaved layout.
@@ -200,9 +198,23 @@ fn process_frames_f32(
             .iter()
             .map(|channel| channel[consumed..consumed + CHUNK_SIZE_IN].to_vec())
             .collect();
-        match resampler.process(&chunk, None) {
+        let input = match SequentialSliceOfVecs::new(&chunk, channel_count, CHUNK_SIZE_IN) {
+            Ok(input) => input,
+            Err(_) => break,
+        };
+        match resampler.process(&input, None) {
             Ok(output) => {
-                let pcm = PCM16Encoder::encode(&output);
+                let data = output.take_data();
+                let out_frames = data.len() / channel_count;
+                let mut per_channel: Vec<Vec<f32>> = (0..channel_count)
+                    .map(|channel| {
+                        (0..out_frames)
+                            .map(|frame| data[frame * channel_count + channel])
+                            .collect()
+                    })
+                    .collect();
+                let pcm = PCM16Encoder::encode(&per_channel);
+                per_channel.clear();
                 if !pcm.is_empty() {
                     let _ = audio_tx.send(pcm);
                 }
