@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { I18N } from "../../lib/i18n";
+import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
 import { isTauri, overlaySetSize } from "../../lib/ipc";
 import { useStore } from "../../lib/store";
 import { OVERLAY_ACTIVITY_PHASES, hexToRgba } from "../../lib/types";
@@ -69,9 +70,13 @@ export function OverlayWindow() {
     void setOverlayCollapsed(!collapsed);
   };
 
-  const handleResize = (width: number, height: number) => {
+  const handleResize = (width: number, height: number, x?: number, y?: number) => {
     setOverlaySize({ width, height });
-    if (isTauri) void overlaySetSize(width, height);
+    if (!isTauri) return;
+    if (x !== undefined && y !== undefined) {
+      void getCurrentWindow().setPosition(new LogicalPosition(x, y)).catch(() => {});
+    }
+    void overlaySetSize(width, height);
   };
 
   const content = (

@@ -44,7 +44,13 @@ const HANDLES: Array<{ region: Region; style: CSSProperties }> = [
 
 interface ResizeHandlesProps {
   disabled: boolean;
-  onResize: (width: number, height: number) => void;
+  /** `x`/`y` are the new window origin when the dragged edge/corner moves it. */
+  onResize: (
+    width: number,
+    height: number,
+    x?: number,
+    y?: number,
+  ) => void;
 }
 
 interface DragState {
@@ -53,6 +59,9 @@ interface DragState {
   startY: number;
   startWidth: number;
   startHeight: number;
+  /** Window origin in CSS (logical) pixels at drag start. */
+  startWinX: number;
+  startWinY: number;
 }
 
 /** Self-drawn resize handles for the overlay's eight edge/corner regions. */
@@ -70,6 +79,8 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
       startY: event.clientY,
       startWidth: rect.width,
       startHeight: rect.height,
+      startWinX: window.screenX,
+      startWinY: window.screenY,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -80,17 +91,30 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
 
+    // Anchor the dragged edge/corner: edges that move also shift the window
+    // origin (top/left grow upward/leftward), matching native window resize.
     let width = drag.startWidth;
     let height = drag.startHeight;
-    if (drag.region.includes("left")) width = drag.startWidth - dx;
-    if (drag.region.includes("right")) width = drag.startWidth + dx;
-    if (drag.region.includes("top")) height = drag.startHeight - dy;
-    if (drag.region.includes("bottom")) height = drag.startHeight + dy;
+    let x = drag.startWinX;
+    let y = drag.startWinY;
+    if (drag.region.includes("left")) {
+      width = drag.startWidth - dx;
+      x = drag.startWinX + dx;
+    }
+    if (drag.region.includes("right")) {
+      width = drag.startWidth + dx;
+    }
+    if (drag.region.includes("top")) {
+      height = drag.startHeight - dy;
+      y = drag.startWinY + dy;
+    }
+    if (drag.region.includes("bottom")) {
+      height = drag.startHeight + dy;
+    }
 
-    onResize(
-      clamp(Math.round(width), OVERLAY_MIN_WIDTH, OVERLAY_MAX_WIDTH),
-      clamp(Math.round(height), OVERLAY_MIN_HEIGHT, OVERLAY_MAX_HEIGHT),
-    );
+    const clampedW = clamp(Math.round(width), OVERLAY_MIN_WIDTH, OVERLAY_MAX_WIDTH);
+    const clampedH = clamp(Math.round(height), OVERLAY_MIN_HEIGHT, OVERLAY_MAX_HEIGHT);
+    onResize(clampedW, clampedH, x, y);
   };
 
   const end = () => {
