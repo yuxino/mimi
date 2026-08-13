@@ -25,7 +25,7 @@ use objc2::{define_class, msg_send, AnyThread, DefinedClass};
 use objc2_core_audio_types::{
     kAudioFormatFlagIsFloat, kAudioFormatFlagIsSignedInteger, AudioStreamBasicDescription,
 };
-use objc2_foundation::{NSArray, NSObjectProtocol};
+use objc2_foundation::{NSArray, NSObjectProtocol, NSString};
 use screen_capture_kit::shareable_content::{SCDisplay, SCRunningApplication, SCShareableContent};
 use screen_capture_kit::stream::{
     SCContentFilter, SCStream, SCStreamConfiguration, SCStreamDelegate, SCStreamOutput,
@@ -33,6 +33,7 @@ use screen_capture_kit::stream::{
 };
 use std::cell::RefCell;
 use std::ffi::c_void;
+use std::panic::AssertUnwindSafe;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -169,46 +170,62 @@ impl MacSystemAudioCapture {
         let (content_tx, content_rx) = oneshot::channel::<Result<(), String>>();
         let content_tx = Arc::new(Mutex::new(Some(content_tx)));
         dispatcher(Box::new(move || {
-            SCShareableContent::get_shareable_content_excluding_desktop_windows(
-                false,
-                false,
-                move |content, error| {
-                    // This completion fires on an arbitrary queue; re-dispatch
-                    // phase 2 to the main thread with the content.
-                    let content = match (content, error) {
-                        (Some(content), _) => content,
-                        (None, Some(error)) => {
-                            if let Some(tx) = content_tx.lock().unwrap().take() {
-                                let _ = tx.send(Err(error.to_string()));
+            // ScreenCaptureKit calls can raise Objective-C exceptions; catch
+            // them here so they surface as errors instead of aborting.
+            let _ = objc2::exception::catch(AssertUnwindSafe(|| {
+                SCShareableContent::get_shareable_content_excluding_desktop_windows(
+                    false,
+                    false,
+                    move |content, error| {
+                        // This completion fires on an arbitrary queue; re-dispatch
+                        // phase 2 to the main thread with the content.
+                        let content = match (content, error) {
+                            (Some(content), _) => content,
+                            (None, Some(error)) => {
+                                if let Some(tx) = content_tx.lock().unwrap().take() {
+                                    let _ = tx.send(Err(error.to_string()));
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        (None, None) => {
-                            if let Some(tx) = content_tx.lock().unwrap().take() {
-                                let _ = tx.send(Err(
+                            (None, None) => {
+                                if let Some(tx) = content_tx.lock().unwrap().take() {
+                                    let _ = tx.send(Err(
                                     "mimi could not find a display to use for system audio capture."
                                         .into(),
                                 ));
+                                }
+                                return;
                             }
-                            return;
-                        }
-                    };
-                    let ptr = MainThreadPtr(Box::into_raw(Box::new(content)) as *mut ());
-                    let audio_tx = audio_tx.clone();
-                    let error_tx = error_tx.clone();
-                    let dispatcher = Arc::clone(&phase2_dispatcher);
-                    let content_tx = Arc::clone(&content_tx);
-                    dispatcher(Box::new(move || {
-                        let raw = ptr.into_inner();
-                        let content =
-                            unsafe { *Box::from_raw(raw as *mut Retained<SCShareableContent>) };
-                        let result = start_capture_on_main(content, audio_tx, error_tx);
-                        if let Some(tx) = content_tx.lock().unwrap().take() {
-                            let _ = tx.send(result);
-                        }
-                    }));
-                },
-            );
+                        };
+                        let ptr = MainThreadPtr(Box::into_raw(Box::new(content)) as *mut ());
+                        let audio_tx = audio_tx.clone();
+                        let error_tx = error_tx.clone();
+                        let dispatcher = Arc::clone(&phase2_dispatcher);
+                        let content_tx = Arc::clone(&content_tx);
+                        dispatcher(Box::new(move || {
+                            let raw = ptr.into_inner();
+                            let content =
+                                unsafe { *Box::from_raw(raw as *mut Retained<SCShareableContent>) };
+                            let result = objc2::exception::catch(AssertUnwindSafe(|| {
+                                start_capture_on_main(content, audio_tx, error_tx)
+                            }));
+                            let result = match result {
+                            Ok(result) => result,
+                            Err(exception) => match exception {
+                                Some(exception) => Err(exception_message(&exception)),
+                                None => Err(
+                                    "System audio capture raised an unknown Objective-C exception."
+                                        .into(),
+                                ),
+                            },
+                        };
+                            if let Some(tx) = content_tx.lock().unwrap().take() {
+                                let _ = tx.send(result);
+                            }
+                        }));
+                    },
+                );
+            }));
         }));
 
         match content_rx.await {
@@ -253,6 +270,7 @@ fn start_capture_on_main(
     audio_tx: AudioSender,
     error_tx: ErrorSender,
 ) -> Result<(), String> {
+    pipeline_log!("audio3 capture phase2 start");
     // Pick the main display, falling back to the first one.
     let displays = content.displays();
     let main_display_id = unsafe { core_graphics2::display::CGMainDisplayID() };
@@ -289,6 +307,7 @@ fn start_capture_on_main(
         &excluded,
         &no_windows,
     );
+    pipeline_log!("audio3 capture filter built");
 
     // Audio-only stream configuration: 16 kHz mono, own audio excluded.
     let configuration = SCStreamConfiguration::new();
@@ -305,7 +324,10 @@ fn start_capture_on_main(
         epoch: 0,
     });
     configuration.set_queue_depth(3);
-    configuration.set_show_cursor(false);
+    // The `screen-capture-kit` crate's `set_show_cursor` sends the wrong
+    // selector (`setShowCursor:`); the property is `showsCursor` →
+    // `setShowsCursor:`.
+    let _: () = unsafe { msg_send![&*configuration, setShowsCursor: false] };
 
     // Handler + stream.
     let state = Box::new(AudioHandlerState {
@@ -320,12 +342,14 @@ fn start_capture_on_main(
     let delegate = ProtocolObject::from_ref(&*handler);
 
     let stream = SCStream::init_with_filter(SCStream::alloc(), &filter, &configuration, delegate);
+    pipeline_log!("audio3 capture stream created");
 
     // Deliver audio samples on a dedicated serial queue.
     let queue = DispatchQueue::new("app.yuxino.mimi.system-audio", DispatchQueueAttr::SERIAL);
     if let Err(error) = stream.add_stream_output(output, SCStreamOutputType::Audio, &queue) {
         return Err(error.to_string());
     }
+    pipeline_log!("audio3 capture output attached");
 
     // Start capture; on failure, clean everything up.
     let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
@@ -337,10 +361,22 @@ fn start_capture_on_main(
         return Err(error);
     }
 
+    pipeline_log!("audio3 capture started");
     MAIN_STREAM.set(Some(stream));
     MAIN_HANDLER.set(Some(handler));
     MAIN_STATE.set(Some(state));
     Ok(())
+}
+
+/// Renders an Objective-C exception as a content-free error description.
+fn exception_message(exception: &objc2::exception::Exception) -> String {
+    let description: Retained<NSString> = unsafe { msg_send![exception, description] };
+    let trimmed: String = description.to_string().chars().take(300).collect();
+    if trimmed.is_empty() {
+        "System audio capture raised an Objective-C exception.".to_string()
+    } else {
+        format!("System audio capture failed: {trimmed}")
+    }
 }
 
 fn own_bundle_identifier() -> Option<String> {
