@@ -199,7 +199,10 @@ export function OverlayWindow() {
           )}
         </div>
 
-        {session.isActive && status !== null && (
+        {/* Quick language / translation-mode switcher. Always visible so the
+            user can switch before starting to listen, not only while active
+            (the Swift original only showed it while listening). */}
+        {status !== null && (
           <div className="absolute" style={{ top: 10, left: 12 }}>
             <LanguagePickerPopover
               phase={phase}
