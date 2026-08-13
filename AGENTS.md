@@ -2,34 +2,39 @@
 
 ## Project
 
-Mimi is a native macOS 14+ live-subtitle app written in Swift 6.1. It captures system audio, streams speech recognition, translates recognized text, and renders a floating subtitle overlay.
+Mimi is a Tauri v2 desktop app (Rust backend + React/TypeScript frontend) that listens to system audio playing on macOS or Windows and shows live translated subtitles in a floating always-on-top overlay. It streams speech recognition and translation from Alibaba Cloud Model Studio and never records audio.
 
 Preserve these product constraints:
 
 - Capture system audio only. Do not add microphone capture unless the task explicitly requires it.
 - Do not persist audio or subtitle content.
-- Store API credentials in macOS Keychain only. Never add plaintext, source-controlled, or environment-variable credential fallbacks.
+- Store API credentials in the OS keychain only (macOS Keychain / Windows Credential Manager via `keyring`). Never add plaintext, source-controlled, or environment-variable credential fallbacks.
 - Keep diagnostics content-free: timing, counts, language codes, status codes, and sanitized error labels are acceptable; recognized or translated text is not.
 
 ## Repository map
 
-- `Sources/MimiCore/`: UI-independent models, protocols, streaming clients, reducers, text segmentation, and pipeline diagnostics.
-- `Sources/MimiApp/`: SwiftUI/AppKit lifecycle, settings, Keychain access, system-audio capture, and overlay UI.
-- `Sources/MimiReplay/`: command-line replay tool for latency-sensitive pipeline investigation.
-- `Tests/MimiCoreTests/`: custom executable test suite for `MimiCore`.
-- `Resources/`: app metadata and icons.
-- `scripts/check.sh`: canonical automated test and strict-build entry point.
-- `scripts/package-app.sh`: release build, app-bundle assembly, and local signing.
+- `src-tauri/src/core/`: UI-independent models, configuration, wire protocols, subtitle assembly, text segmentation, and pipeline diagnostics. Pure Rust, fully unit-tested.
+- `src-tauri/src/clients/`: tokio network clients (low-latency live translate WebSocket, Audio 3.0 ASR WebSocket, Qwen-MT HTTP/SSE, and the high-quality pipeline).
+- `src-tauri/src/audio/`: system-audio capture (macOS ScreenCaptureKit via `screen-capture-kit`, Windows WASAPI loopback via `cpal` + `rubato`) and the bounded PCM send pipeline.
+- `src-tauri/src/session_manager.rs`: session lifecycle — start/stop/pause/resume, language/mode switching, health checks, automatic reconnection, state events.
+- `src-tauri/src/settings_store.rs`: preferences JSON in the app config directory + keychain credential storage.
+- `src-tauri/src/{commands,windows,lib}.rs`: IPC commands, overlay/tray-panel window management, tray/shortcut wiring.
+- `src/`: React frontend — `src/windows/{overlay,tray-panel,settings}/` replicate the original SwiftUI windows; `src/lib/{ipc,store,types,i18n}.ts` define the IPC contract.
+- `mimi-web/`: the product website (marketing site, not the app).
 - `docs/plans/`: accepted design notes and implementation plans.
+- `scripts/check.sh`: canonical automated test and strict-build entry point.
+- `scripts/package-app.sh`: release build via `tauri build`.
+- `.github/workflows/ci.yml`: CI (Rust fmt/clippy/test on macOS and Windows, frontend checks).
 
 ## Working agreements
 
 - Read the relevant source and tests before changing behavior. For non-trivial behavior changes, add or update a design note in `docs/plans/`.
-- Keep reusable logic in `MimiCore`; keep AppKit, SwiftUI, ScreenCaptureKit, UserDefaults, and Keychain integration in `MimiApp`.
-- Preserve Swift 6 concurrency safety. Prefer value types and pure transformations; isolate mutable network or lifecycle state in actors or `@MainActor` types.
+- Keep UI-independent logic in `src-tauri/src/core/`; keep Tauri, window, keyring, and OS-audio integration in the app-layer modules. Never import `tauri` types in `core/` or `clients/`.
+- Preserve Rust concurrency safety. Isolate mutable network or lifecycle state behind `Arc<Mutex<…>>` or actors; never hold a `std::sync::MutexGuard` across an `.await`.
 - Treat streaming drafts as replaceable previews and final events as durable subtitle history. Do not let preview work block, reorder, or overwrite final translations.
 - Keep queues and on-screen draft growth bounded. Latency fixes must account for cancellation, reconnects, stale generations, empty results, and out-of-order completions.
-- Add focused coverage to the custom test runner when changing `MimiCore`. Do not assume `swift test` runs this repository's suite.
+- Add focused `#[cfg(test)]` coverage when changing `core/`. `cargo test` runs the repository's suite.
+- The wire protocols (JSON shapes, model names, domain prompts, filler glossaries) mirror the upstream services exactly; do not reword the translation prompts.
 - Do not introduce a dependency, external service, or credential requirement unless the task needs it and the trade-off is documented.
 
 ## Verification
@@ -40,12 +45,12 @@ Run the repository check from the repository root:
 ./scripts/check.sh
 ```
 
-It runs the complete core suite, a release build with warnings treated as errors, and whitespace/error checks on the diff.
+It runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, and the frontend typecheck/lint/test/build pipeline, plus whitespace/error checks on the diff.
 
 Additional checks by change type:
 
-- UI changes: run `./scripts/package-app.sh`, launch `dist/mimi.app`, and inspect normal, empty, error, paused, collapsed, translating, and long-subtitle states as applicable.
-- Latency or streaming changes: use `mimi-replay` with non-sensitive fixtures and report measurements as well as correctness tests.
-- Packaging or signing changes: run `./scripts/package-app.sh` and verify the resulting app opens. Never commit `dist/` or signing identities.
+- UI changes: run `npm run tauri dev` and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. `MIMI_UI_TEST=1` seeds demo credentials; `MIMI_AUTO_START=1` additionally starts a session on launch so the failure path (fake credentials) can be exercised without interaction.
+- Latency or streaming changes: measure against a real Alibaba Cloud session (user-supplied credentials) and report timing diagnostics as well as correctness tests.
+- Packaging or signing changes: run `./scripts/package-app.sh` and verify the resulting app opens. Windows packaging is verified on a Windows machine (or CI). Never commit `dist/`, `src-tauri/target/`, or signing identities.
 
 Before committing, inspect the diff for credentials, recordings, subtitle content, personal paths, and build artifacts.
