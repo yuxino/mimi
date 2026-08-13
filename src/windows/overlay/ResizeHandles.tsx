@@ -1,5 +1,6 @@
 import { useRef } from "react";
-import { isTauri, overlayCommitFrame } from "../../lib/ipc";
+import { invoke } from "@tauri-apps/api/core";
+import { isTauri } from "../../lib/ipc";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
 type Region =
@@ -71,6 +72,16 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
 
   const start = (region: Region, event: ReactPointerEvent<HTMLDivElement>) => {
     if (disabled) return;
+    if (isTauri) {
+      // The backend owns the resize math (anchoring, clamps, screen bounds);
+      // the webview only forwards pointer coordinates.
+      void invoke("resize_start", {
+        region,
+        x: event.clientX,
+        y: event.clientY,
+      }).catch(() => {});
+      return;
+    }
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
     dragRef.current = {
@@ -86,6 +97,12 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
   };
 
   const move = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (isTauri) {
+      void invoke("resize_move", { x: event.clientX, y: event.clientY }).catch(
+        () => {},
+      );
+      return;
+    }
     const drag = dragRef.current;
     if (!drag) return;
     const dx = event.clientX - drag.startX;
@@ -131,9 +148,7 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
 
   const end = () => {
     dragRef.current = null;
-    // Persist the final frame now that the drag finished (the Resized
-    // handler may have been suppressed while a popover was enlarged).
-    if (isTauri) void overlayCommitFrame().catch(() => {});
+    if (isTauri) void invoke("resize_end").catch(() => {});
   };
 
   return (

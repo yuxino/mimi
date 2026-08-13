@@ -12,6 +12,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 pub struct AppState {
     pub settings: Arc<SettingsStore>,
     pub session: Arc<SessionManager>,
+    pub resize_drag: std::sync::Mutex<Option<crate::windows::resize::ResizeRegion>>,
+    pub resize_start: std::sync::Mutex<Option<(f64, f64, crate::settings_store::OverlayFrame)>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -298,6 +300,98 @@ pub fn overlay_set_height(app: AppHandle, height: f64) -> Result<(), String> {
 
 #[tauri::command]
 pub fn overlay_commit_frame(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    crate::windows::OverlayWindowManager::commit_frame(&app, &state.settings);
+    Ok(())
+}
+
+/// Begins an overlay resize drag. `region` is one of topLeft/top/topRight/
+/// left/right/bottomLeft/bottom/bottomRight; `x`/`y` are the pointer position
+/// in logical (CSS) pixels.
+#[tauri::command]
+pub fn resize_start(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    region: String,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    let Some(region) = crate::windows::resize::ResizeRegion::from_name(&region) else {
+        return Err(format!("unknown resize region: {region}"));
+    };
+    let Some(window) = app.get_webview_window("overlay") else {
+        return Ok(());
+    };
+    let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+    let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) else {
+        return Ok(());
+    };
+    let frame = crate::settings_store::OverlayFrame {
+        x: position.x as f64 / scale,
+        y: position.y as f64 / scale,
+        width: size.width as f64 / scale,
+        height: size.height as f64 / scale,
+    };
+    *state.resize_drag.lock().unwrap() = Some(region);
+    *state.resize_start.lock().unwrap() = Some((x, y, frame));
+    Ok(())
+}
+
+/// Continues a resize drag with the current pointer position (logical px).
+#[tauri::command]
+pub fn resize_move(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    let region = *state.resize_drag.lock().unwrap();
+    let Some(region) = region else {
+        return Ok(());
+    };
+    let Some((start_x, start_y, start_frame)) = state.resize_start.lock().unwrap().clone() else {
+        return Ok(());
+    };
+    let Some(window) = app.get_webview_window("overlay") else {
+        return Ok(());
+    };
+    let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+    let screen = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| {
+            let size = monitor.size();
+            (size.width as f64 / scale, size.height as f64 / scale)
+        })
+        .unwrap_or((1440.0, 900.0));
+
+    let frame = crate::windows::resize::apply_drag(
+        region,
+        (start_x, start_y),
+        &start_frame,
+        (x, y),
+        (
+            crate::windows::SubtitleOverlayMetrics::MINIMUM_WIDTH,
+            crate::windows::SubtitleOverlayMetrics::MINIMUM_HEIGHT,
+        ),
+        (
+            crate::windows::SubtitleOverlayMetrics::MAXIMUM_WIDTH,
+            crate::windows::SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
+        ),
+        screen,
+        48.0,
+    );
+
+    let _ = window.set_position(tauri::LogicalPosition::new(frame.x, frame.y));
+    let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
+    Ok(())
+}
+
+/// Ends a resize drag and commits the final frame.
+#[tauri::command]
+pub fn resize_end(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    *state.resize_drag.lock().unwrap() = None;
+    *state.resize_start.lock().unwrap() = None;
     crate::windows::OverlayWindowManager::commit_frame(&app, &state.settings);
     Ok(())
 }
