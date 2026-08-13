@@ -37,6 +37,12 @@ export function PopoverWindow() {
     !isPaused &&
     sessionStatus.kind !== "connecting" &&
     sessionStatus.kind !== "stopping";
+  // Automatic source runs the low-latency pipeline regardless of the stored
+  // mode, so the picker reflects (and locks onto) the effective mode.
+  const automaticSource = settings.sourceLanguage === "auto";
+  const effectiveMode = automaticSource
+    ? "lowLatency"
+    : settings.translationMode;
 
   const close = () => {
     if (isTauri) {
@@ -96,8 +102,8 @@ export function PopoverWindow() {
           <PickerRow
             key={mode}
             title={TRANSLATION_MODE_DISPLAY_NAMES[mode]}
-            selected={settings.translationMode === mode}
-            disabled={!canInteract}
+            selected={effectiveMode === mode}
+            disabled={!canInteract || automaticSource}
             onSelect={() => selectTranslationMode(mode)}
           />
         ))}
