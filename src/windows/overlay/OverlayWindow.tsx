@@ -168,6 +168,12 @@ export function OverlayWindow() {
           <div
             className="flex min-h-0 flex-col"
             style={{
+              // The top band (drag handle / language capsule / control
+              // buttons) floats over the canvas in this port, so reserve its
+              // exact height here — mirroring the Swift in-flow drag-area
+              // frame — otherwise subtitle rows slide underneath the
+              // controls and overlap them.
+              paddingTop: session.isActive ? 38 : 24,
               height: popoverOpen ? contentHeight : "100%",
               marginTop: popoverOpen ? "auto" : 0,
             }}
