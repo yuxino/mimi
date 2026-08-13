@@ -63,6 +63,10 @@ export function LanguagePickerPopover({
   const canInteract =
     !isPaused && statusKind !== "connecting" && statusKind !== "stopping";
   const translatesAudio = targetLanguageTranslatesAudio(settings.targetLanguage);
+  // Automatic source runs the low-latency pipeline regardless of the stored
+  // mode; the capsule badge shows the effective mode.
+  const automaticSource = settings.sourceLanguage === "auto";
+  const displayMode = automaticSource ? "lowLatency" : settings.translationMode;
   const help = translatesAudio
     ? I18N.overlay.pickerHelpTranslating
     : I18N.overlay.pickerHelpOriginal;
@@ -144,7 +148,7 @@ export function LanguagePickerPopover({
                 color: `rgba(255,255,255,${isHovering ? 0.72 : 0.52})`,
               }}
             >
-              {TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}
+              {TRANSLATION_MODE_DISPLAY_NAMES[displayMode]}
             </span>
           </>
         )}
@@ -215,7 +219,8 @@ export function LanguagePickerPopover({
             <PickerRow
               key={mode}
               title={TRANSLATION_MODE_DISPLAY_NAMES[mode]}
-              selected={settings.translationMode === mode}
+              selected={displayMode === mode}
+              disabled={automaticSource}
               onSelect={() => {
                 setOpen(false);
                 onSwitchTranslationMode(mode);
@@ -247,16 +252,19 @@ function PopoverHeader({ children }: { children: string }) {
 function PickerRow({
   title,
   selected,
+  disabled = false,
   onSelect,
 }: {
   title: string;
   selected: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       className="flex w-full items-center"
       style={{
         gap: 8,
@@ -267,7 +275,7 @@ function PickerRow({
         background: "transparent",
         color: "rgba(255,255,255,0.9)",
         fontSize: 13,
-        cursor: "pointer",
+        cursor: disabled ? "default" : "pointer",
       }}
     >
       <span className="flex-1 text-left">{title}</span>
@@ -281,8 +289,10 @@ function accessibilityLabel(
   status: LanguageStatus,
   settings: SettingsSnapshot,
 ): string {
+  const effectiveMode =
+    settings.sourceLanguage === "auto" ? "lowLatency" : settings.translationMode;
   const mode = targetLanguageTranslatesAudio(settings.targetLanguage)
-    ? `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}翻译`
+    ? `${TRANSLATION_MODE_DISPLAY_NAMES[effectiveMode]}翻译`
     : I18N.overlay.originalOnly;
   return `${OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel}，当前语言：${status.source} ${status.separator} ${status.target}，${mode}。打开以切换识别语言。`;
 }
