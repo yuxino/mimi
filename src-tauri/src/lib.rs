@@ -295,8 +295,9 @@ fn switch_language(
     );
 }
 
-/// Registers the global start/stop shortcut (⌘⇧Space on macOS,
-/// Ctrl+Shift+Space on Windows).
+/// Registers the global start/stop shortcut — ⌘⇧Space on macOS (matching the
+/// original app), Ctrl+Shift+Space on Windows. A 2s debounce mirrors the
+/// original `GlobalHotKeyController`.
 fn setup_global_shortcut(
     app: &tauri::AppHandle,
     session: Arc<SessionManager>,
@@ -305,10 +306,14 @@ fn setup_global_shortcut(
         Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
     };
 
-    let shortcut = Shortcut::new(
-        Some(Modifiers::CONTROL | Modifiers::SHIFT | Modifiers::SUPER),
-        Code::Space,
-    );
+    // macOS: Cmd+Shift (SUPER is the Command key); Windows: Ctrl+Shift.
+    #[cfg(target_os = "macos")]
+    let modifiers = Modifiers::SUPER | Modifiers::SHIFT;
+    #[cfg(not(target_os = "macos"))]
+    let modifiers = Modifiers::CONTROL | Modifiers::SHIFT;
+    let shortcut = Shortcut::new(Some(modifiers), Code::Space);
+
+    let last_trigger = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
     let session_for_handler = Arc::clone(&session);
 
     app.global_shortcut()
@@ -316,6 +321,16 @@ fn setup_global_shortcut(
             if event.state() != ShortcutState::Pressed {
                 return;
             }
+            // Debounce repeated presses like the Swift hotkey controller.
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            let previous = last_trigger.load(std::sync::atomic::Ordering::SeqCst);
+            if now_ms.saturating_sub(previous) < 2_000 {
+                return;
+            }
+            last_trigger.store(now_ms, std::sync::atomic::Ordering::SeqCst);
             let session = Arc::clone(&session_for_handler);
             tauri::async_runtime::spawn(async move {
                 let status = session.status_kind();
