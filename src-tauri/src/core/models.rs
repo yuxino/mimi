@@ -3,14 +3,35 @@
 use serde::{Deserialize, Serialize};
 
 /// The language being recognized in system audio.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SourceLanguage {
     Automatic,
     Chinese,
     English,
     Japanese,
     Korean,
+}
+
+impl Serialize for SourceLanguage {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.raw_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for SourceLanguage {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        match value.as_str() {
+            "auto" => Ok(Self::Automatic),
+            "zh" => Ok(Self::Chinese),
+            "en" => Ok(Self::English),
+            "ja" => Ok(Self::Japanese),
+            "ko" => Ok(Self::Korean),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown source language: {other}"
+            ))),
+        }
+    }
 }
 
 impl SourceLanguage {
@@ -166,13 +187,33 @@ impl DetectedLanguage {
 }
 
 /// The language subtitles are translated into; `Original` means no translation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TargetLanguage {
     Original,
     SimplifiedChinese,
     English,
     Japanese,
+}
+
+impl Serialize for TargetLanguage {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.raw_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for TargetLanguage {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        match value.as_str() {
+            "original" => Ok(Self::Original),
+            "zh" => Ok(Self::SimplifiedChinese),
+            "en" => Ok(Self::English),
+            "ja" => Ok(Self::Japanese),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown target language: {other}"
+            ))),
+        }
+    }
 }
 
 impl TargetLanguage {
@@ -209,12 +250,35 @@ impl TargetLanguage {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TranslationMode {
     LowLatency,
     HighQuality,
     Turbo,
+}
+
+impl Serialize for TranslationMode {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(match self {
+            Self::LowLatency => "lowLatency",
+            Self::HighQuality => "highQuality",
+            Self::Turbo => "turbo",
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for TranslationMode {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        match value.as_str() {
+            "lowLatency" => Ok(Self::LowLatency),
+            "highQuality" => Ok(Self::HighQuality),
+            "turbo" => Ok(Self::Turbo),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown translation mode: {other}"
+            ))),
+        }
+    }
 }
 
 impl TranslationMode {

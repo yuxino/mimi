@@ -713,8 +713,11 @@ dependencies = [
  "block",
  "cfg-if",
  "core-foundation",
+ "dispatch2",
  "libc",
  "objc2",
+ "objc2-core-foundation",
+ "objc2-io-surface",
 ]
 
 [[package]]
@@ -2504,12 +2507,14 @@ dependencies = [
  "base64 0.23.1",
  "block2",
  "core-audio",
+ "core-graphics2",
  "core-media",
  "cpal",
  "dispatch2",
  "futures-util",
  "keyring",
  "objc2",
+ "objc2-core-audio-types",
  "objc2-foundation",
  "regex",
  "reqwest 0.12.28",
