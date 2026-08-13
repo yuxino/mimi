@@ -85,6 +85,14 @@ impl LiveTranslateRequestEncoder {
         if !hotwords.is_empty() {
             translation["corpus"] = json!({ "phrases": hotwords });
         }
+        // Automatic source detection omits the transcription language so the
+        // server detects it per utterance (mirrors the original app's
+        // RealtimeASRProtocol: `sourceLanguage == .automatic ? nil : rawValue`);
+        // the per-event language field then drives the detected-language UI.
+        let mut transcription = json!({ "model": "qwen3-asr-flash-realtime" });
+        if source_language != SourceLanguage::Automatic {
+            transcription["language"] = json!(source_language.raw_value());
+        }
         Ok(json!({
             "event_id": event_id.unwrap_or(&next_event_id()),
             "type": "session.update",
@@ -92,10 +100,7 @@ impl LiveTranslateRequestEncoder {
                 "modalities": ["text"],
                 "sample_rate": 16_000,
                 "input_audio_format": "pcm",
-                "input_audio_transcription": {
-                    "model": "qwen3-asr-flash-realtime",
-                    "language": source_language.raw_value()
-                },
+                "input_audio_transcription": transcription,
                 "translation": translation
             }
         }))
