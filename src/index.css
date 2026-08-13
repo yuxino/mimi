@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+/* Settings window gets an opaque background instead. */
+body.settings-body {
+  background: #1e1e1e;
+}
+
+/* Overlay collapse/expand cross-fade (180ms easeInOut, matches Swift). */
+@keyframes overlay-enter-collapsed {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes overlay-enter-expanded {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.overlay-swap-collapsed {
+  animation: overlay-enter-collapsed 180ms ease-in-out;
+}
+
+.overlay-swap-expanded {
+  animation: overlay-enter-expanded 180ms ease-in-out;
+}
+
+/* Thin, unobtrusive scrollbars for the overlay timeline. */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
