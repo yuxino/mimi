@@ -753,9 +753,11 @@ function errorMessage(error: unknown): string {
 function listeningPreferencesDraft(
   settings: SettingsSnapshot,
 ): SettingsDraft | null {
-  let source = settings.sourceLanguage;
+  // Automatic source is the user's persistent choice now (the backend
+  // resolves the engine language); only the Chinese-source original-target
+  // rule is applied here.
+  const source = settings.sourceLanguage;
   let target = settings.targetLanguage;
-  if (source === "auto") source = "ja";
   if (source === "zh") target = "original";
   if (source !== settings.sourceLanguage || target !== settings.targetLanguage) {
     return { sourceLanguage: source, targetLanguage: target };

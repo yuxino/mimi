@@ -61,8 +61,7 @@ export function TrayPanel() {
     void saveSettings({ isOverlayLocked: checked }).catch(() => {});
   };
 
-  const pickerValue =
-    settings.sourceLanguage === "auto" ? "ja" : settings.sourceLanguage;
+  const pickerValue = settings.sourceLanguage;
 
   const panel = (
     <div
@@ -307,9 +306,11 @@ function prepareLanguagePreferences(
   settings: SettingsSnapshot,
   saveSettings: (draft: SettingsDraft) => Promise<void>,
 ): void {
-  let source = settings.sourceLanguage;
+  // Note: automatic source is the user's persistent choice now (the
+  // backend resolves the engine language); only the Chinese-source
+  // original-target rule is applied here.
+  const source = settings.sourceLanguage;
   let target = settings.targetLanguage;
-  if (source === "auto") source = "ja";
   if (source === "zh") target = "original";
   if (source !== settings.sourceLanguage || target !== settings.targetLanguage) {
     void saveSettings({ sourceLanguage: source, targetLanguage: target }).catch(
