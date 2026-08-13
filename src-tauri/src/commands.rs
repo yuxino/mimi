@@ -12,8 +12,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 pub struct AppState {
     pub settings: Arc<SettingsStore>,
     pub session: Arc<SessionManager>,
-    pub resize_drag: std::sync::Mutex<Option<crate::windows::resize::ResizeRegion>>,
-    pub resize_start: std::sync::Mutex<Option<(f64, f64, crate::settings_store::OverlayFrame)>>,
+    /// Single source of truth for the overlay window geometry.
+    pub overlay: Arc<std::sync::Mutex<crate::windows::OverlayState>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -247,7 +247,7 @@ pub fn overlay_set_collapsed(
     collapsed: bool,
 ) -> Result<(), String> {
     state.session.set_overlay_collapsed(collapsed);
-    OverlayWindowManager::set_collapsed(&app, &state.settings, collapsed);
+    OverlayWindowManager::set_collapsed(&app, &state.overlay, collapsed);
     // The frontend's collapse UI state only updates through the
     // session-state event; without this the overlay renders the wrong
     // layout after collapsing/expanding.
@@ -282,31 +282,46 @@ pub fn overlay_show(app: AppHandle, state: State<'_, AppState>) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn overlay_set_size(app: AppHandle, width: f64, height: f64) -> Result<(), String> {
-    OverlayWindowManager::set_size(&app, width, height);
+pub fn overlay_set_size(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    OverlayWindowManager::set_size(&app, &state.overlay, width, height);
     Ok(())
 }
 
+/// Opens the language/mode popover: the overlay is temporarily enlarged by
+/// `extra_height` logical px (bottom edge fixed) so the menu fits. The
+/// remembered expanded frame is never modified.
 #[tauri::command]
-pub fn overlay_set_height(app: AppHandle, height: f64) -> Result<(), String> {
-    if height > 0.0 {
-        crate::windows::POPOVER_RESIZING.store(true, std::sync::atomic::Ordering::SeqCst);
-    } else {
-        crate::windows::POPOVER_RESIZING.store(false, std::sync::atomic::Ordering::SeqCst);
-    }
-    crate::windows::OverlayWindowManager::set_height_for_popover(&app, height);
+pub fn overlay_popover_open(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    extra_height: f64,
+) -> Result<(), String> {
+    OverlayWindowManager::open_popover(&app, &state.overlay, extra_height);
+    Ok(())
+}
+
+/// Closes the popover and restores the remembered expanded geometry. A no-op
+/// unless the popover is open, so unmount cleanup and collapse races are safe.
+#[tauri::command]
+pub fn overlay_popover_close(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    OverlayWindowManager::close_popover(&app, &state.overlay);
     Ok(())
 }
 
 #[tauri::command]
 pub fn overlay_commit_frame(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    crate::windows::OverlayWindowManager::commit_frame(&app, &state.settings);
+    OverlayWindowManager::commit(&app, &state.overlay, &state.settings);
     Ok(())
 }
 
 /// Begins an overlay resize drag. `region` is one of topLeft/top/topRight/
 /// left/right/bottomLeft/bottom/bottomRight; `x`/`y` are the pointer position
-/// in logical (CSS) pixels.
+/// in screen (logical) coordinates. Ignored unless the overlay is expanded.
 #[tauri::command]
 pub fn resize_start(
     app: AppHandle,
@@ -315,33 +330,12 @@ pub fn resize_start(
     x: f64,
     y: f64,
 ) -> Result<(), String> {
-    let Some(region) = crate::windows::resize::ResizeRegion::from_name(&region) else {
-        return Err(format!("unknown resize region: {region}"));
-    };
-    let Some(window) = app.get_webview_window("overlay") else {
-        return Ok(());
-    };
-    let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-    let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) else {
-        return Ok(());
-    };
-    let frame = crate::settings_store::OverlayFrame {
-        x: position.x as f64 / scale,
-        y: position.y as f64 / scale,
-        width: size.width as f64 / scale,
-        height: size.height as f64 / scale,
-    };
-    *state.resize_drag.lock().unwrap() = Some(region);
-    tracing::info!(
-        "resize start region={:?} frame={:?}",
-        region,
-        (frame.x, frame.y, frame.width, frame.height)
-    );
-    *state.resize_start.lock().unwrap() = Some((x, y, frame));
-    Ok(())
+    OverlayWindowManager::resize_start(&app, &state.overlay, &region, x, y)
 }
 
-/// Continues a resize drag with the current pointer position (logical px).
+/// Continues a resize drag with the current pointer position (screen logical
+/// px). The dragged edge/corner stays anchored, sizes clamp to min/max, and
+/// the frame keeps at least 48 px on screen.
 #[tauri::command]
 pub fn resize_move(
     app: AppHandle,
@@ -349,65 +343,14 @@ pub fn resize_move(
     x: f64,
     y: f64,
 ) -> Result<(), String> {
-    let region = *state.resize_drag.lock().unwrap();
-    let Some(region) = region else {
-        return Ok(());
-    };
-    let Some((start_x, start_y, start_frame)) = state.resize_start.lock().unwrap().clone() else {
-        return Ok(());
-    };
-    let Some(window) = app.get_webview_window("overlay") else {
-        return Ok(());
-    };
-    let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-    let screen = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .map(|monitor| {
-            let size = monitor.size();
-            (size.width as f64 / scale, size.height as f64 / scale)
-        })
-        .unwrap_or((1440.0, 900.0));
-
-    let frame = crate::windows::resize::apply_drag(
-        region,
-        (start_x, start_y),
-        &start_frame,
-        (x, y),
-        (
-            crate::windows::SubtitleOverlayMetrics::MINIMUM_WIDTH,
-            crate::windows::SubtitleOverlayMetrics::MINIMUM_HEIGHT,
-        ),
-        (
-            crate::windows::SubtitleOverlayMetrics::MAXIMUM_WIDTH,
-            crate::windows::SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
-        ),
-        screen,
-        48.0,
-    );
-
-    let _ = window.set_position(tauri::LogicalPosition::new(frame.x, frame.y));
-    let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
-    tracing::info!(
-        "resize move frame={:?}",
-        (frame.x, frame.y, frame.width, frame.height)
-    );
+    OverlayWindowManager::resize_move(&app, &state.overlay, x, y);
     Ok(())
 }
 
 /// Ends a resize drag and commits the final frame.
 #[tauri::command]
 pub fn resize_end(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    *state.resize_drag.lock().unwrap() = None;
-    *state.resize_start.lock().unwrap() = None;
-    tracing::info!("resize end");
-    // While the language/mode popover has enlarged the window, the current
-    // height is temporary; persist only once the popover closes (its close
-    // path commits the frame).
-    if !crate::windows::POPOVER_RESIZING.load(std::sync::atomic::Ordering::SeqCst) {
-        crate::windows::OverlayWindowManager::commit_frame(&app, &state.settings);
-    }
+    OverlayWindowManager::resize_end(&app, &state.overlay, &state.settings);
     Ok(())
 }
 

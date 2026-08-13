@@ -19,7 +19,7 @@ pub const KEYCHAIN_ACCOUNT: &str = "dashscope-api-key";
 pub const FONT_SIZE_RANGE: std::ops::RangeInclusive<f64> = 14.0..=20.0;
 pub const DEFAULT_FONT_SIZE: f64 = 18.0;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct OverlayFrame {
     pub x: f64,
     pub y: f64,

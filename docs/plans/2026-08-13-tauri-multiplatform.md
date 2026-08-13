@@ -351,6 +351,7 @@ Expected: 弹出一个 560×570 的空设置窗口；无编译错误。
 - 波形/指示器动画：正弦胶囊（9 根，24fps；相位色与 speed/amplitude 参数照抄 Swift 表格），尊重 `prefers-reduced-motion`。
 - 自绘缩放手柄：8 区域命中（边 6px / 角 14px 内缩），cursor 样式 `nwse-resize` 等，pointer 拖拽 → `overlay_set_size`（最小 360×100 / 最大 1200×600）；锁定或收起时禁用。
 - resize 拖拽 IPC 契约（2026-08-14 修订）：`resize_start{region,x,y}` / `resize_move{x,y}` / `resize_end`；前端只转发指针位置，坐标一律用 `screenX/screenY`（屏幕 CSS 像素，随窗口移动不变）。严禁 `clientX/Y`——窗口相对坐标会在后端移动窗口后反馈进差值计算，导致拖角时窗口在两个帧之间来回振荡。前端在 pointerdown 时 `setPointerCapture` 并维护本地 active 标志（只在拖动中转发 move），另挂 window 级 pointerup/pointercancel/blur 兜底（防 capture 丢失后后端拖动态悬挂、后续 hover 触发误 resize），结束时必发 `resize_end`（后端 commit 帧）。
+- 窗体几何状态机（2026-08-14 重构，取代全局 `POPOVER_RESIZING` 补丁）：Rust 侧 `OverlayState` 持有唯一 `user_frame`（唯一被持久化的帧，只由 resize 拖动与窗口移动防抖 350ms 后写入）+ `OverlayMode`（Expanded / Collapsed / Popover{extra}）。`OverlayWindowManager::apply` 是唯一写 OS 窗口几何的入口，按 `(mode, user_frame)` 推导 size/position/min/max。弹层契约：`overlay_popover_open{extraHeight}`（底边固定向上长高，超出屏幕高度时 clamp；用户帧不动）/ `overlay_popover_close`（恢复 Expanded，非 Popover 态时 no-op，卸载兜底安全）；弹层打开期间前端禁用 resize 手柄、后端忽略 resize 拖动。收起/展开动画的中间尺寸、弹层临时高度一律不持久化；收起态拖动只更新位置不污染记忆尺寸。
 - 语言分段长度表：zh 28 / en 64 / ja 32 / original 按检测语言。
 
 ### Task 29: TrayPanel 窗口 UI
