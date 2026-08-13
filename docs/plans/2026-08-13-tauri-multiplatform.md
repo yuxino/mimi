@@ -289,7 +289,7 @@ Expected: 弹出一个 560×570 的空设置窗口；无编译错误。
 
 **Port:** `AppSettings.swift` + `KeychainStore.swift`：
 - `Preferences{workspace_id, source_language, target_language, translation_mode, font_size, overlay_locked, overlay_frame?, frame_layout_version}` ↔ `app_config_dir()/preferences.json`（serde）。
-- API Key 走 `keyring::Entry::new("app.yuxino.mimi.credentials.v2", "dashscope-api-key")`，读取失败回退读旧 service `app.yuxino.mimi.translation`（读成功后迁移保存，对应 Swift 的 legacyService 迁移）；错误消息 `Keychain: …` / Windows `Credential Manager: …` 风格透传。
+- API Key 走 `keyring`，主 service `app.yuxino.mimi.credentials.v3`（本应用自建条目，默认 ACL 永不弹授权），account=`dashscope-api-key`；读取顺序 v3 → v2（`app.yuxino.mimi.credentials.v2`，首版 Tauri 复用、带 Swift 遗留 ACL）→ 旧 service `app.yuxino.mimi.translation`，旧条目读成功后一次性迁移写入 v3（对应 Swift 的 legacyService 迁移）。2026-08-14 修订：Swift 原条目带 partition-list ACL 绑定创建二进制，dev 重建 cdhash 变化导致每次重启都弹钥匙串授权、并发 settings_get 各自阻塞饿死 tokio 运行时（全窗口冻结）——故凭证改为写入自建 v3 条目并做内存缓存（并发调用共享单次读取）。错误消息 `Keychain: …` / Windows `Credential Manager: …` 风格透传。
 - 默认值：source=auto、target=zh、mode=highQuality（auto 时降为 lowLatency）、fontSize=18、locked=false。
 - `prepare_for_listening`（auto→ja；zh 源 → original 目标）、`save()` 校验 + 写 keyring + 写偏好、`reload_api_key`。
 - `MIMI_UI_TEST=1` 环境变量注入假凭证（同 Swift UITest 模式，供 UI 冒烟）。
