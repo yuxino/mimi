@@ -487,6 +487,12 @@ fn capture_to_pcm16(
     if samples.is_empty() {
         return Ok(None);
     }
+    let decoded_peak = samples.iter().fold(0.0f32, |acc, s| acc.max(s.abs()));
+    pipeline_log!(
+        "capture decoded frames={} peak={}",
+        samples.len(),
+        decoded_peak
+    );
 
     // Resample to 16 kHz when the device rate differs from the ASR pipeline.
     let pcm = if (sample_rate - TARGET_SAMPLE_RATE).abs() < 0.5 {
@@ -654,5 +660,147 @@ fn sample_to_f32(
             / 2_147_483_648.0)
     } else {
         Err(SystemAudioCaptureError::UnsupportedAudioFormat)
+    }
+}
+
+#[cfg(test)]
+mod resampler_tests {
+    use objc2_core_audio_types::AudioStreamBasicDescription;
+
+    fn asbd_48k_1ch_f32() -> AudioStreamBasicDescription {
+        AudioStreamBasicDescription {
+            mSampleRate: 48_000.0,
+            mFormatID: 0x6c70636d, // kAudioFormatLinearPCM
+            mFormatFlags: 0x29,    // float | packed | native-endian
+            mBytesPerPacket: 4,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 4,
+            mChannelsPerFrame: 1,
+            mBitsPerChannel: 32,
+            mReserved: 0,
+        }
+    }
+
+    fn f32_bytes(samples: &[f32]) -> Vec<u8> {
+        samples.iter().flat_map(|s| s.to_le_bytes()).collect()
+    }
+
+    #[test]
+    fn decode_interleaved_f32_preserves_signal() {
+        let samples = vec![0.5f32, -0.25, 1.0, -1.0, 0.0, 0.75];
+        let bytes = f32_bytes(&samples);
+        let mono = decode_to_f32_mono(&bytes, &asbd_48k_1ch_f32()).expect("decode ok");
+        assert_eq!(mono.len(), samples.len());
+        let peak = mono.iter().fold(0.0f32, |a, s| a.max(s.abs()));
+        assert!(peak > 0.5, "decoded samples are near-silent (peak={peak})");
+        assert!((mono[0] - 0.5).abs() < 1e-6);
+        assert!((mono[3] - (-1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn decode_handles_stereo_by_averaging_channels() {
+        let asbd = AudioStreamBasicDescription {
+            mChannelsPerFrame: 2,
+            ..asbd_48k_1ch_f32()
+        };
+        // Interleaved: L=0.5 R=0.5 -> mono 0.5; L=-1 R=1 -> mono 0.
+        let bytes = f32_bytes(&[0.5, 0.5, -1.0, 1.0]);
+        let mono = decode_to_f32_mono(&bytes, &asbd).expect("decode ok");
+        assert_eq!(mono.len(), 2);
+        assert!((mono[0] - 0.5).abs() < 1e-6);
+        assert!(mono[1].abs() < 1e-6);
+    }
+
+    use super::*;
+    use rubato::audioadapter::Adapter;
+    use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+    use rubato::FixedSync;
+    use rubato::Resampler;
+
+    fn peak(data: &[f32]) -> f32 {
+        data.iter().fold(0.0f32, |acc, s| acc.max(s.abs()))
+    }
+
+    #[test]
+    fn fft_resampler_48000_to_16000_produces_non_silent_output() {
+        let mut resampler = rubato::Fft::<f32>::new(48_000, 16_000, 1024, 1, FixedSync::Input)
+            .expect("resampler builds");
+        let input_frames = resampler.input_frames_next();
+        // 1 kHz sine at 48 kHz.
+        let samples: Vec<f32> = (0..input_frames)
+            .map(|i| (i as f64 * 2.0 * std::f64::consts::PI * 1000.0 / 48_000.0).sin() as f32 * 0.5)
+            .collect();
+        let binding = [samples];
+        let input = SequentialSliceOfVecs::new(&binding, 1, input_frames).expect("adapter builds");
+        let output = resampler.process(&input, None).expect("process succeeds");
+        let frames = output.frames();
+        let data = output.take_data();
+
+        eprintln!(
+            "input_frames={input_frames} output_frames={frames} peak={}",
+            peak(&data)
+        );
+        assert!(!data.is_empty(), "resampler produced no output");
+        assert!(
+            peak(&data) > 0.01,
+            "resampled output is silent (peak={})",
+            peak(&data)
+        );
+    }
+
+    #[test]
+    fn fft_resampler_streams_multiple_chunks_without_silence() {
+        let mut resampler = rubato::Fft::<f32>::new(48_000, 16_000, 1024, 1, FixedSync::Input)
+            .expect("resampler builds");
+        let delay = resampler.output_delay();
+        let input_frames = resampler.input_frames_next();
+        let samples: Vec<f32> = (0..input_frames)
+            .map(|i| (i as f64 * 2.0 * std::f64::consts::PI * 1000.0 / 48_000.0).sin() as f32 * 0.5)
+            .collect();
+        let binding = [samples.clone()];
+        let input = SequentialSliceOfVecs::new(&binding, 1, input_frames).expect("adapter");
+
+        let out1 = resampler
+            .process(&input, None)
+            .expect("process 1")
+            .take_data();
+        let binding2 = [samples];
+        let input2 = SequentialSliceOfVecs::new(&binding2, 1, input_frames).expect("adapter");
+        let out2 = resampler
+            .process(&input2, None)
+            .expect("process 2")
+            .take_data();
+
+        eprintln!(
+            "output_delay={delay} out1_frames={} out1_peak={} out2_frames={} out2_peak={}",
+            out1.len(),
+            peak(&out1),
+            out2.len(),
+            peak(&out2)
+        );
+        assert!(
+            peak(&out2) > 0.01,
+            "streaming second chunk is silent (delay={delay} out2_peak={})",
+            peak(&out2)
+        );
+    }
+
+    #[test]
+    fn fft_resampler_reports_expected_chunk_sizes() {
+        let resampler = rubato::Fft::<f32>::new(48_000, 16_000, 1024, 1, FixedSync::Input)
+            .expect("resampler builds");
+        eprintln!(
+            "input_frames_next={} output_frames_next={}",
+            resampler.input_frames_next(),
+            resampler.output_frames_next()
+        );
+        // The first block is a warm-up chunk (fewer frames); subsequent
+        // blocks output ≈1024/3 frames. The streaming test above asserts
+        // non-silent, correctly-sized output across multiple chunks.
+        assert!(
+            (200..=350).contains(&resampler.output_frames_next()),
+            "unexpected output chunk size: {}",
+            resampler.output_frames_next()
+        );
     }
 }
