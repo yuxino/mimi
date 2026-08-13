@@ -95,7 +95,9 @@ export function OverlayWindow() {
         </div>
       </div>
       {!settings.isOverlayLocked && !collapsed && (
-        <ResizeHandles disabled={false} onResize={handleResize} />
+        // Resizing is suspended while the language/mode popover temporarily
+        // enlarges the window; the backend ignores such drags as well.
+        <ResizeHandles disabled={popoverOpen} onResize={handleResize} />
       )}
     </>
   );

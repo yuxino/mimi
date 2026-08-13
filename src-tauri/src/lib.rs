@@ -43,7 +43,10 @@ pub fn run() {
             ));
             let session = SessionManager::new(app_handle.clone(), Arc::clone(&settings));
 
-            windows::OverlayWindowManager::ensure_overlay(&app_handle, &settings);
+            let overlay = Arc::new(std::sync::Mutex::new(
+                windows::OverlayState::load(&app_handle, &settings),
+            ));
+            windows::OverlayWindowManager::ensure_overlay(&app_handle, &overlay);
             windows::TrayPanelManager::ensure(&app_handle);
 
             setup_tray(&app_handle)?;
@@ -100,23 +103,23 @@ pub fn run() {
             app.manage(AppState {
                 settings,
                 session,
-                resize_drag: std::sync::Mutex::new(None),
-                resize_start: std::sync::Mutex::new(None),
+                overlay,
             });
             Ok(())
         })
         .on_window_event(|window, event| {
             let app = window.app_handle();
             match event {
+                // The overlay geometry manager folds the final frame in after
+                // a debounce; transient states (popover enlargement, collapse
+                // animation steps) are never persisted.
                 WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == "overlay" => {
                     if let Some(state) = app.try_state::<AppState>() {
-                        // Do not overwrite the remembered expanded size while
-                        // collapsed: the collapse animation resizes the window
-                        // to 280x54 and would otherwise clobber the frame the
-                        // next expand restores from.
-                        if !state.session.is_overlay_collapsed() {
-                            windows::OverlayWindowManager::persist_frame(app, &state.settings);
-                        }
+                        windows::OverlayWindowManager::on_geometry_event(
+                            app,
+                            &state.overlay,
+                            &state.settings,
+                        );
                     }
                 }
                 WindowEvent::Focused(false) if window.label() == "tray-panel" => {
@@ -144,7 +147,8 @@ pub fn run() {
             commands::overlay_set_locked,
             commands::overlay_show,
             commands::overlay_set_size,
-            commands::overlay_set_height,
+            commands::overlay_popover_open,
+            commands::overlay_popover_close,
             commands::overlay_commit_frame,
             commands::resize_start,
             commands::resize_move,

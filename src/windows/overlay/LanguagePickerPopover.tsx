@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { I18N } from "../../lib/i18n";
-import { isTauri, overlayCommitFrame, overlaySetHeight } from "../../lib/ipc";
+import {
+  isTauri,
+  overlayPopoverClose,
+  overlayPopoverOpen,
+} from "../../lib/ipc";
 import {
   OVERLAY_ACTIVITY_PHASES,
   SOURCE_LANGUAGE_MANUAL_CASES,
@@ -56,20 +60,23 @@ export function LanguagePickerPopover({
   const status = languageStatus(settings, detectedLanguage);
 
   // The popover renders inside the overlay window, which is normally only
-  // ~136px tall — too short for the language + mode menu. Enlarge the window
-  // while open (enough for the menu below the pinned subtitle area) and
-  // restore the remembered height on close so the menu is never clipped.
+  // ~136px tall — too short for the language + mode menu. While open, the
+  // backend enlarges the window in popover mode (bottom edge fixed, never
+  // touching the remembered frame) and restores it on close.
   useEffect(() => {
     onOpenChange?.(open);
     if (!isTauri) return;
     if (open) {
       const currentHeight = window.innerHeight;
-      void overlaySetHeight(Math.max(400, currentHeight + 260));
-    } else {
-      void overlaySetHeight(0).then(() => {
-        void overlayCommitFrame().catch(() => {});
-      });
+      void overlayPopoverOpen(Math.max(400, currentHeight + 260));
+      // The cleanup runs both when the popover closes and when the component
+      // unmounts while open (e.g. the overlay collapses), so the temporary
+      // enlargement can never be left behind.
+      return () => {
+        void overlayPopoverClose().catch(() => {});
+      };
     }
+    void overlayPopoverClose().catch(() => {});
   }, [open, onOpenChange]);
 
   if (status === null) return null;

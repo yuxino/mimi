@@ -79,14 +79,21 @@ export function overlaySetSize(width: number, height: number): Promise<void> {
   return invoke("overlay_set_size", { width, height });
 }
 
-/** Temporarily enlarges the overlay so the language/mode popover fits;
- * `height <= 0` restores the remembered expanded height. */
-export function overlaySetHeight(height: number): Promise<void> {
-  return invoke("overlay_set_height", { height });
+/** Opens the language/mode popover: the overlay window is temporarily
+ * enlarged by `extraHeight` logical px (bottom edge fixed) so the menu fits.
+ * The remembered expanded frame is never modified. */
+export function overlayPopoverOpen(extraHeight: number): Promise<void> {
+  return invoke("overlay_popover_open", { extraHeight });
 }
 
-/** Persists the current overlay frame (end of a drag-resize or popover
- * close). */
+/** Closes the popover and restores the remembered expanded geometry. Safe to
+ * call at any time (no-op unless the popover is open). */
+export function overlayPopoverClose(): Promise<void> {
+  return invoke("overlay_popover_close");
+}
+
+/** Persists the current overlay frame (explicit commit points, e.g. the end
+ * of a drag-resize). */
 export function overlayCommitFrame(): Promise<void> {
   return invoke("overlay_commit_frame");
 }
