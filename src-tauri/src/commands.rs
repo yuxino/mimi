@@ -60,6 +60,7 @@ pub struct SettingsDraft {
 
 #[tauri::command]
 pub fn settings_get(state: State<'_, AppState>) -> Result<SettingsSnapshotPayload, String> {
+    tracing::info!("settings_get invoked from frontend");
     Ok(SettingsSnapshotPayload::from_store(&state.settings))
 }
 
