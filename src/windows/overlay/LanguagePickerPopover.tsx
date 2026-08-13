@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Icon } from "../../components/Icon";
 import { I18N } from "../../lib/i18n";
 import { isTauri, overlayPopoverToggle } from "../../lib/ipc";
@@ -54,7 +54,6 @@ export function LanguagePickerPopover({
   onSwitchTranslationMode,
 }: LanguagePickerPopoverProps) {
   const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const status = languageStatus(settings, detectedLanguage);
 
   if (status === null) return null;
@@ -71,14 +70,10 @@ export function LanguagePickerPopover({
   const handleToggle = () => {
     if (!canInteract) return;
     if (isTauri) {
-      // Anchor the menu window under this capsule's bottom-left corner
-      // (screen coordinates, CSS px — the same space the backend uses).
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      void overlayPopoverToggle(
-        rect.left + window.screenX,
-        rect.bottom + window.screenY + 6,
-      );
+      // The menu lives in its own window (like the Swift NSPopover); the
+      // backend anchors it under this capsule from the overlay window's own
+      // position, so the overlay size is never affected by the menu.
+      void overlayPopoverToggle();
       return;
     }
     setOpen((value) => !value);
@@ -87,7 +82,6 @@ export function LanguagePickerPopover({
   return (
     <div className="relative">
       <button
-        ref={buttonRef}
         type="button"
         disabled={!canInteract}
         onClick={handleToggle}

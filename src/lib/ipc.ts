@@ -79,14 +79,12 @@ export function overlaySetSize(width: number, height: number): Promise<void> {
   return invoke("overlay_set_size", { width, height });
 }
 
-/** Toggles the language/mode popover window under the given anchor point
- * (the language capsule's bottom-left corner in screen logical coordinates).
- * The overlay window itself is never resized for the menu. */
-export function overlayPopoverToggle(
-  anchorX: number,
-  anchorY: number,
-): Promise<void> {
-  return invoke("overlay_popover_toggle", { anchorX, anchorY });
+/** Toggles the language/mode popover window, anchored under the overlay's
+ * language capsule (the anchor is derived from the overlay window's own
+ * position backend-side). The overlay window itself is never resized for the
+ * menu. */
+export function overlayPopoverToggle(): Promise<void> {
+  return invoke("overlay_popover_toggle");
 }
 
 /** Hides the language/mode popover window. */

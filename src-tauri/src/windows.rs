@@ -624,6 +624,11 @@ impl LanguagePopoverManager {
     pub const HEIGHT: f64 = 266.0;
     /// Height of the language capsule the menu anchors below (for flipping).
     pub const CAPSULE_HEIGHT: f64 = 20.0;
+    /// Capsule anchor offset from the overlay origin (logical px): canvas
+    /// padding (6) + capsule position (left 12 / top 10) + capsule height
+    /// (20) + the 6px gap between the capsule and the menu.
+    pub const ANCHOR_OFFSET_X: f64 = 6.0 + 12.0;
+    pub const ANCHOR_OFFSET_Y: f64 = 6.0 + 10.0 + 20.0 + 6.0;
 
     pub fn ensure(app: &AppHandle) {
         if app.get_webview_window("language-popover").is_some() {
@@ -650,9 +655,23 @@ impl LanguagePopoverManager {
         }
     }
 
-    /// Shows the popover under the given anchor point (the language capsule's
-    /// bottom-left corner in screen logical coordinates). Flips above the
-    /// anchor when the menu would run past the bottom screen edge.
+    /// The menu anchor point (the overlay capsule's bottom-left corner) in
+    /// screen logical coordinates, derived from the overlay window's own
+    /// position — never from DOM `window.screenX`-style coordinates, which
+    /// are unreliable inside the webview.
+    fn overlay_anchor(app: &AppHandle) -> Option<(f64, f64)> {
+        let overlay = app.get_webview_window("overlay")?;
+        let scale = overlay.scale_factor().unwrap_or(1.0).max(1.0);
+        let position = overlay.outer_position().ok()?;
+        Some((
+            position.x as f64 / scale + Self::ANCHOR_OFFSET_X,
+            position.y as f64 / scale + Self::ANCHOR_OFFSET_Y,
+        ))
+    }
+
+    /// Shows the popover under the given anchor point (screen logical
+    /// coordinates). Flips above the anchor when the menu would run past the
+    /// bottom screen edge.
     pub fn show_at(app: &AppHandle, anchor_x: f64, anchor_y: f64) {
         POPOVER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let Some(window) = app.get_webview_window("language-popover") else {
@@ -666,11 +685,12 @@ impl LanguagePopoverManager {
         let _ = window.set_focus();
     }
 
-    /// Toggles the popover at the anchor: open when closed, close when open.
-    /// The delayed hide (scheduled on focus loss) makes the "close" click
-    /// race-free: the mousedown steals focus and schedules a hide, then the
-    /// click toggles the still-visible window closed before the delay fires.
-    pub fn toggle(app: &AppHandle, anchor_x: f64, anchor_y: f64) {
+    /// Toggles the popover: open when closed, close when open. The anchor is
+    /// computed from the overlay window's current position.
+    pub fn toggle(app: &AppHandle) {
+        let Some((anchor_x, anchor_y)) = Self::overlay_anchor(app) else {
+            return;
+        };
         let visible = app
             .get_webview_window("language-popover")
             .and_then(|window| window.is_visible().ok())
@@ -680,6 +700,23 @@ impl LanguagePopoverManager {
         } else {
             Self::show_at(app, anchor_x, anchor_y);
         }
+    }
+
+    /// Keeps the open menu glued to the capsule while the overlay moves.
+    pub fn follow_overlay(app: &AppHandle) {
+        let Some(window) = app.get_webview_window("language-popover") else {
+            return;
+        };
+        if !window.is_visible().unwrap_or(false) {
+            return;
+        }
+        let Some((anchor_x, anchor_y)) = Self::overlay_anchor(app) else {
+            return;
+        };
+        let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+        let screen = current_screen_logical(app, &window, scale);
+        let y = language_popover_y(anchor_y, Self::HEIGHT, screen);
+        let _ = window.set_position(tauri::LogicalPosition::new(anchor_x, y));
     }
 
     pub fn hide(app: &AppHandle) {
