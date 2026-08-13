@@ -7,6 +7,12 @@ use crate::settings_store::{OverlayFrame, SettingsStore};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
+/// Set while the overlay is temporarily enlarged for the language/mode
+/// popover; frame persistence is skipped so the temporary height never
+/// overwrites the remembered expanded size.
+pub static POPOVER_RESIZING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Logical-coordinate frame layout version. Frames saved before this version
 /// stored physical pixels and must be discarded (they restore off-screen on
 /// Retina displays).
@@ -212,6 +218,9 @@ impl OverlayWindowManager {
     }
 
     pub fn persist_frame(app: &AppHandle, settings: &SettingsStore) {
+        if POPOVER_RESIZING.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
         let Some(window) = app.get_webview_window("overlay") else {
             return;
         };
@@ -362,5 +371,26 @@ fn ease_in_out(t: f64) -> f64 {
         2.0 * t * t
     } else {
         1.0 - ((-2.0 * t + 2.0).powi(2)) / 2.0
+    }
+}
+
+impl OverlayWindowManager {
+    /// Sets the overlay height (logical px), keeping its width. Used while
+    /// the language/mode popover is open and to restore the remembered height
+    /// on close.
+    pub fn set_height_for_popover(app: &AppHandle, height: f64) {
+        let Some(window) = app.get_webview_window("overlay") else {
+            return;
+        };
+        let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+        let width = window
+            .inner_size()
+            .map(|size| size.width as f64 / scale)
+            .unwrap_or(SubtitleOverlayMetrics::REFERENCE_WIDTH);
+        let clamped = height.clamp(
+            SubtitleOverlayMetrics::MINIMUM_HEIGHT,
+            SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
+        );
+        let _ = window.set_size(tauri::LogicalSize::new(width, clamped));
     }
 }
