@@ -475,7 +475,13 @@ impl SessionManager {
         self.publish_state();
 
         if matches!(event, LiveTranslateServerEvent::Error { .. }) {
-            pipeline_log!("session terminal error");
+            // Content-free: log only the machine-readable code, never the
+            // server's free-text message.
+            let code = match &event {
+                LiveTranslateServerEvent::Error { code, .. } => code.as_str(),
+                _ => "",
+            };
+            pipeline_log!("session terminal error code={code}");
             self.stop_health_checks().await;
             self.cancel_recovery().await;
             self.stop_pipeline().await;
