@@ -198,7 +198,14 @@ export function OverlayWindow() {
               </div>
             </div>
           ) : (
-            <Timeline rows={rows} fontSize={settings.fontSize} />
+            <Timeline
+              rows={rows}
+              fontSize={settings.fontSize}
+              draft={
+                session.subtitles.translation.text !== "" &&
+                !session.subtitles.translation.isFinal
+              }
+            />
           )}
 
           {rows.length > 0 && session.isActive && (
