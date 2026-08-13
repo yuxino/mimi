@@ -57,3 +57,26 @@ Residual case: a server final that rewrites a stable local commit with
 completely different wording cannot be detected structurally and is appended
 like new content. The stability gate makes that rare by keeping still-revising
 sentences out of history in the first place.
+
+## 2026-08-14 追加：积压下的队列合并与降载
+
+真实会话反馈（高音量连读）：翻译延迟随语音量持续增长、偶发重复字幕，
+像是队列积压。定位到高质量管线的串行 final 队列：稳定草稿本地提交与
+服务端 final 都入同一 FIFO，语音爆发时入队速度快于 MT 翻译速度，深度
+无上界 → 延迟无上界；已入队但尚未展示的本地提交随后被服务端 final
+覆盖时仍会先翻译一遍 → 重复行。
+
+修复（`high_quality_client`）：
+
+1. **合并（coalesce）**：服务端 final 入队时，若结构上覆盖队尾的本地
+   提交（复用 committer 的 `final_covers_chunk` 覆盖规则），直接原位替换
+   队尾文本——该临时提交从未展示过，省一次翻译往返、少一条重复历史行；
+   同时回退为其预留的 revoke 计数（revoke 只在临时行已上屏时使用）。
+2. **降载（shed）**：队列深度 ≥ 3 时丢弃最老的仍未开始的 `stable-draft`
+   项；`server-final`/`maximum-wait`/`session-finish` 永不丢弃。被丢的
+   本地提交若 ASR 后续没有 final，maximum-wait 兜底路径仍会按原机制提交，
+   内容不丢；高音量下服务端 final 几乎总是紧随其后，延迟被限制在
+   ~3 × 单次翻译时长。
+
+`final_covers_chunk` 抽出为 committer 共享纯函数并有单元测试；原文模式下
+语言胶囊的模式槽位显示"原文"占位（不再无声消失，用户不再困惑）。

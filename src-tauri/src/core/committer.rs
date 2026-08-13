@@ -17,6 +17,16 @@ pub enum FinishOutcome {
     Replaced(String),
 }
 
+/// Whether a server final structurally covers a locally committed chunk —
+/// the same rule used to supersede provisional commits and to coalesce the
+/// pending final-translation queue.
+pub fn final_covers_chunk(final_text: &str, chunk: &str) -> bool {
+    final_text != chunk
+        && final_text.chars().count() >= 2
+        && chunk.chars().count() >= 2
+        && (final_text.starts_with(chunk) || final_text.contains(chunk))
+}
+
 pub struct ASRDraftCommitter {
     long_incomplete_commit_threshold: usize,
     latest_draft: String,
@@ -113,9 +123,7 @@ impl ASRDraftCommitter {
             && final_text.chars().count() >= 2
         {
             let chunk = self.last_committed_chunk.clone();
-            let supersedes = final_text != chunk
-                && (final_text.starts_with(&chunk) || final_text.contains(&chunk));
-            if supersedes {
+            if final_covers_chunk(&final_text, &chunk) {
                 if self.committed_text.ends_with(&chunk) {
                     let new_len = self.committed_text.chars().count() - chunk.chars().count();
                     self.committed_text = self.committed_text.chars().take(new_len).collect();
@@ -444,6 +452,22 @@ mod tests {
             committer.commit_latest_draft(true).as_deref(),
             Some(long_incomplete)
         );
+    }
+
+    #[test]
+    fn final_covers_chunk_detects_structural_supersede() {
+        // Exact repeat of the committed chunk is not a cover (dedup).
+        assert!(!final_covers_chunk("こんにちは。", "こんにちは。"));
+        // Extension and leading-word additions are covers.
+        assert!(final_covers_chunk(
+            "こんにちは。今日は天気がいいです。",
+            "こんにちは。"
+        ));
+        assert!(final_covers_chunk("はい、こんにちは。", "こんにちは。"));
+        // Unrelated text is not a cover.
+        assert!(!final_covers_chunk("明日は雨です。", "こんにちは。"));
+        // Degenerate single-character inputs never cover.
+        assert!(!final_covers_chunk("あ", "あ"));
     }
 
     #[test]
