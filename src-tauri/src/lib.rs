@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+pub mod audio;
 pub mod clients;
 pub mod commands;
 pub mod core;
