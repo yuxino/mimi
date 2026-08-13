@@ -148,6 +148,27 @@ export function LanguagePickerPopover({
             </span>
           </>
         )}
+        {!translatesAudio && (
+          // Original mode: the mode slot stays visible with an explicit
+          // "原文" label instead of silently disappearing, so the capsule
+          // layout is stable and the current state is always explained.
+          <>
+            <div
+              style={{
+                width: 0.5,
+                height: 9,
+                background: "rgba(255,255,255,0.14)",
+              }}
+            />
+            <span
+              style={{
+                color: `rgba(255,255,255,${isHovering ? 0.72 : 0.52})`,
+              }}
+            >
+              {I18N.overlay.originalOnly}
+            </span>
+          </>
+        )}
         <Icon
           name="chevron-down"
           style={{

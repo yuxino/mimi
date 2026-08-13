@@ -5,7 +5,7 @@
 
 use crate::clients::audio3_client::Audio3ASRClient;
 use crate::clients::qwen_mt_client::QwenMTClient;
-use crate::core::committer::{ASRDraftCommitter, FinishOutcome};
+use crate::core::committer::{final_covers_chunk, ASRDraftCommitter, FinishOutcome};
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use crate::core::protocols::live_translate::LiveTranslateServerEvent;
 use crate::core::protocols::qwen_mt::{QwenMTClientError, QwenMTMemoryPair, QwenMTModel};
@@ -22,6 +22,11 @@ use uuid::Uuid;
 struct TranslationRequest {
     text: String,
     language: Option<String>,
+    /// How the source text was confirmed: "server-final" (authoritative),
+    /// "stable-draft" (provisional local commit), "maximum-wait" or
+    /// "session-finish" (last-resort flushes). Provisional items may be
+    /// coalesced or shed under backlog; authoritative ones never are.
+    boundary: &'static str,
     enqueued_at: tokio::time::Instant,
 }
 
@@ -265,8 +270,13 @@ impl HighQualityTranslationClient {
                         self.emit(LiveTranslateServerEvent::SubtitleRevoked);
                     }
                 }
-                self.enqueue_confirmed_source(uncommitted_text, language, "server-final")
-                    .await;
+                self.enqueue_confirmed_source(
+                    uncommitted_text,
+                    language,
+                    "server-final",
+                    was_replaced,
+                )
+                .await;
             }
             other => self.emit(other),
         }
@@ -321,7 +331,7 @@ impl HighQualityTranslationClient {
                 .as_deref()
                 .unwrap_or(self.source_language.raw_value())
         );
-        self.enqueue_confirmed_source(text, language, boundary)
+        self.enqueue_confirmed_source(text, language, boundary, false)
             .await;
     }
 
@@ -330,6 +340,7 @@ impl HighQualityTranslationClient {
         text: String,
         language: Option<String>,
         boundary: &'static str,
+        supersedes_provisional: bool,
     ) {
         if !self.translates_audio {
             self.emit(LiveTranslateServerEvent::SourceFinal {
@@ -342,9 +353,55 @@ impl HighQualityTranslationClient {
 
         {
             let mut inner = self.inner.lock().await;
+            // Coalesce: a server final that covers the queued local commit
+            // replaces it in place. The provisional was never shown, so one
+            // translation round-trip and one duplicate history row are both
+            // avoided. (When the tail translation already started, the
+            // provisional revoke path handles the replacement instead.)
+            if boundary == "server-final" {
+                if let Some(tail) = inner.final_queue.back_mut() {
+                    if tail.boundary != "server-final" && final_covers_chunk(&text, &tail.text) {
+                        tail.text = text;
+                        tail.language = language;
+                        tail.boundary = boundary;
+                        if supersedes_provisional && inner.pending_revoke_count > 0 {
+                            // The provisional never reached the screen; the
+                            // revoke reserved for it must not fire.
+                            inner.pending_revoke_count -= 1;
+                        }
+                        pipeline_log!("mt plus final coalesced depth={}", inner.final_queue.len());
+                        return;
+                    }
+                }
+            }
+            // Shed the oldest still-queued provisional commit once the queue
+            // is deep. Authoritative server finals and last-resort flushes
+            // are never dropped; provisional stable-drafts are almost always
+            // superseded by the server final that follows within a second,
+            // and dropping them keeps latency bounded instead of letting a
+            // speech burst build an ever-growing backlog.
+            const MAX_QUEUE_DEPTH: usize = 3;
+            if inner.final_queue.len() >= MAX_QUEUE_DEPTH {
+                if let Some(position) = inner
+                    .final_queue
+                    .iter()
+                    .position(|request| request.boundary == "stable-draft")
+                {
+                    let shed = inner
+                        .final_queue
+                        .remove(position)
+                        .expect("position comes from the same queue");
+                    pipeline_log!(
+                        "mt plus final shed boundary={} depth={}",
+                        shed.boundary,
+                        inner.final_queue.len()
+                    );
+                }
+            }
             inner.final_queue.push_back(TranslationRequest {
                 text,
                 language,
+                boundary,
                 enqueued_at: tokio::time::Instant::now(),
             });
             pipeline_log!(
