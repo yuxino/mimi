@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { I18N } from "../../lib/i18n";
 import { isTauri } from "../../lib/ipc";
@@ -31,10 +32,22 @@ export function DragHandle({
       onToggleCollapsed();
       return;
     }
-    void getCurrentWindow()
+    void invoke("ui_probe_report", {
+      window: "drag",
+      state: `startDragging begin detail=${event.detail}`,
+    }).catch(() => {});
+    getCurrentWindow()
       .startDragging()
-      .catch(() => {
-        // The overlay may be locked (click-through); ignore drag failures.
+      .then(() =>
+        invoke("ui_probe_report", { window: "drag", state: "startDragging ok" }).catch(
+          () => {},
+        ),
+      )
+      .catch((error) => {
+        void invoke("ui_probe_report", {
+          window: "drag",
+          state: `startDragging failed: ${String(error).slice(0, 300)}`,
+        }).catch(() => {});
       });
   };
 
