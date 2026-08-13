@@ -327,7 +327,7 @@ fn setup_global_shortcut(
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0);
             let previous = last_trigger.load(std::sync::atomic::Ordering::SeqCst);
-            if now_ms.saturating_sub(previous) < 2_000 {
+            if now_ms.saturating_sub(previous) < 500 {
                 return;
             }
             last_trigger.store(now_ms, std::sync::atomic::Ordering::SeqCst);
