@@ -12,7 +12,17 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-pub const KEYCHAIN_SERVICE: &str = "app.yuxino.mimi.credentials.v2";
+/// Keychain service owned by this app. Items created by the original Swift
+/// app (and by the first Tauri build that reused its service) carry a
+/// partition-list ACL tied to the creating binary: every read prompts for
+/// authorization, and dev rebuilds change the binary's cdhash so the grant
+/// never sticks. Credentials therefore live in this app's own service, whose
+/// default ACL (created by the `security` CLI) never prompts; values found in
+/// the older services are migrated here on first successful read.
+pub const KEYCHAIN_SERVICE: &str = "app.yuxino.mimi.credentials.v3";
+/// Service reused by the first Tauri build; inherited the Swift-era ACL.
+pub const KEYCHAIN_SERVICE_TAURI_V2: &str = "app.yuxino.mimi.credentials.v2";
+/// Service written by the original Swift app.
 pub const LEGACY_KEYCHAIN_SERVICE: &str = "app.yuxino.mimi.translation";
 pub const KEYCHAIN_ACCOUNT: &str = "dashscope-api-key";
 
@@ -66,7 +76,19 @@ struct KeyringSecretStore;
 
 impl SecretStore for KeyringSecretStore {
     fn load(&self) -> Result<Option<String>, String> {
-        load_from_keyring(KEYCHAIN_SERVICE).map_err(|error| format!("Keychain: {error}"))
+        if let Some(value) = load_from_keyring(KEYCHAIN_SERVICE)? {
+            return Ok(Some(value));
+        }
+        // Migrate from the older services. Reading the Swift-era items may
+        // prompt once for keychain authorization; the migrated value lands in
+        // this app's own service, whose default ACL never prompts again.
+        for legacy in [KEYCHAIN_SERVICE_TAURI_V2, LEGACY_KEYCHAIN_SERVICE] {
+            if let Some(value) = load_from_keyring(legacy)? {
+                save_to_keyring(KEYCHAIN_SERVICE, &value)?;
+                return Ok(Some(value));
+            }
+        }
+        Ok(None)
     }
 
     fn save(&self, value: &str) -> Result<(), String> {
@@ -95,6 +117,11 @@ pub struct SettingsStore {
     prefs_path: PathBuf,
     prefs: Mutex<Preferences>,
     secret: Box<dyn SecretStore>,
+    /// In-memory credential cache. Keychain access can block on an
+    /// authorization prompt; caching serializes every caller behind a single
+    /// load so concurrent `settings_get` calls (one per window) can neither
+    /// each trigger their own prompt nor starve the async runtime.
+    key_cache: Mutex<Option<Result<Option<String>, String>>>,
     is_ui_test: bool,
 }
 
@@ -117,6 +144,7 @@ impl SettingsStore {
             prefs_path,
             prefs: Mutex::new(prefs),
             secret: Box::new(KeyringSecretStore),
+            key_cache: Mutex::new(None),
             is_ui_test,
         }
     }
@@ -127,6 +155,7 @@ impl SettingsStore {
             prefs_path: PathBuf::new(),
             prefs: Mutex::new(Preferences::default()),
             secret,
+            key_cache: Mutex::new(None),
             is_ui_test,
         }
     }
@@ -144,22 +173,21 @@ impl SettingsStore {
         update(&mut prefs);
     }
 
-    /// The stored API key, or `None` when missing. Reading the legacy service
-    /// migrates the value to the current one (same behavior as the Swift
-    /// `KeychainStore.loadAPIKey`).
+    /// The stored API key, or `None` when missing. Older-service values are
+    /// migrated to this app's own keychain service on first read. Results are
+    /// cached in memory: keychain access can block on an authorization
+    /// prompt, so every caller shares one load instead of racing.
     pub fn load_api_key(&self) -> Result<Option<String>, String> {
         if self.is_ui_test {
             return Ok(Some("sk-demo-not-a-real-key".into()));
         }
-        if let Some(value) = self.secret.load()? {
-            return Ok(Some(value));
+        let mut cache = self.key_cache.lock().unwrap();
+        if let Some(cached) = cache.clone() {
+            return cached;
         }
-        let legacy = load_from_keyring(LEGACY_KEYCHAIN_SERVICE)?;
-        if let Some(legacy_value) = legacy {
-            self.secret.save(&legacy_value)?;
-            return Ok(Some(legacy_value));
-        }
-        Ok(None)
+        let result = self.secret.load();
+        *cache = Some(result.clone());
+        result
     }
 
     pub fn credential_load_error(&self) -> Option<String> {
@@ -197,6 +225,8 @@ impl SettingsStore {
 
         if !self.is_ui_test {
             self.secret.save(&validated.api_key)?;
+            // Keep the in-memory cache in sync with the freshly saved value.
+            *self.key_cache.lock().unwrap() = Some(Ok(Some(validated.api_key.clone())));
         }
         self.persist();
         Ok(())
@@ -242,5 +272,62 @@ impl SettingsStore {
             }
             let _ = std::fs::write(&self.prefs_path, text);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct CountingStore {
+        value: Option<String>,
+        loads: Arc<AtomicUsize>,
+    }
+
+    impl SecretStore for CountingStore {
+        fn load(&self) -> Result<Option<String>, String> {
+            self.loads.fetch_add(1, Ordering::SeqCst);
+            Ok(self.value.clone())
+        }
+
+        fn save(&self, _value: &str) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn load_api_key_caches_the_first_result() {
+        let loads = Arc::new(AtomicUsize::new(0));
+        let secret = CountingStore {
+            value: Some("k".into()),
+            loads: Arc::clone(&loads),
+        };
+        let settings = SettingsStore::in_memory(Box::new(secret), false);
+        assert_eq!(settings.load_api_key().unwrap().as_deref(), Some("k"));
+        assert_eq!(settings.load_api_key().unwrap().as_deref(), Some("k"));
+        // The second call must come from the cache, not the secret store.
+        assert_eq!(loads.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn save_credentials_refreshes_the_cache() {
+        let loads = Arc::new(AtomicUsize::new(0));
+        let secret = CountingStore {
+            value: None,
+            loads: Arc::clone(&loads),
+        };
+        let settings = SettingsStore::in_memory(Box::new(secret), false);
+        assert_eq!(settings.load_api_key().unwrap(), None);
+        settings
+            .save_credentials("llm-workspace", "sk-new-key")
+            .unwrap();
+        // The saved key is served from the refreshed cache without a reload.
+        assert_eq!(
+            settings.load_api_key().unwrap().as_deref(),
+            Some("sk-new-key")
+        );
+        assert_eq!(loads.load(Ordering::SeqCst), 1);
     }
 }
