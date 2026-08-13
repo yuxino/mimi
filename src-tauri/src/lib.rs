@@ -97,7 +97,12 @@ pub fn run() {
                 });
             }
 
-            app.manage(AppState { settings, session });
+            app.manage(AppState {
+                settings,
+                session,
+                resize_drag: std::sync::Mutex::new(None),
+                resize_start: std::sync::Mutex::new(None),
+            });
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -141,6 +146,9 @@ pub fn run() {
             commands::overlay_set_size,
             commands::overlay_set_height,
             commands::overlay_commit_frame,
+            commands::resize_start,
+            commands::resize_move,
+            commands::resize_end,
             commands::tray_panel_hide,
             commands::app_show_settings,
             commands::app_quit,
