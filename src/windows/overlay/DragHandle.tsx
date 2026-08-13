@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { I18N } from "../../lib/i18n";
+import { isTauri } from "../../lib/ipc";
 
 interface DragHandleProps {
   onToggleCollapsed: () => void;
@@ -8,9 +10,10 @@ interface DragHandleProps {
 }
 
 /**
- * The drag handle. In Tauri the `data-tauri-drag-region` attribute enables
- * native window dragging; a double-click collapses/expands the overlay. The
- * hover pill matches `WindowDragArea` (accent 78% / white 28%).
+ * The drag handle, mirroring `WindowDragArea`: a primary-button press drags
+ * the overlay window (via `startDragging`, which works regardless of which
+ * child element the press lands on), and a double-click collapses/expands it.
+ * The hover pill matches the Swift original (accent 78% / white 28%).
  */
 export function DragHandle({
   onToggleCollapsed,
@@ -20,12 +23,27 @@ export function DragHandle({
   const width = compact ? 42 : 120;
   const height = compact ? 30 : 18;
 
+  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !isTauri) return;
+    if (event.detail === 2) {
+      // Second press of a double-click: toggle instead of dragging, exactly
+      // like the Swift `mouseDown` `clickCount == 2` branch.
+      onToggleCollapsed();
+      return;
+    }
+    void getCurrentWindow()
+      .startDragging()
+      .catch(() => {
+        // The overlay may be locked (click-through); ignore drag failures.
+      });
+  };
+
   return (
     <div
-      data-tauri-drag-region
+      onMouseDown={handleMouseDown}
+      onDoubleClick={onToggleCollapsed}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onDoubleClick={onToggleCollapsed}
       title={I18N.overlay.dragTooltip}
       className="relative flex items-center justify-center"
       style={{ width, height }}

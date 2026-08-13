@@ -231,22 +231,18 @@ export function OverlayWindow() {
               label={I18N.overlay.collapseSubtitle}
               onClick={() => void setOverlayCollapsed(true)}
             />
-            {isHovering && (
-              <>
-                {hasContent && (
-                  <ControlButton
-                    icon="eraser"
-                    label={I18N.overlay.clearSubtitles}
-                    onClick={() => void clearSubtitles()}
-                  />
-                )}
-                <ControlButton
-                  icon="gear"
-                  label={I18N.overlay.openSettings}
-                  onClick={() => void showSettings()}
-                />
-              </>
+            {hasContent && (
+              <ControlButton
+                icon="eraser"
+                label={I18N.overlay.clearSubtitles}
+                onClick={() => void clearSubtitles()}
+              />
             )}
+            <ControlButton
+              icon="gear"
+              label={I18N.overlay.openSettings}
+              onClick={() => void showSettings()}
+            />
           </div>
         )}
       </div>
