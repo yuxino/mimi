@@ -8,6 +8,7 @@ import {
   TRANSLATION_MODE_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
   hexToRgba,
+  overlayPhaseColor,
   targetLanguageTranslatesAudio,
   type OverlayActivityPhaseKind,
   type SessionStatus,
@@ -109,7 +110,7 @@ export function LanguagePickerPopover({
         <RecognitionActivityIndicator phase={phase} />
         {(isPaused || isWaitingForFinalTranslation) && (
           <>
-            <span style={{ color: hexToRgba(ACCENT, 0.96) }}>
+            <span style={{ color: overlayPhaseColor(phase, 0.96) }}>
               {isPaused ? I18N.overlay.paused : I18N.overlay.translating}
             </span>
             <span style={{ color: "rgba(255,255,255,0.34)" }}>
