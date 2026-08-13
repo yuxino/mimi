@@ -34,6 +34,9 @@ interface LanguagePickerPopoverProps {
   detectedLanguage: string | null;
   onSwitchSourceLanguage: (language: SourceLanguage) => void;
   onSwitchTranslationMode: (mode: TranslationMode) => void;
+  /** Called when the popover opens/closes so the overlay can keep the
+   * subtitle area height stable while the window is enlarged. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** The top-left language capsule and its source-language / mode popover. */
@@ -47,20 +50,27 @@ export function LanguagePickerPopover({
   detectedLanguage,
   onSwitchSourceLanguage,
   onSwitchTranslationMode,
+  onOpenChange,
 }: LanguagePickerPopoverProps) {
   const [open, setOpen] = useState(false);
   const status = languageStatus(settings, detectedLanguage);
 
   // The popover renders inside the overlay window, which is normally only
   // ~136px tall — too short for the language + mode menu. Enlarge the window
-  // while open and restore the remembered height on close so the menu is not
-  // clipped by the window edge.
+  // while open (enough for the menu below the pinned subtitle area) and
+  // restore the remembered height on close so the menu is never clipped.
   useEffect(() => {
+    onOpenChange?.(open);
     if (!isTauri) return;
-    void overlaySetHeight(open ? 400 : 0).then(() => {
-      if (!open) void overlayCommitFrame().catch(() => {});
-    });
-  }, [open]);
+    if (open) {
+      const currentHeight = window.innerHeight;
+      void overlaySetHeight(Math.max(400, currentHeight + 260));
+    } else {
+      void overlaySetHeight(0).then(() => {
+        void overlayCommitFrame().catch(() => {});
+      });
+    }
+  }, [open, onOpenChange]);
 
   if (status === null) return null;
 
