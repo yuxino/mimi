@@ -79,6 +79,12 @@ export function overlaySetSize(width: number, height: number): Promise<void> {
   return invoke("overlay_set_size", { width, height });
 }
 
+/** Temporarily enlarges the overlay so the language/mode popover fits;
+ * `height <= 0` restores the remembered expanded height. */
+export function overlaySetHeight(height: number): Promise<void> {
+  return invoke("overlay_set_height", { height });
+}
+
 export function trayPanelHide(): Promise<void> {
   return invoke("tray_panel_hide");
 }

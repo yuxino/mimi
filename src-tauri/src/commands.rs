@@ -286,6 +286,17 @@ pub fn overlay_set_size(app: AppHandle, width: f64, height: f64) -> Result<(), S
 }
 
 #[tauri::command]
+pub fn overlay_set_height(app: AppHandle, height: f64) -> Result<(), String> {
+    if height > 0.0 {
+        crate::windows::POPOVER_RESIZING.store(true, std::sync::atomic::Ordering::SeqCst);
+    } else {
+        crate::windows::POPOVER_RESIZING.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+    crate::windows::OverlayWindowManager::set_height_for_popover(&app, height);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn tray_panel_hide(app: AppHandle) -> Result<(), String> {
     TrayPanelManager::hide(&app);
     Ok(())
