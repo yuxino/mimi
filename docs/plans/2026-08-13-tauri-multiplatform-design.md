@@ -105,7 +105,7 @@ Tauri 窗口配置：`transparent + decorations:false + alwaysOnTop + skipTaskba
 
 ### 凭证与偏好
 
-- API Key：`keyring`（macOS Keychain，service=`app.yuxino.mimi.credentials.v2`，account=`dashscope-api-key`；Windows Credential Manager 同名条目）。无明文、无环境变量回退。
+- API Key：`keyring`（macOS Keychain，service=`app.yuxino.mimi.credentials.v3`（应用自建、默认 ACL），account=`dashscope-api-key`；旧 service v2/translation 读成功后一次性迁移到 v3；Windows Credential Manager 同名条目）。无明文、无环境变量回退。
 - Workspace ID / 语言 / 翻译模式 / 字号 / 锁定 / 帧位置：`app_config_dir()/preferences.json`。
 
 ### 权限
