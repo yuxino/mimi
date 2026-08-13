@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /** Tracks the user's reduced-motion preference reactively. */
 export function useReducedMotion(): boolean {
@@ -19,26 +19,24 @@ export function useReducedMotion(): boolean {
 }
 
 /**
- * A monotonically increasing time value (seconds) that advances at ~24fps
- * while `active` is true, matching the Swift `TimelineView` cadence. When
- * inactive it returns 0 so paused/reduced-motion waveforms render statically.
+ * A monotonically increasing time value (seconds) that advances on every
+ * animation frame while `active` is true, matching the Swift `TimelineView`
+ * continuous cadence (the 24fps gate produced visibly uneven bar motion).
+ * When inactive it returns 0 so paused/reduced-motion waveforms render
+ * statically.
  */
 export function useTimelineTime(active: boolean): number {
   const [time, setTime] = useState(0);
-  const lastFrame = useRef(0);
 
   useEffect(() => {
     if (!active) {
-      lastFrame.current = 0;
+      // The hook returns 0 while inactive; nothing to subscribe.
       return;
     }
 
     let raf = 0;
     const loop = (now: number) => {
-      if (now - lastFrame.current >= 1000 / 24) {
-        lastFrame.current = now;
-        setTime(now / 1000);
-      }
+      setTime(now / 1000);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
