@@ -122,6 +122,8 @@ pub fn run() {
                             &state.settings,
                         );
                     }
+                    // Keep the open language/mode menu glued to the capsule.
+                    windows::LanguagePopoverManager::follow_overlay(app);
                 }
                 WindowEvent::Focused(false) if window.label() == "tray-panel" => {
                     windows::TrayPanelManager::hide(app);

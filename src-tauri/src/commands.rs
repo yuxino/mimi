@@ -295,12 +295,12 @@ pub fn overlay_set_size(
     Ok(())
 }
 
-/// Toggles the language/mode popover window under the given anchor point
-/// (the language capsule's bottom-left corner in screen logical
-/// coordinates). The overlay window itself is never resized for the menu.
+/// Toggles the language/mode popover window, anchored under the overlay's
+/// language capsule (the anchor is derived from the overlay window's own
+/// position). The overlay window itself is never resized for the menu.
 #[tauri::command]
-pub fn overlay_popover_toggle(app: AppHandle, anchor_x: f64, anchor_y: f64) -> Result<(), String> {
-    crate::windows::LanguagePopoverManager::toggle(&app, anchor_x, anchor_y);
+pub fn overlay_popover_toggle(app: AppHandle) -> Result<(), String> {
+    crate::windows::LanguagePopoverManager::toggle(&app);
     Ok(())
 }
 
