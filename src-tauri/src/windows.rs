@@ -277,6 +277,17 @@ fn default_overlay_origin(
         if saved.width >= SubtitleOverlayMetrics::MINIMUM_WIDTH
             && saved.height >= SubtitleOverlayMetrics::MINIMUM_HEIGHT
         {
+            // Clamp the restored origin back into the visible screen so a
+            // frame dragged off-screen earlier cannot hide the overlay.
+            if let Some(monitor) = app.primary_monitor().ok().flatten() {
+                let scale = monitor.scale_factor().max(1.0);
+                let monitor_size = monitor.size();
+                let screen_w = monitor_size.width as f64 / scale;
+                let screen_h = monitor_size.height as f64 / scale;
+                let x = saved.x.clamp(0.0, (screen_w - saved.width).max(0.0));
+                let y = saved.y.clamp(0.0, (screen_h - saved.height).max(0.0));
+                return (x, y);
+            }
             return (saved.x, saved.y);
         }
     }

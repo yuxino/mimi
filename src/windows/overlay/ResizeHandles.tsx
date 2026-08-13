@@ -114,6 +114,18 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
 
     const clampedW = clamp(Math.round(width), OVERLAY_MIN_WIDTH, OVERLAY_MAX_WIDTH);
     const clampedH = clamp(Math.round(height), OVERLAY_MIN_HEIGHT, OVERLAY_MAX_HEIGHT);
+    // Recede the dragged edge when the size got clamped, so dragging past the
+    // minimum does not keep drifting the window off-screen.
+    if (drag.region.includes("left")) x += width - clampedW;
+    if (drag.region.includes("top")) y += height - clampedH;
+    // Keep at least a sliver of the window on screen so it cannot get lost.
+    const minVisible = 48;
+    x = clamp(
+      Math.round(x),
+      -clampedW + minVisible,
+      window.screen.width - minVisible,
+    );
+    y = clamp(Math.round(y), 0, Math.max(0, window.screen.availHeight - minVisible));
     onResize(clampedW, clampedH, x, y);
   };
 
