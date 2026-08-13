@@ -1,0 +1,47 @@
+[package]
+name = "mimi"
+version = "1.0.0"
+description = "Live translated subtitles for anything playing on your Mac or PC."
+authors = ["yuxino <nbsawz@gmail.com>"]
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "mimi_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-positioner = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots", "url"] }
+futures-util = { version = "0.3", features = ["sink"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json", "stream"] }
+base64 = "0.23"
+uuid = { version = "1", features = ["v4"] }
+keyring = "4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+regex = "1"
+url = "2"
+cpal = "0.18"
+rubato = "5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+screen-capture-kit = "0.7.1"
+core-media = "0.8"
+core-audio = "0.1"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSError", "NSGeometry", "NSObject"] }
+dispatch2 = "0.3"
+block2 = "0.6"
+
+[dev-dependencies]

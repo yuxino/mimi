@@ -4,3 +4,10 @@ dist/
 work/
 .DS_Store
 *.xcuserstate
+node_modules/
+.npm-cache/
+src-tauri/target/
+src-tauri/gen/
+
+.cargo-home/
+dsh-blue-whale-maid/
