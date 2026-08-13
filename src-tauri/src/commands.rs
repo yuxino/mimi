@@ -332,6 +332,11 @@ pub fn resize_start(
         height: size.height as f64 / scale,
     };
     *state.resize_drag.lock().unwrap() = Some(region);
+    tracing::info!(
+        "resize start region={:?} frame={:?}",
+        region,
+        (frame.x, frame.y, frame.width, frame.height)
+    );
     *state.resize_start.lock().unwrap() = Some((x, y, frame));
     Ok(())
 }
@@ -384,6 +389,10 @@ pub fn resize_move(
 
     let _ = window.set_position(tauri::LogicalPosition::new(frame.x, frame.y));
     let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
+    tracing::info!(
+        "resize move frame={:?}",
+        (frame.x, frame.y, frame.width, frame.height)
+    );
     Ok(())
 }
 
@@ -392,7 +401,13 @@ pub fn resize_move(
 pub fn resize_end(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     *state.resize_drag.lock().unwrap() = None;
     *state.resize_start.lock().unwrap() = None;
-    crate::windows::OverlayWindowManager::commit_frame(&app, &state.settings);
+    tracing::info!("resize end");
+    // While the language/mode popover has enlarged the window, the current
+    // height is temporary; persist only once the popover closes (its close
+    // path commits the frame).
+    if !crate::windows::POPOVER_RESIZING.load(std::sync::atomic::Ordering::SeqCst) {
+        crate::windows::OverlayWindowManager::commit_frame(&app, &state.settings);
+    }
     Ok(())
 }
 
