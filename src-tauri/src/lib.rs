@@ -59,6 +59,41 @@ pub fn run() {
                 });
             }
 
+            // UI diagnostics probe: report the real DOM state inside each
+            // webview a few seconds after launch (content-free: only counts,
+            // colors, and readiness). Helps diagnose blank-window issues that
+            // cannot be seen from outside the webview.
+            {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    for label in ["settings", "overlay", "tray-panel"] {
+                        if let Some(window) = app_handle.get_webview_window(label) {
+                            let script = format!(
+                                r#"
+                                (function() {{
+                                    var state = JSON.stringify({{
+                                        readyState: document.readyState,
+                                        bodyTextLen: document.body.innerText.length,
+                                        bodyBg: getComputedStyle(document.body).backgroundColor,
+                                        rootChildren: document.getElementById('root') ? document.getElementById('root').children.length : -1,
+                                        bodyClass: document.body.className,
+                                        viewport: window.innerWidth + 'x' + window.innerHeight,
+                                        href: location.href
+                                    }});
+                                    window.__TAURI_INTERNALS__.invoke('ui_probe_report', {{
+                                        window: '{label}',
+                                        state: state
+                                    }});
+                                }})()
+                                "#
+                            );
+                            let _ = window.eval(&script);
+                        }
+                    }
+                });
+            }
+
             app.manage(AppState { settings, session });
             Ok(())
         })
@@ -98,6 +133,7 @@ pub fn run() {
             commands::tray_panel_hide,
             commands::app_show_settings,
             commands::app_quit,
+            commands::ui_probe_report,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

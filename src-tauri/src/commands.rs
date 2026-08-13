@@ -17,6 +17,7 @@ pub struct AppState {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsSnapshotPayload {
+    #[serde(rename = "workspaceID")]
     pub workspace_id: String,
     /// Loaded from the OS keychain so the settings field can be prefilled,
     /// mirroring the original app's in-memory binding. Never persisted.
@@ -32,6 +33,39 @@ pub struct SettingsSnapshotPayload {
     pub is_overlay_locked: bool,
     #[serde(rename = "credentialLoadError")]
     pub credential_load_error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The `workspaceID` key must survive camelCase renaming (serde would
+    /// otherwise emit `workspaceId`, which the frontend does not read).
+    #[test]
+    fn settings_payload_uses_workspace_id_key() {
+        let payload = SettingsSnapshotPayload {
+            workspace_id: "ws-abc123".into(),
+            api_key: "sk-demo".into(),
+            has_api_key: true,
+            source_language: SourceLanguage::Japanese,
+            target_language: TargetLanguage::SimplifiedChinese,
+            translation_mode: TranslationMode::HighQuality,
+            font_size: 18.0,
+            is_overlay_locked: false,
+            credential_load_error: None,
+        };
+        let json = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json["workspaceID"], "ws-abc123");
+        assert!(json.get("workspaceId").is_none());
+        assert_eq!(json["apiKey"], "sk-demo");
+        assert_eq!(json["hasAPIKey"], true);
+    }
+
+    #[test]
+    fn settings_draft_reads_workspace_id_key() {
+        let draft: SettingsDraft = serde_json::from_str(r#"{"workspaceID":"ws-abc123"}"#).unwrap();
+        assert_eq!(draft.workspace_id.as_deref(), Some("ws-abc123"));
+    }
 }
 
 impl SettingsSnapshotPayload {
@@ -55,6 +89,7 @@ impl SettingsSnapshotPayload {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SettingsDraft {
+    #[serde(rename = "workspaceID")]
     pub workspace_id: Option<String>,
     pub api_key: Option<String>,
     pub source_language: Option<SourceLanguage>,
@@ -264,5 +299,12 @@ pub fn app_show_settings(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn app_quit(app: AppHandle) -> Result<(), String> {
     app.exit(0);
+    Ok(())
+}
+
+/// Content-free UI diagnostics probe used by the launch-time DOM check.
+#[tauri::command]
+pub fn ui_probe_report(window: String, state: String) -> Result<(), String> {
+    tracing::info!("ui probe window={} state={}", window, state);
     Ok(())
 }
