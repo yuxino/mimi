@@ -51,7 +51,10 @@ export function LanguagePickerPopover({
   const status = languageStatus(settings, detectedLanguage);
   if (status === null) return null;
 
-  const canInteract = statusKind === "listening" && !isPaused;
+  // Interactive whenever not mid-connection: idle (before starting)
+  // and listening both allow quick language/mode switching.
+  const canInteract =
+    !isPaused && statusKind !== "connecting" && statusKind !== "stopping";
   const translatesAudio = targetLanguageTranslatesAudio(settings.targetLanguage);
   const help = translatesAudio
     ? I18N.overlay.pickerHelpTranslating
