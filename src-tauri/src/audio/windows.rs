@@ -206,7 +206,7 @@ fn process_frames_f32(
             Ok(output) => {
                 let data = output.take_data();
                 let out_frames = data.len() / channel_count;
-                let mut per_channel: Vec<Vec<f32>> = (0..channel_count)
+                let per_channel: Vec<Vec<f32>> = (0..channel_count)
                     .map(|channel| {
                         (0..out_frames)
                             .map(|frame| data[frame * channel_count + channel])
@@ -214,7 +214,6 @@ fn process_frames_f32(
                     })
                     .collect();
                 let pcm = PCM16Encoder::encode(&per_channel);
-                per_channel.clear();
                 if !pcm.is_empty() {
                     let _ = audio_tx.send(pcm);
                 }

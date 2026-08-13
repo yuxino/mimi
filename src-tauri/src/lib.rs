@@ -103,7 +103,13 @@ pub fn run() {
             match event {
                 WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == "overlay" => {
                     if let Some(state) = app.try_state::<AppState>() {
-                        windows::OverlayWindowManager::persist_frame(app, &state.settings);
+                        // Do not overwrite the remembered expanded size while
+                        // collapsed: the collapse animation resizes the window
+                        // to 280x54 and would otherwise clobber the frame the
+                        // next expand restores from.
+                        if !state.session.is_overlay_collapsed() {
+                            windows::OverlayWindowManager::persist_frame(app, &state.settings);
+                        }
                     }
                 }
                 WindowEvent::Focused(false) if window.label() == "tray-panel" => {
