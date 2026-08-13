@@ -85,13 +85,16 @@ function renderPath(name: IconName) {
         />
       );
     case "eraser":
-      // SF Symbol "eraser.fill": a solid rounded eraser tilted at 45°.
+      // SF Symbol "eraser.fill": a solid, chunky eraser tilted at 45° with
+      // rounded ends. Drawn as a round-capped thick stroke (the same
+      // geometry as a filled stadium) — near-180° arc pairs are numerically
+      // degenerate and render self-intersecting in some engines.
       return (
         <path
-          d="M7.5 18.5L16.5 9.5"
+          d="M6.5 18.5L17.5 7.5"
           fill="none"
           stroke="currentColor"
-          strokeWidth="4.8"
+          strokeWidth="5.6"
           strokeLinecap="round"
         />
       );
