@@ -94,7 +94,7 @@ impl TranslationClient {
 
     pub async fn finish(&self) {
         match self {
-            Self::LowLatency(client) => client.finish(Duration::from_secs(2)).await,
+            Self::LowLatency(client) => client.finish(Duration::from_secs(1)).await,
             Self::HighQuality(client) => client.finish().await,
         }
     }
