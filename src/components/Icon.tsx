@@ -85,8 +85,15 @@ function renderPath(name: IconName) {
         />
       );
     case "eraser":
+      // SF Symbol "eraser.fill": a solid rounded eraser tilted at 45°.
       return (
-        <path d="M6.4 20.6a1.6 1.6 0 0 1-1.2-2.7l2.3-2.4 7-7a2.1 2.1 0 0 1 3 0l2.9 2.9a2.1 2.1 0 0 1 0 3l-6.7 6.7a1.6 1.6 0 0 1-1.14.47H6.4z" />
+        <path
+          d="M7.5 18.5L16.5 9.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4.8"
+          strokeLinecap="round"
+        />
       );
     case "gear":
       return (
