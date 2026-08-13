@@ -104,60 +104,17 @@ impl OverlayWindowManager {
     }
 
     /// Collapses to 280×54 or expands to the remembered size, mirroring
-    /// `SubtitleOverlayCollapseLayout` plus the frame settle pass.
+    /// `SubtitleOverlayCollapseLayout` plus the Swift `settleFrame` pass. The
+    /// size change is animated in small steps (180 ms easeInOut) so the
+    /// collapse/expand does not visually jump, and the frame is constrained
+    /// back into the visible screen on expand (a wide remembered frame could
+    /// otherwise slide off-screen when the left edge stays fixed).
     pub fn set_collapsed(app: &AppHandle, settings: &SettingsStore, collapsed: bool) {
         let Some(window) = app.get_webview_window("overlay") else {
             return;
         };
-        if collapsed {
-            if let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) {
-                let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-                remember_frame(
-                    settings,
-                    Some(tauri::LogicalPosition::new(
-                        position.x as f64 / scale,
-                        position.y as f64 / scale,
-                    )),
-                    tauri::LogicalSize::new(size.width as f64 / scale, size.height as f64 / scale),
-                );
-            }
-            let _ = window.set_min_size(Some(tauri::LogicalSize::new(
-                SubtitleOverlayMetrics::COLLAPSED_WIDTH,
-                SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
-            )));
-            let _ = window.set_max_size(Some(tauri::LogicalSize::new(
-                SubtitleOverlayMetrics::COLLAPSED_WIDTH,
-                SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
-            )));
-            let _ = window.set_size(tauri::LogicalSize::new(
-                SubtitleOverlayMetrics::COLLAPSED_WIDTH,
-                SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
-            ));
-        } else {
-            let _ = window.set_min_size(Some(tauri::LogicalSize::new(
-                SubtitleOverlayMetrics::MINIMUM_WIDTH,
-                SubtitleOverlayMetrics::MINIMUM_HEIGHT,
-            )));
-            let _ = window.set_max_size(Some(tauri::LogicalSize::new(
-                SubtitleOverlayMetrics::MAXIMUM_WIDTH,
-                SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
-            )));
-            let frame = settings
-                .preferences()
-                .overlay_frame
-                .unwrap_or(OverlayFrame {
-                    x: 0.0,
-                    y: 0.0,
-                    width: SubtitleOverlayMetrics::REFERENCE_WIDTH,
-                    height: SubtitleOverlayMetrics::REFERENCE_HEIGHT,
-                });
-            let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
-        }
+        let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
 
-        // Settle the exact size once animations have had time to finish,
-        // mirroring the Swift `settleFrame` pass: the collapsed bar, or the
-        // remembered expanded size when un-collapsing.
-        let window_settle = window.clone();
         let target = if collapsed {
             tauri::LogicalSize::new(
                 SubtitleOverlayMetrics::COLLAPSED_WIDTH,
@@ -176,9 +133,65 @@ impl OverlayWindowManager {
             });
             tauri::LogicalSize::new(frame.width, frame.height)
         };
+
+        if collapsed {
+            if let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) {
+                remember_frame(
+                    settings,
+                    Some(tauri::LogicalPosition::new(
+                        position.x as f64 / scale,
+                        position.y as f64 / scale,
+                    )),
+                    tauri::LogicalSize::new(size.width as f64 / scale, size.height as f64 / scale),
+                );
+            }
+            let _ = window.set_min_size(Some(tauri::LogicalSize::new(
+                SubtitleOverlayMetrics::COLLAPSED_WIDTH,
+                SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
+            )));
+            let _ = window.set_max_size(Some(tauri::LogicalSize::new(
+                SubtitleOverlayMetrics::COLLAPSED_WIDTH,
+                SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
+            )));
+        } else {
+            let _ = window.set_min_size(Some(tauri::LogicalSize::new(
+                SubtitleOverlayMetrics::MINIMUM_WIDTH,
+                SubtitleOverlayMetrics::MINIMUM_HEIGHT,
+            )));
+            let _ = window.set_max_size(Some(tauri::LogicalSize::new(
+                SubtitleOverlayMetrics::MAXIMUM_WIDTH,
+                SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
+            )));
+            constrain_overlay_origin(&window, target.width, target.height, scale);
+        }
+
+        let start = window.inner_size().unwrap_or_else(|_| {
+            tauri::PhysicalSize::new(
+                (target.width * scale) as u32,
+                (target.height * scale) as u32,
+            )
+        });
+        let end = tauri::PhysicalSize::new(
+            (target.width * scale).round() as u32,
+            (target.height * scale).round() as u32,
+        );
+
+        // Animated size transition (≈180 ms easeInOut, matching the Swift
+        // overlay transition), then a final settle pass.
+        let window_anim = window.clone();
         tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-            let _ = window_settle.set_size(target);
+            const STEPS: usize = 12;
+            for step in 1..=STEPS {
+                tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+                let t = ease_in_out(step as f64 / STEPS as f64);
+                let width = start.width as f64 + (end.width as f64 - start.width as f64) * t;
+                let height = start.height as f64 + (end.height as f64 - start.height as f64) * t;
+                let _ = window_anim.set_size(tauri::PhysicalSize::new(
+                    width.round() as u32,
+                    height.round() as u32,
+                ));
+            }
+            let _ = window_anim.set_size(end);
         });
     }
 
@@ -320,3 +333,34 @@ impl TrayPanelManager {
 
 #[allow(dead_code)]
 fn _unused(_: Arc<()>) {}
+
+/// Clamps the overlay so the whole frame stays on the visible screen when its
+/// size changes (the window left/top edge stays fixed during resize).
+fn constrain_overlay_origin(window: &tauri::WebviewWindow, width: f64, height: f64, scale: f64) {
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+    let Ok(monitor) = window.current_monitor() else {
+        return;
+    };
+    let Some(monitor) = monitor else { return };
+    let monitor_size = monitor.size();
+    let screen_width = monitor_size.width as f64 / scale;
+    let screen_height = monitor_size.height as f64 / scale;
+    let x = position.x as f64 / scale;
+    let y = position.y as f64 / scale;
+    let clamped_x = x.clamp(0.0, (screen_width - width).max(0.0));
+    let clamped_y = y.clamp(0.0, (screen_height - height).max(0.0));
+    if (clamped_x - x).abs() > 0.5 || (clamped_y - y).abs() > 0.5 {
+        let _ = window.set_position(tauri::LogicalPosition::new(clamped_x, clamped_y));
+    }
+}
+
+/// Cubic ease-in-out, matching the Swift `easeInOut(duration: 0.18)` curve.
+fn ease_in_out(t: f64) -> f64 {
+    if t < 0.5 {
+        2.0 * t * t
+    } else {
+        1.0 - ((-2.0 * t + 2.0).powi(2)) / 2.0
+    }
+}
