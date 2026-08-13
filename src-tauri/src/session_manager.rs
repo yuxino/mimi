@@ -373,6 +373,10 @@ impl SessionManager {
             prefs.target_language = target_language;
         });
         self.settings.persist();
+        // Broadcast immediately: the reconnect below can take seconds, and
+        // every window (including the language popover) must see the new
+        // selection right away.
+        self.publish_settings();
         if self.is_paused() {
             *self.active_settings.lock().unwrap() = self.settings.configuration().ok();
             return;
@@ -398,6 +402,8 @@ impl SessionManager {
         self.settings
             .update_preferences(|prefs| prefs.translation_mode = mode);
         self.settings.persist();
+        // Broadcast immediately: the reconnect below can take seconds.
+        self.publish_settings();
         if self.is_paused() {
             *self.active_settings.lock().unwrap() = self.settings.configuration().ok();
             return;
@@ -661,6 +667,15 @@ impl SessionManager {
         let is_active = event.is_active;
         let _ = self.app.emit("session-state", event);
         OverlayWindowManager::sync_visibility(&self.app, is_active);
+    }
+
+    /// Broadcasts the current settings snapshot to every window (used after
+    /// preference writes so no window keeps a stale selection).
+    fn publish_settings(&self) {
+        let _ = self.app.emit(
+            "settings-changed",
+            crate::commands::SettingsSnapshotPayload::from_store(&self.settings),
+        );
     }
 
     fn is_ui_test(&self) -> bool {

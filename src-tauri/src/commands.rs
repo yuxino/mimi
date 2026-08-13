@@ -219,11 +219,10 @@ pub async fn session_switch_source_language(
     state: State<'_, AppState>,
     language: SourceLanguage,
 ) -> Result<(), String> {
+    // The session manager broadcasts settings-changed immediately after the
+    // preference write, so no window keeps a stale selection while the
+    // reconnect (which this awaits) is still in flight.
     state.session.switch_source_language(language).await;
-    let _ = state.session.app_handle().emit(
-        "settings-changed",
-        SettingsSnapshotPayload::from_store(&state.settings),
-    );
     Ok(())
 }
 
@@ -233,10 +232,6 @@ pub async fn session_switch_translation_mode(
     mode: TranslationMode,
 ) -> Result<(), String> {
     state.session.switch_translation_mode(mode).await;
-    let _ = state.session.app_handle().emit(
-        "settings-changed",
-        SettingsSnapshotPayload::from_store(&state.settings),
-    );
     Ok(())
 }
 

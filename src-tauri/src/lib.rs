@@ -227,18 +227,10 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                         }
                     });
                 }
-                "lang-ja" => {
-                    switch_language(app, state, crate::core::models::SourceLanguage::Japanese)
-                }
-                "lang-en" => {
-                    switch_language(app, state, crate::core::models::SourceLanguage::English)
-                }
-                "lang-ko" => {
-                    switch_language(app, state, crate::core::models::SourceLanguage::Korean)
-                }
-                "lang-zh" => {
-                    switch_language(app, state, crate::core::models::SourceLanguage::Chinese)
-                }
+                "lang-ja" => switch_language(state, crate::core::models::SourceLanguage::Japanese),
+                "lang-en" => switch_language(state, crate::core::models::SourceLanguage::English),
+                "lang-ko" => switch_language(state, crate::core::models::SourceLanguage::Korean),
+                "lang-zh" => switch_language(state, crate::core::models::SourceLanguage::Chinese),
                 "lock-position" => {
                     let locked = !state.settings.preferences().overlay_locked;
                     state
@@ -306,18 +298,15 @@ fn state_settings_prepare(session: &SessionManager) {
 }
 
 fn switch_language(
-    app: &tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     language: crate::core::models::SourceLanguage,
 ) {
+    // The session manager broadcasts settings-changed itself, immediately
+    // after the preference write.
     let session = Arc::clone(&state.session);
     tauri::async_runtime::spawn(async move {
         session.switch_source_language(language).await;
     });
-    let _ = app.emit(
-        "settings-changed",
-        commands::SettingsSnapshotPayload::from_store(&state.settings),
-    );
 }
 
 /// Registers the global start/stop shortcut — ⌘⇧Space on macOS (matching the
