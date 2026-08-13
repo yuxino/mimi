@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+#[derive(Clone)]
 pub enum TranslationClient {
     LowLatency(LiveTranslateClient),
     HighQuality(HighQualityTranslationClient),
@@ -74,8 +75,13 @@ impl TranslationClient {
 
     pub async fn send_audio(&self, pcm_data: &[u8]) -> Result<(), ConnectError> {
         match self {
-            Self::LowLatency(client) => client.send_audio(pcm_data).await.map_err(ConnectError::Live),
-            Self::HighQuality(client) => client.send_audio(pcm_data).await.map_err(ConnectError::MT),
+            Self::LowLatency(client) => client
+                .send_audio(pcm_data)
+                .await
+                .map_err(ConnectError::Live),
+            Self::HighQuality(client) => {
+                client.send_audio(pcm_data).await.map_err(ConnectError::MT)
+            }
         }
     }
 

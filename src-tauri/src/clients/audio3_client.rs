@@ -3,8 +3,7 @@
 
 use crate::core::models::SourceLanguage;
 use crate::core::protocols::audio3::{
-    Audio3ASREndpoint, Audio3ASRRequestEncoder, Audio3ASRServerEvent,
-    Audio3ASRServerEventDecoder,
+    Audio3ASREndpoint, Audio3ASRRequestEncoder, Audio3ASRServerEvent, Audio3ASRServerEventDecoder,
 };
 use crate::core::protocols::live_translate::LiveTranslateServerEvent;
 use futures_util::{SinkExt, StreamExt};
@@ -104,10 +103,9 @@ impl Audio3ASRClient {
             "Authorization",
             HeaderValue::from_str(&auth).map_err(|_| Audio3ASRClientError::MissingAPIKey)?,
         );
-        request.headers_mut().insert(
-            "User-Agent",
-            HeaderValue::from_static("mimi-tauri"),
-        );
+        request
+            .headers_mut()
+            .insert("User-Agent", HeaderValue::from_static("mimi-tauri"));
 
         let (socket, _response) = connect_async(request)
             .await
@@ -156,48 +154,44 @@ impl Audio3ASRClient {
                     }
                 };
                 {
-                        let event = match Audio3ASRServerEventDecoder::decode(&text) {
-                            Ok(event) => event,
-                            Err(error) => {
-                                *inner.terminal_error.lock().await =
-                                    Some(error.to_string());
-                                if events
-                                    .send(LiveTranslateServerEvent::Error {
-                                        code: "transport_error".into(),
-                                        message: error.to_string(),
-                                    })
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                                return;
+                    let event = match Audio3ASRServerEventDecoder::decode(&text) {
+                        Ok(event) => event,
+                        Err(error) => {
+                            *inner.terminal_error.lock().await = Some(error.to_string());
+                            if events
+                                .send(LiveTranslateServerEvent::Error {
+                                    code: "transport_error".into(),
+                                    message: error.to_string(),
+                                })
+                                .is_err()
+                            {
+                                break;
                             }
-                        };
-                        match &event {
-                            Audio3ASRServerEvent::TaskStarted => {
-                                inner.task_started.store(true, Ordering::SeqCst);
-                            }
-                            Audio3ASRServerEvent::TaskFinished => {
-                                inner.task_finished.store(true, Ordering::SeqCst);
-                            }
-                            Audio3ASRServerEvent::TaskFailed { code, message } => {
-                                *inner.terminal_error.lock().await =
-                                    Some(message.clone());
-                                let _ = code;
-                            }
-                            _ => {}
-                        }
-                        let subtitle_event = event.subtitle_event(source_language);
-                        let is_task_failed = matches!(
-                            subtitle_event,
-                            LiveTranslateServerEvent::Error { .. }
-                        );
-                        if events.send(subtitle_event).is_err() {
-                            break;
-                        }
-                        if is_task_failed {
                             return;
                         }
+                    };
+                    match &event {
+                        Audio3ASRServerEvent::TaskStarted => {
+                            inner.task_started.store(true, Ordering::SeqCst);
+                        }
+                        Audio3ASRServerEvent::TaskFinished => {
+                            inner.task_finished.store(true, Ordering::SeqCst);
+                        }
+                        Audio3ASRServerEvent::TaskFailed { code, message } => {
+                            *inner.terminal_error.lock().await = Some(message.clone());
+                            let _ = code;
+                        }
+                        _ => {}
+                    }
+                    let subtitle_event = event.subtitle_event(source_language);
+                    let is_task_failed =
+                        matches!(subtitle_event, LiveTranslateServerEvent::Error { .. });
+                    if events.send(subtitle_event).is_err() {
+                        break;
+                    }
+                    if is_task_failed {
+                        return;
+                    }
                 }
             }
         });
@@ -206,9 +200,11 @@ impl Audio3ASRClient {
         let run_task = Audio3ASRRequestEncoder::run_task(
             task_id,
             self.source_language,
-            Some(crate::core::protocols::audio3::Audio3ASRContext::audiovisual_dialogue(
-                self.source_language,
-            )),
+            Some(
+                crate::core::protocols::audio3::Audio3ASRContext::audiovisual_dialogue(
+                    self.source_language,
+                ),
+            ),
         )
         .map_err(|_| Audio3ASRClientError::NotConnected)?;
         self.send_text(run_task.to_string()).await?;
@@ -238,11 +234,9 @@ impl Audio3ASRClient {
             let Some(sink) = sink.as_mut() else {
                 return Err(Audio3ASRClientError::NotConnected);
             };
-            sink.send(Message::Ping(
-                tokio_tungstenite::tungstenite::Bytes::new(),
-            ))
-            .await
-            .map_err(|_| Audio3ASRClientError::NotConnected)?;
+            sink.send(Message::Ping(tokio_tungstenite::tungstenite::Bytes::new()))
+                .await
+                .map_err(|_| Audio3ASRClientError::NotConnected)?;
         }
         tokio::time::timeout(timeout, self.inner.pong_notify.notified())
             .await

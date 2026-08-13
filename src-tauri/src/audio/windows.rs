@@ -16,6 +16,7 @@ use tokio::sync::mpsc;
 const TARGET_SAMPLE_RATE: f64 = 16_000.0;
 const CHUNK_SIZE_IN: usize = 1024;
 
+#[derive(Clone)]
 pub struct WindowsSystemAudioCapture {
     stream: Mutex<Option<cpal::Stream>>,
     active: Arc<AtomicBool>,
@@ -83,9 +84,8 @@ impl WindowsSystemAudioCapture {
                             );
                         },
                         move |error| {
-                            let _ = error_tx_for_cb.send(format!(
-                                "System audio capture stopped: {error}"
-                            ));
+                            let _ = error_tx_for_cb
+                                .send(format!("System audio capture stopped: {error}"));
                         },
                         None,
                     )
@@ -115,9 +115,8 @@ impl WindowsSystemAudioCapture {
                             );
                         },
                         move |error| {
-                            let _ = error_tx_for_cb.send(format!(
-                                "System audio capture stopped: {error}"
-                            ));
+                            let _ = error_tx_for_cb
+                                .send(format!("System audio capture stopped: {error}"));
                         },
                         None,
                     )

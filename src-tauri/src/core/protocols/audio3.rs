@@ -134,8 +134,8 @@ pub enum Audio3ASRServerEventDecoder {}
 
 impl Audio3ASRServerEventDecoder {
     pub fn decode(text: &str) -> Result<Audio3ASRServerEvent, LiveTranslateProtocolError> {
-        let json: Value = serde_json::from_str(text)
-            .map_err(|_| LiveTranslateProtocolError::InvalidJSON)?;
+        let json: Value =
+            serde_json::from_str(text).map_err(|_| LiveTranslateProtocolError::InvalidJSON)?;
         let header = json
             .get("header")
             .ok_or(LiveTranslateProtocolError::InvalidJSON)?;
@@ -274,7 +274,10 @@ mod tests {
 
         assert_eq!(header["action"], "finish-task");
         assert_eq!(header["task_id"], "task-finish");
-        assert!(payload["input"].is_object(), "finish-task requires an empty input object");
+        assert!(
+            payload["input"].is_object(),
+            "finish-task requires an empty input object"
+        );
     }
 
     #[test]
@@ -306,9 +309,10 @@ mod tests {
 
     #[test]
     fn lifecycle_and_failures_decode() {
-        let started =
-            Audio3ASRServerEventDecoder::decode(r#"{"header":{"event":"task-started"},"payload":{}}"#)
-                .unwrap();
+        let started = Audio3ASRServerEventDecoder::decode(
+            r#"{"header":{"event":"task-started"},"payload":{}}"#,
+        )
+        .unwrap();
         let failed = Audio3ASRServerEventDecoder::decode(
             r#"{"header":{"event":"task-failed","error_code":"CLIENT_ERROR","error_message":"Bad request"},"payload":{}}"#,
         )
@@ -350,6 +354,9 @@ mod tests {
             Audio3ASRContext::audiovisual_dialogue(SourceLanguage::Japanese),
             "日本語の映像作品の自然な口語会話。感動詞、間投詞、息遣い、喘ぎ声、うめき声、泣き声、笑い声などの発声を含む。"
         );
-        assert!(Audio3ASRContext::audiovisual_dialogue(SourceLanguage::Chinese).contains("中文影视口语对白"));
+        assert!(
+            Audio3ASRContext::audiovisual_dialogue(SourceLanguage::Chinese)
+                .contains("中文影视口语对白")
+        );
     }
 }

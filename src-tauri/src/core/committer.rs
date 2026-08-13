@@ -58,9 +58,11 @@ impl ASRDraftCommitter {
             return None;
         }
         let tail_len = tail.chars().count();
-        self.committed_text = self.latest_draft.chars().take(
-            self.latest_draft.chars().count().saturating_sub(tail_len),
-        ).collect();
+        self.committed_text = self
+            .latest_draft
+            .chars()
+            .take(self.latest_draft.chars().count().saturating_sub(tail_len))
+            .collect();
         self.last_committed_chunk = complete.clone();
         self.last_commit_was_provisional = true;
         Some(complete)
@@ -158,7 +160,10 @@ impl ASRDraftCommitter {
             // let server finals (not local commits) advance the boundary.
             return text.to_string();
         }
-        let suffix: String = text.chars().skip(self.committed_text.chars().count()).collect();
+        let suffix: String = text
+            .chars()
+            .skip(self.committed_text.chars().count())
+            .collect();
         suffix.trim().to_string()
     }
 
@@ -197,7 +202,8 @@ impl ASRDraftCommitter {
     /// Text is meaningful when it contains at least one character that is not
     /// whitespace and not punctuation (mirrors the Swift `isMeaningful`).
     fn is_meaningful(text: &str) -> bool {
-        text.chars().any(|c| !c.is_whitespace() && !is_punctuation(c))
+        text.chars()
+            .any(|c| !c.is_whitespace() && !is_punctuation(c))
     }
 }
 
@@ -207,7 +213,22 @@ fn is_punctuation(c: char) -> bool {
     // punctuation, so include all Unicode punctuation categories.
     !c.is_alphanumeric() && !c.is_whitespace() && !c.is_control()
         || c.is_ascii_punctuation()
-        || matches!(c, '。' | '、' | '！' | '？' | '「' | '」' | '『' | '』' | '（' | '）' | '・' | '…' | '—' | '–')
+        || matches!(
+            c,
+            '。' | '、'
+                | '！'
+                | '？'
+                | '「'
+                | '」'
+                | '『'
+                | '』'
+                | '（'
+                | '）'
+                | '・'
+                | '…'
+                | '—'
+                | '–'
+        )
 }
 
 impl Default for ASRDraftCommitter {
@@ -264,7 +285,10 @@ mod tests {
     fn splits_multiple_sentences_per_draft() {
         let mut committer = ASRDraftCommitter::default();
 
-        assert_eq!(committer.update_draft("あ！え？うん。まだ"), "あ！え？うん。まだ");
+        assert_eq!(
+            committer.update_draft("あ！え？うん。まだ"),
+            "あ！え？うん。まだ"
+        );
         assert_eq!(
             committer.commit_complete_sentences().as_deref(),
             Some("あ！え？うん。")
@@ -303,7 +327,10 @@ mod tests {
         );
         // The same sentence arriving later as a server final is already
         // committed verbatim, so it must be dropped.
-        assert_eq!(committer.finish_sentence("こんにちは。"), FinishOutcome::None);
+        assert_eq!(
+            committer.finish_sentence("こんにちは。"),
+            FinishOutcome::None
+        );
         // A genuinely new final is committed.
         assert_eq!(
             committer.finish_sentence("今日は天気がいいですね。"),
