@@ -99,13 +99,21 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
   return (
     <div
       ref={rootRef}
+      // The root must never swallow pointer events: it overlays the whole
+      // window and would otherwise block the drag handle and the control
+      // buttons beneath it. Only the eight edge handles stay interactive.
       className="absolute inset-0"
-      style={{ pointerEvents: disabled ? "none" : "auto" }}
+      style={{ pointerEvents: "none" }}
     >
       {HANDLES.map(({ region, style }) => (
         <div
           key={region}
-          style={{ position: "absolute", cursor: CURSORS[region], ...style }}
+          style={{
+            position: "absolute",
+            cursor: CURSORS[region],
+            pointerEvents: disabled ? "none" : "auto",
+            ...style,
+          }}
           onPointerDown={(event) => start(region, event)}
           onPointerMove={move}
           onPointerUp={end}
