@@ -46,7 +46,7 @@ impl Default for Preferences {
             workspace_id: String::new(),
             source_language: SourceLanguage::Automatic,
             target_language: TargetLanguage::SimplifiedChinese,
-            translation_mode: TranslationMode::HighQuality,
+            translation_mode: TranslationMode::LowLatency,
             font_size: DEFAULT_FONT_SIZE,
             overlay_locked: false,
             overlay_frame: None,

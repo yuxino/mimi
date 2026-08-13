@@ -32,6 +32,7 @@ pub fn run() {
         .setup(|app| {
             tracing::info!("mimi starting");
 
+
             let app_handle = app.handle().clone();
             let is_ui_test = std::env::var("MIMI_UI_TEST").as_deref() == Ok("1");
             let settings = Arc::new(SettingsStore::load(
