@@ -39,6 +39,8 @@ export function OverlayWindow() {
 
   const [isHovering, setIsHovering] = useState(false);
   const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [contentHeight, setContentHeight] = useState(136);
   // Keep the drag handle clear of the language capsule (~122px) and the
   // control buttons (~140px) when the window is narrow.
   const windowWidth =
@@ -145,7 +147,7 @@ export function OverlayWindow() {
 
         <div className="relative flex h-full flex-col" style={{ padding: 5 }}>
           <div
-            className="flex w-full items-end justify-center"
+            className="absolute inset-x-0 top-0 flex items-end justify-center"
             style={{
               height: session.isActive ? 38 : 24,
               // Always-visible drag affordance: dimmed while idle, full on
@@ -161,6 +163,13 @@ export function OverlayWindow() {
             />
           </div>
 
+          <div
+            className="flex min-h-0 flex-col"
+            style={{
+              height: popoverOpen ? contentHeight : "100%",
+              marginTop: popoverOpen ? "auto" : 0,
+            }}
+          >
           {rows.length === 0 ? (
             <div
               className="flex flex-1 flex-col items-center justify-center"
@@ -210,6 +219,7 @@ export function OverlayWindow() {
               <span className="flex-1" />
             </div>
           )}
+          </div>
         </div>
 
         {/* Quick language / translation-mode switcher. Always visible so the
@@ -231,6 +241,10 @@ export function OverlayWindow() {
               onSwitchTranslationMode={(mode) =>
                 void switchTranslationMode(mode)
               }
+              onOpenChange={(open) => {
+                setPopoverOpen(open);
+                if (open) setContentHeight(window.innerHeight);
+              }}
             />
           </div>
         )}
