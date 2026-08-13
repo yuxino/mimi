@@ -48,6 +48,7 @@ pub fn run() {
             ));
             windows::OverlayWindowManager::ensure_overlay(&app_handle, &overlay);
             windows::TrayPanelManager::ensure(&app_handle);
+            windows::LanguagePopoverManager::ensure(&app_handle);
 
             setup_tray(&app_handle)?;
             setup_global_shortcut(&app_handle, Arc::clone(&session))?;
@@ -125,6 +126,13 @@ pub fn run() {
                 WindowEvent::Focused(false) if window.label() == "tray-panel" => {
                     windows::TrayPanelManager::hide(app);
                 }
+                // The language/mode menu closes when focus moves elsewhere
+                // (mirrors the Swift NSPopover's transient behavior). The
+                // delayed hide lets a capsule click that stole focus re-open
+                // or toggle the menu without a hide/show flicker.
+                WindowEvent::Focused(false) if window.label() == "language-popover" => {
+                    windows::LanguagePopoverManager::schedule_hide(app);
+                }
                 WindowEvent::CloseRequested { api, .. }
                     if window.label() == "overlay" || window.label() == "tray-panel" =>
                 {
@@ -147,9 +155,10 @@ pub fn run() {
             commands::overlay_set_locked,
             commands::overlay_show,
             commands::overlay_set_size,
-            commands::overlay_popover_open,
-            commands::overlay_popover_close,
+            commands::overlay_popover_toggle,
+            commands::overlay_popover_hide,
             commands::overlay_commit_frame,
+            commands::session_get_state,
             commands::resize_start,
             commands::resize_move,
             commands::resize_end,

@@ -2,7 +2,7 @@
 //! documented in docs/plans/2026-08-13-tauri-multiplatform.md.
 
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
-use crate::session_manager::SessionManager;
+use crate::session_manager::{SessionManager, SessionStateEvent};
 use crate::settings_store::SettingsStore;
 use crate::windows::{OverlayWindowManager, TrayPanelManager};
 use serde::{Deserialize, Serialize};
@@ -248,6 +248,9 @@ pub fn overlay_set_collapsed(
 ) -> Result<(), String> {
     state.session.set_overlay_collapsed(collapsed);
     OverlayWindowManager::set_collapsed(&app, &state.overlay, collapsed);
+    // The language/mode menu cannot stay anchored to a capsule that is no
+    // longer visible.
+    crate::windows::LanguagePopoverManager::hide(&app);
     // The frontend's collapse UI state only updates through the
     // session-state event; without this the overlay renders the wrong
     // layout after collapsing/expanding.
@@ -292,25 +295,27 @@ pub fn overlay_set_size(
     Ok(())
 }
 
-/// Opens the language/mode popover: the overlay is temporarily enlarged by
-/// `extra_height` logical px (bottom edge fixed) so the menu fits. The
-/// remembered expanded frame is never modified.
+/// Toggles the language/mode popover window under the given anchor point
+/// (the language capsule's bottom-left corner in screen logical
+/// coordinates). The overlay window itself is never resized for the menu.
 #[tauri::command]
-pub fn overlay_popover_open(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    extra_height: f64,
-) -> Result<(), String> {
-    OverlayWindowManager::open_popover(&app, &state.overlay, extra_height);
+pub fn overlay_popover_toggle(app: AppHandle, anchor_x: f64, anchor_y: f64) -> Result<(), String> {
+    crate::windows::LanguagePopoverManager::toggle(&app, anchor_x, anchor_y);
     Ok(())
 }
 
-/// Closes the popover and restores the remembered expanded geometry. A no-op
-/// unless the popover is open, so unmount cleanup and collapse races are safe.
+/// Hides the language/mode popover window (no-op when already hidden).
 #[tauri::command]
-pub fn overlay_popover_close(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    OverlayWindowManager::close_popover(&app, &state.overlay);
+pub fn overlay_popover_hide(app: AppHandle) -> Result<(), String> {
+    crate::windows::LanguagePopoverManager::hide(&app);
     Ok(())
+}
+
+/// The current session state snapshot, for windows that boot after the last
+/// broadcast (e.g. the language popover).
+#[tauri::command]
+pub fn session_get_state(state: State<'_, AppState>) -> Result<SessionStateEvent, String> {
+    Ok(state.session.current_state_event())
 }
 
 #[tauri::command]

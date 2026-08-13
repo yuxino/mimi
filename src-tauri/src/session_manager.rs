@@ -645,12 +645,19 @@ impl SessionManager {
 
     // MARK: state publishing
 
-    /// Broadcasts the current session state to the frontend.
-    pub fn publish_state(&self) {
+    /// Builds the current session state snapshot without emitting it (used by
+    /// windows that boot after the last broadcast, e.g. the language popover).
+    pub fn current_state_event(&self) -> SessionStateEvent {
         let state = self.controller.lock().unwrap().state.clone();
         let mut event = SessionStateEvent::from(&state);
         event.is_paused = self.is_paused();
         event.is_overlay_collapsed = self.is_overlay_collapsed();
+        event
+    }
+
+    /// Broadcasts the current session state to the frontend.
+    pub fn publish_state(&self) {
+        let event = self.current_state_event();
         let is_active = event.is_active;
         let _ = self.app.emit("session-state", event);
         OverlayWindowManager::sync_visibility(&self.app, is_active);

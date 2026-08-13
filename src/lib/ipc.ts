@@ -79,17 +79,25 @@ export function overlaySetSize(width: number, height: number): Promise<void> {
   return invoke("overlay_set_size", { width, height });
 }
 
-/** Opens the language/mode popover: the overlay window is temporarily
- * enlarged by `extraHeight` logical px (bottom edge fixed) so the menu fits.
- * The remembered expanded frame is never modified. */
-export function overlayPopoverOpen(extraHeight: number): Promise<void> {
-  return invoke("overlay_popover_open", { extraHeight });
+/** Toggles the language/mode popover window under the given anchor point
+ * (the language capsule's bottom-left corner in screen logical coordinates).
+ * The overlay window itself is never resized for the menu. */
+export function overlayPopoverToggle(
+  anchorX: number,
+  anchorY: number,
+): Promise<void> {
+  return invoke("overlay_popover_toggle", { anchorX, anchorY });
 }
 
-/** Closes the popover and restores the remembered expanded geometry. Safe to
- * call at any time (no-op unless the popover is open). */
-export function overlayPopoverClose(): Promise<void> {
-  return invoke("overlay_popover_close");
+/** Hides the language/mode popover window. */
+export function overlayPopoverHide(): Promise<void> {
+  return invoke("overlay_popover_hide");
+}
+
+/** Fetches the current session state snapshot (for windows that boot after
+ * the last session-state broadcast). */
+export function sessionGetState(): Promise<SessionStateEvent> {
+  return invoke<SessionStateEvent>("session_get_state");
 }
 
 /** Persists the current overlay frame (explicit commit points, e.g. the end
