@@ -46,13 +46,14 @@ impl SubtitleOverlayMetrics {
     pub const COLLAPSED_HEIGHT: f64 = 54.0;
 }
 
-/// The overlay's visual state. `Popover` temporarily enlarges the window so
-/// the language/mode menu fits; the user frame is never modified by it.
+/// The overlay's visual state. The language/mode menu lives in its own
+/// window (see [`LanguagePopoverManager`], mirroring the Swift NSPopover), so
+/// the overlay window has no menu-related state and its height is never
+/// affected by the menu.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OverlayMode {
     Expanded,
     Collapsed,
-    Popover { extra: f64 },
 }
 
 /// All overlay geometry state: the single source of truth for the overlay
@@ -118,11 +119,7 @@ struct WindowGeometry {
 
 /// Pure derivation of the window geometry from the overlay state. `screen` is
 /// the logical size of the screen the overlay currently sits on.
-fn geometry_for(
-    mode: OverlayMode,
-    user_frame: &OverlayFrame,
-    screen: (f64, f64),
-) -> WindowGeometry {
+fn geometry_for(mode: OverlayMode, user_frame: &OverlayFrame) -> WindowGeometry {
     let min = (
         SubtitleOverlayMetrics::MINIMUM_WIDTH,
         SubtitleOverlayMetrics::MINIMUM_HEIGHT,
@@ -155,25 +152,6 @@ fn geometry_for(
                 SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
             ),
         },
-        OverlayMode::Popover { extra } => {
-            let total_height =
-                (user_frame.height + extra).clamp(SubtitleOverlayMetrics::MINIMUM_HEIGHT, screen.1);
-            // Keep the window's bottom edge fixed so the subtitle content
-            // stays put on screen while the menu occupies the new space at
-            // the top. If there is no room above (window near the screen
-            // top), y clamps to 0 and the bottom edge moves down.
-            let y = (user_frame.y + user_frame.height - total_height).max(0.0);
-            WindowGeometry {
-                x: user_frame.x,
-                y,
-                width: user_frame.width,
-                height: total_height,
-                min,
-                // The popover enlargement is allowed to exceed the user max
-                // height, up to the full screen, so the menu never clips.
-                max: (SubtitleOverlayMetrics::MAXIMUM_WIDTH, screen.1),
-            }
-        }
     }
 }
 
@@ -248,9 +226,7 @@ impl OverlayWindowManager {
         let Some(window) = app.get_webview_window("overlay") else {
             return;
         };
-        let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-        let screen = current_screen_logical(app, &window, scale);
-        let geometry = geometry_for(state.mode, &state.user_frame, screen);
+        let geometry = geometry_for(state.mode, &state.user_frame);
         let _ = window.set_min_size(Some(tauri::LogicalSize::new(
             geometry.min.0,
             geometry.min.1,
@@ -260,6 +236,7 @@ impl OverlayWindowManager {
             geometry.max.1,
         )));
         if animate {
+            let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
             let _ = window.set_position(tauri::LogicalPosition::new(geometry.x, geometry.y));
             animate_resize(&window, scale, geometry.width, geometry.height);
         } else {
@@ -298,36 +275,8 @@ impl OverlayWindowManager {
         Self::apply(app, &state, true);
     }
 
-    /// Temporarily enlarges the window by `extra` logical px (menu height) so
-    /// the language/mode popover fits. The user frame is untouched; closing
-    /// the popover restores the expanded geometry exactly.
-    pub fn open_popover(app: &AppHandle, state: &Arc<std::sync::Mutex<OverlayState>>, extra: f64) {
-        let mut state = state.lock().unwrap();
-        if state.mode != OverlayMode::Expanded {
-            return;
-        }
-        // Fold any in-flight drag/move into the user frame first.
-        sync_user_frame_from_window(app, &mut state);
-        state.mode = OverlayMode::Popover {
-            extra: extra.max(0.0),
-        };
-        Self::apply(app, &state, false);
-    }
-
-    /// Restores the remembered expanded geometry. A no-op unless the popover
-    /// is actually open, so stray close calls (unmount cleanup, races with
-    /// collapse) can never corrupt the window state.
-    pub fn close_popover(app: &AppHandle, state: &Arc<std::sync::Mutex<OverlayState>>) {
-        let mut state = state.lock().unwrap();
-        if !matches!(state.mode, OverlayMode::Popover { .. }) {
-            return;
-        }
-        state.mode = OverlayMode::Expanded;
-        Self::apply(app, &state, false);
-    }
-
     /// Persists the current window frame as the user frame (explicit commit
-    /// points: end of a resize drag). Never persists the popover geometry.
+    /// points: end of a resize drag).
     pub fn commit(
         app: &AppHandle,
         state: &Arc<std::sync::Mutex<OverlayState>>,
@@ -344,7 +293,7 @@ impl OverlayWindowManager {
     /// Handles OS Moved/Resized events for the overlay. Never persists
     /// immediately: a debounced task (350 ms after the last event) folds the
     /// final window frame into the user frame, so native drags are remembered
-    /// but transient animation steps and the popover enlargement are not.
+    /// but transient animation steps are not.
     pub fn on_geometry_event(
         app: &AppHandle,
         state: &Arc<std::sync::Mutex<OverlayState>>,
@@ -353,10 +302,6 @@ impl OverlayWindowManager {
         let now = std::time::Instant::now();
         {
             let mut state = state.lock().unwrap();
-            if matches!(state.mode, OverlayMode::Popover { .. }) {
-                // Temporary popover enlargement must never be persisted.
-                return;
-            }
             state.last_geometry_event = Some(now);
         }
         let app = app.clone();
@@ -380,7 +325,6 @@ impl OverlayWindowManager {
                     sync_position_from_window(&app, &mut state.user_frame);
                     persist_user_frame(&settings, &state.user_frame);
                 }
-                OverlayMode::Popover { .. } => {}
             }
         });
     }
@@ -664,6 +608,115 @@ fn default_overlay_origin(
     (0.0, 0.0)
 }
 
+/// The language/mode picker: a separate frameless window shown under the
+/// overlay's language capsule, mirroring the Swift `NSPopover`. Because the
+/// menu lives in its own window, the overlay's size is never affected by
+/// opening or using the menu.
+pub struct LanguagePopoverManager;
+
+/// Bumped on every show/hide decision so a pending delayed hide (scheduled
+/// when the popover loses focus) never fights a newer open/toggle.
+static POPOVER_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+impl LanguagePopoverManager {
+    /// Window size: the 184px menu panel plus 8px shadow margins.
+    pub const WIDTH: f64 = 200.0;
+    pub const HEIGHT: f64 = 266.0;
+    /// Height of the language capsule the menu anchors below (for flipping).
+    pub const CAPSULE_HEIGHT: f64 = 20.0;
+
+    pub fn ensure(app: &AppHandle) {
+        if app.get_webview_window("language-popover").is_some() {
+            return;
+        }
+        let builder = WebviewWindowBuilder::new(
+            app,
+            "language-popover",
+            WebviewUrl::App("index.html".into()),
+        )
+        .title("mimi")
+        .inner_size(Self::WIDTH, Self::HEIGHT)
+        .resizable(false)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .visible(false);
+
+        match builder.build() {
+            Ok(_) => pipeline_log!("language popover created"),
+            Err(error) => pipeline_log!("language popover failed error={}", error),
+        }
+    }
+
+    /// Shows the popover under the given anchor point (the language capsule's
+    /// bottom-left corner in screen logical coordinates). Flips above the
+    /// anchor when the menu would run past the bottom screen edge.
+    pub fn show_at(app: &AppHandle, anchor_x: f64, anchor_y: f64) {
+        POPOVER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let Some(window) = app.get_webview_window("language-popover") else {
+            return;
+        };
+        let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+        let screen = current_screen_logical(app, &window, scale);
+        let y = language_popover_y(anchor_y, Self::HEIGHT, screen);
+        let _ = window.set_position(tauri::LogicalPosition::new(anchor_x, y));
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+
+    /// Toggles the popover at the anchor: open when closed, close when open.
+    /// The delayed hide (scheduled on focus loss) makes the "close" click
+    /// race-free: the mousedown steals focus and schedules a hide, then the
+    /// click toggles the still-visible window closed before the delay fires.
+    pub fn toggle(app: &AppHandle, anchor_x: f64, anchor_y: f64) {
+        let visible = app
+            .get_webview_window("language-popover")
+            .and_then(|window| window.is_visible().ok())
+            .unwrap_or(false);
+        if visible {
+            Self::hide(app);
+        } else {
+            Self::show_at(app, anchor_x, anchor_y);
+        }
+    }
+
+    pub fn hide(app: &AppHandle) {
+        POPOVER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if let Some(window) = app.get_webview_window("language-popover") {
+            let _ = window.hide();
+        }
+    }
+
+    /// Hides the popover shortly after focus loss, unless a newer show/toggle
+    /// happened in between (e.g. the capsule click that stole focus was meant
+    /// to keep the menu open at the new position).
+    pub fn schedule_hide(app: &AppHandle) {
+        let generation = POPOVER_GENERATION.load(std::sync::atomic::Ordering::SeqCst);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(180)).await;
+            if POPOVER_GENERATION.load(std::sync::atomic::Ordering::SeqCst) != generation {
+                return;
+            }
+            Self::hide(&app);
+        });
+    }
+}
+
+/// Y origin for the language popover window: below the anchor unless the
+/// menu would run past the bottom screen edge, in which case it opens above
+/// the anchor, clear of the capsule.
+fn language_popover_y(anchor_y: f64, menu_height: f64, screen: (f64, f64)) -> f64 {
+    let margin = 8.0;
+    if anchor_y + menu_height > screen.1 - margin {
+        (anchor_y - LanguagePopoverManager::CAPSULE_HEIGHT - menu_height).max(0.0)
+    } else {
+        anchor_y
+    }
+}
+
 /// Tray popup panel: a small frameless always-on-top window shown under the
 /// tray icon, mirroring the SwiftUI MenuBarExtra window style.
 pub struct TrayPanelManager;
@@ -732,11 +785,7 @@ mod geometry_tests {
 
     #[test]
     fn expanded_passes_user_frame_through() {
-        let geometry = geometry_for(
-            OverlayMode::Expanded,
-            &frame(400.0, 300.0, 640.0, 136.0),
-            SCREEN,
-        );
+        let geometry = geometry_for(OverlayMode::Expanded, &frame(400.0, 300.0, 640.0, 136.0));
         assert_eq!(
             (geometry.x, geometry.y, geometry.width, geometry.height),
             (400.0, 300.0, 640.0, 136.0)
@@ -747,11 +796,7 @@ mod geometry_tests {
 
     #[test]
     fn collapsed_is_fixed_size_at_user_origin() {
-        let geometry = geometry_for(
-            OverlayMode::Collapsed,
-            &frame(400.0, 300.0, 640.0, 136.0),
-            SCREEN,
-        );
+        let geometry = geometry_for(OverlayMode::Collapsed, &frame(400.0, 300.0, 640.0, 136.0));
         assert_eq!(
             (geometry.x, geometry.y, geometry.width, geometry.height),
             (400.0, 300.0, 280.0, 54.0)
@@ -762,67 +807,26 @@ mod geometry_tests {
     }
 
     #[test]
-    fn popover_grows_upward_when_the_bottom_would_overflow() {
-        // A subtitle near the bottom of the screen: growing downward would
-        // push the content below the bottom edge, so the top edge rises and
-        // the bottom edge stays fixed.
-        let user = frame(400.0, 850.0, 640.0, 100.0); // bottom at 950
-        let geometry = geometry_for(OverlayMode::Popover { extra: 260.0 }, &user, SCREEN);
-        assert_eq!(geometry.width, 640.0);
-        assert_eq!(geometry.height, 360.0);
-        // Bottom edge stays at 950.
-        assert_eq!(geometry.y + geometry.height, 950.0);
-        assert_eq!(geometry.y, 590.0);
+    fn popover_anchor_flips_above_when_menu_would_overflow_bottom() {
+        // The menu is a separate window: place it below the anchor unless it
+        // would run past the bottom edge, in which case it opens above the
+        // anchor, clear of the 20px-tall capsule.
+        let anchor_y = 900.0;
+        let y = language_popover_y(anchor_y, 260.0, SCREEN);
+        assert_eq!(y, 900.0 - 20.0 - 260.0);
     }
 
     #[test]
-    fn popover_keeps_bottom_edge_fixed_when_room_above() {
-        let user = frame(400.0, 600.0, 640.0, 100.0); // bottom at 700
-        let geometry = geometry_for(OverlayMode::Popover { extra: 260.0 }, &user, SCREEN);
-        // Bottom edge stays at 700: origin rises by exactly the extra height.
-        assert_eq!(geometry.y, 340.0);
-        assert_eq!(geometry.height, 360.0);
-        assert_eq!(geometry.y + geometry.height, 700.0);
+    fn popover_anchor_stays_below_when_there_is_room() {
+        let y = language_popover_y(100.0, 260.0, SCREEN);
+        assert_eq!(y, 100.0);
     }
 
     #[test]
-    fn popover_clamps_origin_when_no_room_above() {
-        // Window only 100 px below the screen top: it cannot rise the full
-        // extra, so the origin clamps to 0 and the bottom edge moves down.
-        let user = frame(400.0, 100.0, 640.0, 100.0); // bottom at 200
-        let geometry = geometry_for(OverlayMode::Popover { extra: 260.0 }, &user, SCREEN);
-        assert_eq!(geometry.y, 0.0);
-        assert_eq!(geometry.height, 360.0);
-    }
-
-    #[test]
-    fn popover_total_height_clamps_to_screen() {
-        let user = frame(400.0, 850.0, 640.0, 100.0);
-        let geometry = geometry_for(OverlayMode::Popover { extra: 10_000.0 }, &user, SCREEN);
-        assert_eq!(geometry.height, SCREEN.1);
-        assert_eq!(geometry.y, 0.0);
-    }
-
-    #[test]
-    fn popover_keeps_origin_when_window_is_at_the_top() {
-        let user = frame(400.0, 0.0, 640.0, 100.0);
-        let geometry = geometry_for(OverlayMode::Popover { extra: 260.0 }, &user, SCREEN);
-        assert_eq!(geometry.y, 0.0);
-        assert_eq!(geometry.height, 360.0);
-    }
-
-    #[test]
-    fn popover_height_respects_minimum() {
-        let user = frame(400.0, 0.0, 640.0, 100.0);
-        let geometry = geometry_for(OverlayMode::Popover { extra: 0.0 }, &user, SCREEN);
-        assert_eq!(geometry.height, 100.0);
-    }
-
-    #[test]
-    fn popover_max_height_exceeds_user_max_but_not_screen() {
-        let user = frame(400.0, 0.0, 640.0, 500.0);
-        let geometry = geometry_for(OverlayMode::Popover { extra: 260.0 }, &user, SCREEN);
-        assert_eq!(geometry.height, 760.0);
-        assert_eq!(geometry.max, (1200.0, SCREEN.1));
+    fn popover_anchor_flips_on_small_screens_and_never_goes_negative() {
+        // A 900px screen with the anchor near the bottom still flips above.
+        let y = language_popover_y(800.0, 260.0, (1512.0, 900.0));
+        assert_eq!(y, 800.0 - 20.0 - 260.0);
+        assert!(y >= 0.0);
     }
 }

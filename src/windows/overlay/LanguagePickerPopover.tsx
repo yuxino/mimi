@@ -1,11 +1,7 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { I18N } from "../../lib/i18n";
-import {
-  isTauri,
-  overlayPopoverClose,
-  overlayPopoverOpen,
-} from "../../lib/ipc";
+import { isTauri, overlayPopoverToggle } from "../../lib/ipc";
 import {
   OVERLAY_ACTIVITY_PHASES,
   SOURCE_LANGUAGE_MANUAL_CASES,
@@ -38,12 +34,14 @@ interface LanguagePickerPopoverProps {
   detectedLanguage: string | null;
   onSwitchSourceLanguage: (language: SourceLanguage) => void;
   onSwitchTranslationMode: (mode: TranslationMode) => void;
-  /** Called when the popover opens/closes so the overlay can keep the
-   * subtitle area height stable while the window is enlarged. */
-  onOpenChange?: (open: boolean) => void;
 }
 
-/** The top-left language capsule and its source-language / mode popover. */
+/**
+ * The top-left language capsule. In Tauri the menu lives in its own window
+ * (like the Swift NSPopover), so the overlay window's size is never affected
+ * by the menu; clicking the capsule toggles that window anchored underneath.
+ * In the plain `vite dev` preview the menu renders inline instead.
+ */
 export function LanguagePickerPopover({
   phase,
   isHovering,
@@ -54,30 +52,10 @@ export function LanguagePickerPopover({
   detectedLanguage,
   onSwitchSourceLanguage,
   onSwitchTranslationMode,
-  onOpenChange,
 }: LanguagePickerPopoverProps) {
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const status = languageStatus(settings, detectedLanguage);
-
-  // The popover renders inside the overlay window, which is normally only
-  // ~136px tall — too short for the language + mode menu. While open, the
-  // backend enlarges the window in popover mode (bottom edge fixed, never
-  // touching the remembered frame) and restores it on close.
-  useEffect(() => {
-    onOpenChange?.(open);
-    if (!isTauri) return;
-    if (open) {
-      const currentHeight = window.innerHeight;
-      void overlayPopoverOpen(Math.max(400, currentHeight + 260));
-      // The cleanup runs both when the popover closes and when the component
-      // unmounts while open (e.g. the overlay collapses), so the temporary
-      // enlargement can never be left behind.
-      return () => {
-        void overlayPopoverClose().catch(() => {});
-      };
-    }
-    void overlayPopoverClose().catch(() => {});
-  }, [open, onOpenChange]);
 
   if (status === null) return null;
 
@@ -90,12 +68,29 @@ export function LanguagePickerPopover({
     ? I18N.overlay.pickerHelpTranslating
     : I18N.overlay.pickerHelpOriginal;
 
+  const handleToggle = () => {
+    if (!canInteract) return;
+    if (isTauri) {
+      // Anchor the menu window under this capsule's bottom-left corner
+      // (screen coordinates, CSS px — the same space the backend uses).
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      void overlayPopoverToggle(
+        rect.left + window.screenX,
+        rect.bottom + window.screenY + 6,
+      );
+      return;
+    }
+    setOpen((value) => !value);
+  };
+
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         disabled={!canInteract}
-        onClick={() => setOpen((value) => !value)}
+        onClick={handleToggle}
         title={help}
         aria-label={accessibilityLabel(phase, status, settings)}
         className="flex items-center"
@@ -168,7 +163,7 @@ export function LanguagePickerPopover({
         />
       </button>
 
-      {open && (
+      {!isTauri && open && (
         <div
           className="absolute left-0 top-full z-10 mt-1.5"
           style={{

@@ -39,8 +39,6 @@ export function OverlayWindow() {
 
   const [isHovering, setIsHovering] = useState(false);
   const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [contentHeight, setContentHeight] = useState(136);
   // Keep the drag handle clear of the language capsule (~122px) and the
   // control buttons (~140px) when the window is narrow.
   const windowWidth =
@@ -95,9 +93,7 @@ export function OverlayWindow() {
         </div>
       </div>
       {!settings.isOverlayLocked && !collapsed && (
-        // Resizing is suspended while the language/mode popover temporarily
-        // enlarges the window; the backend ignores such drags as well.
-        <ResizeHandles disabled={popoverOpen} onResize={handleResize} />
+        <ResizeHandles disabled={false} onResize={handleResize} />
       )}
     </>
   );
@@ -174,8 +170,7 @@ export function OverlayWindow() {
               // frame — otherwise subtitle rows slide underneath the
               // controls and overlap them.
               paddingTop: session.isActive ? 38 : 24,
-              height: popoverOpen ? contentHeight : "100%",
-              marginTop: popoverOpen ? "auto" : 0,
+              height: "100%",
             }}
           >
           {rows.length === 0 ? (
@@ -249,10 +244,6 @@ export function OverlayWindow() {
               onSwitchTranslationMode={(mode) =>
                 void switchTranslationMode(mode)
               }
-              onOpenChange={(open) => {
-                setPopoverOpen(open);
-                if (open) setContentHeight(window.innerHeight);
-              }}
             />
           </div>
         )}

@@ -17,6 +17,7 @@ import {
   overlaySetLocked,
   overlayShow,
   sessionClearSubtitles,
+  sessionGetState,
   sessionStart,
   sessionStop,
   sessionSwitchSourceLanguage,
@@ -95,10 +96,13 @@ export const useStore = create<StoreState>()((set, get) => ({
     if (get().initialized) return;
     if (isTauri) {
       try {
-        const snapshot = await settingsGet();
-        set({ settings: snapshot });
+        const [snapshot, session] = await Promise.all([
+          settingsGet(),
+          sessionGetState(),
+        ]);
+        set({ settings: snapshot, session });
       } catch {
-        // Settings are not available yet; the events below will reconcile.
+        // The backend is not ready yet; the events below will reconcile.
       }
       unlisteners.push(
         await listenSessionState((session) => set({ session })),
