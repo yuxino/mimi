@@ -42,7 +42,7 @@ core-audio = "0.1"
 core-graphics2 = { version = "0.6", features = ["display", "objc"] }
 objc2 = { version = "0.6", features = ["exception"] }
 objc2-core-audio-types = { version = "0.3", features = ["objc2"] }
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSError", "NSGeometry", "NSObject", "NSBundle"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSError", "NSGeometry", "NSObject", "NSBundle", "NSData"] }
 dispatch2 = "0.3"
 block2 = "0.6"
 

@@ -58,7 +58,7 @@ const INITIAL_SETTINGS: SettingsSnapshot = {
   hasAPIKey: false,
   sourceLanguage: "auto",
   targetLanguage: "zh",
-  translationMode: "highQuality",
+  translationMode: "lowLatency",
   fontSize: 18,
   isOverlayLocked: false,
   credentialLoadError: null,
