@@ -138,7 +138,10 @@ export function OverlayWindow() {
             className="flex w-full items-end justify-center"
             style={{
               height: session.isActive ? 38 : 24,
-              opacity: isHovering ? 1 : 0,
+              // Always-visible drag affordance: dimmed while idle, full on
+              // hover. A fully transparent handle leaves no cue that the
+              // overlay can be moved.
+              opacity: isHovering ? 1 : 0.45,
               transition: "opacity 160ms ease-out",
             }}
           >
