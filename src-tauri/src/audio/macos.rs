@@ -505,12 +505,9 @@ fn capture_to_pcm16(
     if samples.is_empty() {
         return Ok(None);
     }
-    let decoded_peak = samples.iter().fold(0.0f32, |acc, s| acc.max(s.abs()));
-    pipeline_log!(
-        "capture decoded frames={} peak={}",
-        samples.len(),
-        decoded_peak
-    );
+    // Per-buffer diagnostics are intentionally absent here: this runs ~48x/s
+    // and the throttled `capture decode buffers=` stats plus the send
+    // pipeline's peakDbFS already cover silence/decode diagnosis.
 
     // Resample to 16 kHz when the device rate differs from the ASR pipeline.
     let pcm = if (sample_rate - TARGET_SAMPLE_RATE).abs() < 0.5 {

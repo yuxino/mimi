@@ -268,11 +268,14 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    // Keep the live-subtitles check state in sync with the session.
+    // Keep the live-subtitles check state in sync with the session. The
+    // polling interval is deliberately coarse: the check states change only
+    // on user actions, so 2s staleness is invisible while the loop stays
+    // nearly free.
     let app_for_state = app.clone();
     tauri::async_runtime::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
             let Some(state) = app_for_state.try_state::<AppState>() else {
                 continue;
             };
