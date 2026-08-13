@@ -277,18 +277,36 @@ impl MacSystemAudioCapture {
         if !self.started.swap(false, Ordering::SeqCst) {
             return;
         }
+        pipeline_log!("capture stop requested");
         let (done_tx, done_rx) = oneshot::channel::<()>();
         let dispatcher = Arc::clone(&self.dispatcher);
         dispatcher(Box::new(move || {
             let stream = MAIN_STREAM.take();
-            if let Some(stream) = stream {
-                stream.stop_capture(move |_error| {
-                    // Stop completion fires on an arbitrary queue; nothing to
-                    // forward after the stream is gone.
-                });
-                let _ = MAIN_STATE.take();
-                let _ = MAIN_HANDLER.take();
-            }
+            let state = MAIN_STATE.take();
+            let handler = MAIN_HANDLER.take();
+            let Some(stream) = stream else {
+                drop(state);
+                drop(handler);
+                let _ = done_tx.send(());
+                return;
+            };
+            // ScreenCaptureKit requires the stream and its output to stay
+            // retained until the stop completion fires. Releasing them right
+            // after calling stop_capture can leave the capture session
+            // running while the handler reads freed state (use-after-free);
+            // the stop completion is the only safe point to release them.
+            // (The completion is typed `Fn`, so the values are released
+            // through `Cell::take`, which is callable on a shared reference.)
+            pipeline_log!("capture stop: stop_capture called");
+            let completion_stream = std::cell::Cell::new(Some(stream.clone()));
+            let completion_state = std::cell::Cell::new(state);
+            let completion_handler = std::cell::Cell::new(handler);
+            stream.stop_capture(move |_error| {
+                pipeline_log!("capture stop completed");
+                drop(completion_stream.take());
+                drop(completion_state.take());
+                drop(completion_handler.take());
+            });
             let _ = done_tx.send(());
         }));
         let _ = done_rx.await;

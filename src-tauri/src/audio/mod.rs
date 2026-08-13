@@ -47,7 +47,11 @@ impl SystemAudioCapture {
             let app = app.clone();
             macos::MacSystemAudioCapture::new(std::sync::Arc::new(
                 move |task: Box<dyn FnOnce() + Send>| {
-                    let _ = app.run_on_main_thread(task);
+                    // A dropped dispatch silently leaves the capture running;
+                    // surface the failure instead of ignoring it.
+                    if let Err(error) = app.run_on_main_thread(task) {
+                        tracing::error!("main-thread dispatch failed error={error}");
+                    }
                 },
             ))
         }

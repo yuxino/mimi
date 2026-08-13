@@ -262,6 +262,7 @@ Expected: 弹出一个 560×570 的空设置窗口；无编译错误。
 
 **Port:** `SystemAudioCapture.swift` + `AudioSendPipeline`：
 - `SCShareableContent` 取 displays（主显示器优先）→ `SCContentFilter`（display + 排除本应用 bundleID）→ `SCStreamConfiguration`{capturesAudio:true, excludesCurrentProcessAudio:true, sampleRate:16000, channelCount:1, minimumFrameInterval:1, queueDepth:3} → `addStreamOutput(.audio)` → `startCapture`。
+- 停止时序（2026-08-14 修订）：SCStream 与其 output handler 必须保留到 `stopCapture` 的完成回调触发后才能释放；过早释放（调用后立即 drop）会留下仍在投递的采集会话、handler 读已释放内存（use-after-free，症状为"stop 后解码日志继续刷"）。release 全部移入完成回调；主线程派发失败必须打日志（`run_on_main_thread` 的 Err 不得吞掉）。
 - 音频回调：`did_output_sample_buffer` → 提取 f32 样本（多声道则混音）→ PCM16 → mpsc 发往 send pipeline；>500ms 间隔记 capture gap。
 - `send_pipeline`：`mpsc::channel(20)` + `try_send`，满则丢最新并触发 fell-behind 错误（对应 bufferingNewest(20) 的 dropped 语义）；发送阻塞 >200ms 记日志；每 1/100 帧记 buffers/bytes/peakDbFS。
 - 停止：stopCapture → removeStreamOutput。
