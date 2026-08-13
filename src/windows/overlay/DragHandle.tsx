@@ -8,6 +8,9 @@ interface DragHandleProps {
   onToggleCollapsed: () => void;
   /** Compact variant uses the 42×30 collapsed-overlay drag area. */
   compact?: boolean;
+  /** Expanded-handle width (default 120); narrowed on small windows so the
+   * handle never overlaps the language capsule or the control buttons. */
+  width?: number;
 }
 
 /**
@@ -19,9 +22,10 @@ interface DragHandleProps {
 export function DragHandle({
   onToggleCollapsed,
   compact = false,
+  width = 120,
 }: DragHandleProps) {
   const [hovered, setHovered] = useState(false);
-  const width = compact ? 42 : 120;
+  const handleWidth = compact ? 42 : width;
   const height = compact ? 30 : 18;
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -59,7 +63,7 @@ export function DragHandle({
       onMouseLeave={() => setHovered(false)}
       title={I18N.overlay.dragTooltip}
       className="relative flex items-center justify-center"
-      style={{ width, height }}
+      style={{ width: handleWidth, height }}
     >
       <div
         style={{
