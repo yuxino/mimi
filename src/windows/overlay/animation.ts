@@ -29,7 +29,6 @@ export function useTimelineTime(active: boolean): number {
 
   useEffect(() => {
     if (!active) {
-      setTime(0);
       lastFrame.current = 0;
       return;
     }
@@ -46,5 +45,5 @@ export function useTimelineTime(active: boolean): number {
     return () => cancelAnimationFrame(raf);
   }, [active]);
 
-  return time;
+  return active ? time : 0;
 }
