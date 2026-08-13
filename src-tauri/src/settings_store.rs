@@ -249,11 +249,13 @@ impl SettingsStore {
 
     /// Applies the listening-time language adjustments: automatic source
     /// becomes Japanese, Chinese source switches to original subtitles.
+    /// Applies the listening-time language adjustments: Chinese source forces
+    /// original subtitles. Automatic source stays in the preferences as the
+    /// user's choice; the recognition engine's concrete language (Japanese,
+    /// matching the original app's auto→ja preparation) is resolved when the
+    /// session clients are built.
     pub fn prepare_for_listening(&self) {
         let mut prefs = self.prefs.lock().unwrap();
-        if prefs.source_language == SourceLanguage::Automatic {
-            prefs.source_language = SourceLanguage::Japanese;
-        }
         if prefs.source_language == SourceLanguage::Chinese {
             prefs.target_language = TargetLanguage::Original;
         }

@@ -91,6 +91,16 @@ export const SOURCE_LANGUAGE_MANUAL_CASES: readonly SourceLanguage[] = [
   "zh",
 ];
 
+/** Picker order including automatic detection ("自动识别"), which runs the
+ * low-latency pipeline and detects the language per utterance. */
+export const SOURCE_LANGUAGE_QUICK_CASES: readonly SourceLanguage[] = [
+  "auto",
+  "ja",
+  "en",
+  "ko",
+  "zh",
+];
+
 export const TARGET_LANGUAGE_CASES: readonly TargetLanguage[] = [
   "original",
   "zh",

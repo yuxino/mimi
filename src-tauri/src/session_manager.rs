@@ -355,10 +355,10 @@ impl SessionManager {
     }
 
     /// Quick-switches the source language, reconnecting when needed.
+    /// Selecting automatic detection also switches to the low-latency
+    /// pipeline (the live-translate stream detects the language per
+    /// utterance), mirroring the original app's auto→lowLatency behavior.
     pub async fn switch_source_language(self: &Arc<Self>, language: SourceLanguage) {
-        if language == SourceLanguage::Automatic {
-            return;
-        }
         let (target_language, needs_reconnect) = {
             let prefs = self.settings.preferences();
             let target = language
@@ -371,6 +371,9 @@ impl SessionManager {
         self.settings.update_preferences(|prefs| {
             prefs.source_language = language;
             prefs.target_language = target_language;
+            if language == SourceLanguage::Automatic {
+                prefs.translation_mode = TranslationMode::LowLatency;
+            }
         });
         self.settings.persist();
         // Broadcast immediately: the reconnect below can take seconds, and

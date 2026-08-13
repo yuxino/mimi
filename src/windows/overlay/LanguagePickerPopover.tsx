@@ -4,7 +4,7 @@ import { I18N } from "../../lib/i18n";
 import { isTauri, overlayPopoverToggle } from "../../lib/ipc";
 import {
   OVERLAY_ACTIVITY_PHASES,
-  SOURCE_LANGUAGE_MANUAL_CASES,
+  SOURCE_LANGUAGE_QUICK_CASES,
   TRANSLATION_MODE_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
   hexToRgba,
@@ -191,7 +191,7 @@ export function LanguagePickerPopover({
           }}
         >
           <PopoverHeader>{I18N.overlay.sourceLanguage}</PopoverHeader>
-          {SOURCE_LANGUAGE_MANUAL_CASES.map((language) => (
+          {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
             <PickerRow
               key={language}
               title={sourceLanguageButtonTitle(language)}

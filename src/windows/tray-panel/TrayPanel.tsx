@@ -5,7 +5,7 @@ import { I18N } from "../../lib/i18n";
 import { isTauri } from "../../lib/ipc";
 import { useStore } from "../../lib/store";
 import {
-  SOURCE_LANGUAGE_MANUAL_CASES,
+  SOURCE_LANGUAGE_QUICK_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
   targetLanguageTranslatesAudio,
   type SessionStateEvent,
@@ -125,7 +125,7 @@ export function TrayPanel() {
               opacity: isChangingSession || session.isPaused ? 0.5 : 1,
             }}
           >
-            {SOURCE_LANGUAGE_MANUAL_CASES.map((language) => (
+            {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
               <option key={language} value={language}>
                 {sourceLanguageButtonTitle(language)}
               </option>

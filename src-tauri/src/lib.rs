@@ -182,6 +182,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         CheckMenuItemBuilder::with_id("lock-position", "Lock Subtitle Position").build(app)?;
 
     let language_menu = SubmenuBuilder::new(app, "识别语言")
+        .item(&MenuItemBuilder::with_id("lang-auto", "自动识别").build(app)?)
         .item(&MenuItemBuilder::with_id("lang-ja", "日本語").build(app)?)
         .item(&MenuItemBuilder::with_id("lang-en", "English").build(app)?)
         .item(&MenuItemBuilder::with_id("lang-ko", "한국어").build(app)?)
@@ -226,6 +227,9 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                             let _ = session.start(true).await;
                         }
                     });
+                }
+                "lang-auto" => {
+                    switch_language(state, crate::core::models::SourceLanguage::Automatic)
                 }
                 "lang-ja" => switch_language(state, crate::core::models::SourceLanguage::Japanese),
                 "lang-en" => switch_language(state, crate::core::models::SourceLanguage::English),
