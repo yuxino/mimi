@@ -9,10 +9,17 @@ const MONO_FONT =
 interface TimelineProps {
   rows: SubtitleRow[];
   fontSize: number;
+  /**
+   * The current line is a live draft (streaming, not yet final). Draft rows
+   * (the current-line segments) render dimmed with a trailing ellipsis so the
+   * in-progress line does not dominate the stable history above it; when the
+   * line becomes final it settles to full opacity.
+   */
+  draft?: boolean;
 }
 
 /** Scrolling subtitle timeline; auto-scrolls to the newest row. */
-export function Timeline({ rows, fontSize }: TimelineProps) {
+export function Timeline({ rows, fontSize, draft = false }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,6 +36,9 @@ export function Timeline({ rows, fontSize }: TimelineProps) {
       {rows.map((row, index) => {
         const isLast = index === rows.length - 1;
         const distance = rows.length - 1 - index;
+        // Current-line rows carry no timestamp; they are the live draft
+        // segments while the line is streaming.
+        const isDraftRow = draft && row.createdAt === null;
         return (
           <div
             key={row.id}
@@ -64,12 +74,21 @@ export function Timeline({ rows, fontSize }: TimelineProps) {
               style={{
                 fontSize: rowFontSize(index, rows.length, fontSize),
                 fontWeight: isLast ? 500 : 400,
-                color: `rgba(255,255,255,${rowOpacity(distance)})`,
+                color: isDraftRow
+                  ? "rgba(255,255,255,0.72)"
+                  : `rgba(255,255,255,${rowOpacity(distance)})`,
                 lineHeight: 1.45,
                 overflowWrap: "break-word",
+                // Gentle settle: dimmed while streaming, full once final.
+                transition: "color 200ms ease",
               }}
             >
               {row.text}
+              {isDraftRow && (
+                <span style={{ opacity: 0.55 }} aria-hidden="true">
+                  {"…"}
+                </span>
+              )}
             </span>
           </div>
         );
