@@ -1,7 +1,10 @@
-import { useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../../lib/ipc";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 
 type Region =
   | "top"
@@ -69,17 +72,66 @@ interface DragState {
 export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  // Tauri mode: the backend owns the resize math; the webview forwards pointer
+  // positions. `active` gates move/end so a stale backend drag can never be
+  // re-triggered by an unrelated hover, and `element`/`pointerId` remember who
+  // owns the pointer so it can be released on the fallback path.
+  const tauriDragRef = useRef<{
+    active: boolean;
+    element: HTMLElement | null;
+    pointerId: number;
+  }>({ active: false, element: null, pointerId: 0 });
+
+  // Stable callback (only refs and module imports), so the one-time window
+  // listeners below can add/remove it with a matching identity.
+  const finishTauriDrag = useCallback(() => {
+    const drag = tauriDragRef.current;
+    if (!drag.active) return;
+    drag.active = false;
+    try {
+      if (drag.element) drag.element.releasePointerCapture(drag.pointerId);
+    } catch {
+      // Pointer capture was already lost (e.g. window blur); nothing to do.
+    }
+    drag.element = null;
+    void invoke("resize_end").catch(() => {});
+  }, []);
+
+  // Safety net: if pointer capture is lost mid-drag, or the window loses
+  // focus, these finish the drag (idempotent via the active flag). Without
+  // them a drag that escapes the 14px handle would leave the backend drag
+  // state stuck and later hovers would keep resizing the window.
+  useEffect(() => {
+    window.addEventListener("pointerup", finishTauriDrag);
+    window.addEventListener("pointercancel", finishTauriDrag);
+    window.addEventListener("blur", finishTauriDrag);
+    return () => {
+      window.removeEventListener("pointerup", finishTauriDrag);
+      window.removeEventListener("pointercancel", finishTauriDrag);
+      window.removeEventListener("blur", finishTauriDrag);
+    };
+  }, [finishTauriDrag]);
 
   const start = (region: Region, event: ReactPointerEvent<HTMLDivElement>) => {
     if (disabled) return;
     if (isTauri) {
-      // The backend owns the resize math (anchoring, clamps, screen bounds);
-      // the webview only forwards pointer coordinates.
+      // Send SCREEN coordinates, not clientX/Y: the backend moves the window
+      // during the drag, so window-relative coordinates would shift under a
+      // stationary cursor and feed back into the math (the overlay used to
+      // oscillate between two frames on corner drags).
       void invoke("resize_start", {
         region,
-        x: event.clientX,
-        y: event.clientY,
+        x: event.screenX,
+        y: event.screenY,
       }).catch(() => {});
+      const element = event.currentTarget;
+      tauriDragRef.current = { active: true, element, pointerId: event.pointerId };
+      try {
+        element.setPointerCapture(event.pointerId);
+      } catch {
+        // Capture is an optimisation; the window-level listeners still
+        // guarantee the drag ends even if capture is unavailable.
+      }
       return;
     }
     const rect = rootRef.current?.getBoundingClientRect();
@@ -98,7 +150,8 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
 
   const move = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (isTauri) {
-      void invoke("resize_move", { x: event.clientX, y: event.clientY }).catch(
+      if (!tauriDragRef.current.active) return;
+      void invoke("resize_move", { x: event.screenX, y: event.screenY }).catch(
         () => {},
       );
       return;
@@ -148,7 +201,7 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
 
   const end = () => {
     dragRef.current = null;
-    if (isTauri) void invoke("resize_end").catch(() => {});
+    if (isTauri) finishTauriDrag();
   };
 
   return (

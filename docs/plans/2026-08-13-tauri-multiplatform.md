@@ -350,6 +350,7 @@ Expected: 弹出一个 560×570 的空设置窗口；无编译错误。
 - 收起态：280×54 圆角 14 黑 68%；拖柄 42×30 + 相位点 + 文案 + 暂停 + 展开按钮。
 - 波形/指示器动画：正弦胶囊（9 根，24fps；相位色与 speed/amplitude 参数照抄 Swift 表格），尊重 `prefers-reduced-motion`。
 - 自绘缩放手柄：8 区域命中（边 6px / 角 14px 内缩），cursor 样式 `nwse-resize` 等，pointer 拖拽 → `overlay_set_size`（最小 360×100 / 最大 1200×600）；锁定或收起时禁用。
+- resize 拖拽 IPC 契约（2026-08-14 修订）：`resize_start{region,x,y}` / `resize_move{x,y}` / `resize_end`；前端只转发指针位置，坐标一律用 `screenX/screenY`（屏幕 CSS 像素，随窗口移动不变）。严禁 `clientX/Y`——窗口相对坐标会在后端移动窗口后反馈进差值计算，导致拖角时窗口在两个帧之间来回振荡。前端在 pointerdown 时 `setPointerCapture` 并维护本地 active 标志（只在拖动中转发 move），另挂 window 级 pointerup/pointercancel/blur 兜底（防 capture 丢失后后端拖动态悬挂、后续 hover 触发误 resize），结束时必发 `resize_end`（后端 commit 帧）。
 - 语言分段长度表：zh 28 / en 64 / ja 32 / original 按检测语言。
 
 ### Task 29: TrayPanel 窗口 UI
