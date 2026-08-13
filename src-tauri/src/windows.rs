@@ -245,6 +245,10 @@ fn remember_frame(
     position: Option<tauri::LogicalPosition<f64>>,
     size: tauri::LogicalSize<f64>,
 ) {
+    // Never persist the temporary popover height as the expanded size.
+    if POPOVER_RESIZING.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let prefs = settings.preferences();
     if prefs.overlay_locked {
         return;

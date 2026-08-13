@@ -38,6 +38,11 @@ export function OverlayWindow() {
 
   const [isHovering, setIsHovering] = useState(false);
   const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
+  // Keep the drag handle clear of the language capsule (~122px) and the
+  // control buttons (~140px) when the window is narrow.
+  const windowWidth =
+    typeof window !== "undefined" ? window.innerWidth : overlaySize.width;
+  const dragHandleWidth = Math.max(48, Math.min(120, windowWidth - 290));
 
   const collapsed = session.isOverlayCollapsed;
   const phase = computeActivityPhase(session, settings);
@@ -145,7 +150,10 @@ export function OverlayWindow() {
               transition: "opacity 160ms ease-out",
             }}
           >
-            <DragHandle onToggleCollapsed={toggleCollapsed} />
+            <DragHandle
+              onToggleCollapsed={toggleCollapsed}
+              width={dragHandleWidth}
+            />
           </div>
 
           {rows.length === 0 ? (
