@@ -140,6 +140,7 @@ pub fn run() {
             commands::overlay_show,
             commands::overlay_set_size,
             commands::overlay_set_height,
+            commands::overlay_commit_frame,
             commands::tray_panel_hide,
             commands::app_show_settings,
             commands::app_quit,

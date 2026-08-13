@@ -398,3 +398,31 @@ impl OverlayWindowManager {
         let _ = window.set_size(tauri::LogicalSize::new(width, clamped));
     }
 }
+
+impl OverlayWindowManager {
+    /// Persists the current overlay frame immediately (user intent, e.g. the
+    /// end of a drag-resize or popover close), even if a temporary popover
+    /// enlargement was in flight. Locked overlays are skipped.
+    pub fn commit_frame(app: &AppHandle, settings: &SettingsStore) {
+        let Some(window) = app.get_webview_window("overlay") else {
+            return;
+        };
+        let prefs = settings.preferences();
+        if prefs.overlay_locked {
+            return;
+        }
+        if let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) {
+            let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
+            settings.update_preferences(|prefs| {
+                prefs.overlay_frame = Some(OverlayFrame {
+                    x: position.x as f64 / scale,
+                    y: position.y as f64 / scale,
+                    width: size.width as f64 / scale,
+                    height: size.height as f64 / scale,
+                });
+                prefs.frame_layout_version = OVERLAY_FRAME_LAYOUT_VERSION;
+            });
+            settings.persist();
+        }
+    }
+}
