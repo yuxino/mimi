@@ -70,6 +70,11 @@ pub struct OverlayState {
     /// Timestamp of the most recent Moved/Resized event; debounced commits
     /// compare against it to drop superseded tasks.
     last_geometry_event: Option<std::time::Instant>,
+    /// Whether a debounced geometry-commit task is already in flight; avoids
+    /// spawning one task per Moved/Resized event during drags (60+/s).
+    geometry_task_pending: bool,
+    /// Last time a resize-move was logged (throttles the per-event log).
+    resize_log_at: Option<std::time::Instant>,
 }
 
 impl OverlayState {
@@ -102,6 +107,8 @@ impl OverlayState {
             resize_drag: None,
             resize_start: None,
             last_geometry_event: None,
+            geometry_task_pending: false,
+            resize_log_at: None,
         }
     }
 }
@@ -308,6 +315,13 @@ impl OverlayWindowManager {
         {
             let mut state = state.lock().unwrap();
             state.last_geometry_event = Some(now);
+            // One debounced commit task is enough: it re-reads the timestamp
+            // when it wakes, so later events are still folded in without
+            // spawning a task per event.
+            if state.geometry_task_pending {
+                return;
+            }
+            state.geometry_task_pending = true;
         }
         let app = app.clone();
         let state = Arc::clone(state);
@@ -315,6 +329,7 @@ impl OverlayWindowManager {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(350)).await;
             let mut state = state.lock().unwrap();
+            state.geometry_task_pending = false;
             // A newer event arrived while we slept; it owns the commit.
             if state.last_geometry_event != Some(now) {
                 return;
@@ -403,12 +418,30 @@ impl OverlayWindowManager {
             screen,
             48.0,
         );
+        // Skip sub-pixel jitter: unchanged frames do not need window ops.
+        if (frame.x - state.user_frame.x).abs() < 0.5
+            && (frame.y - state.user_frame.y).abs() < 0.5
+            && (frame.width - state.user_frame.width).abs() < 0.5
+            && (frame.height - state.user_frame.height).abs() < 0.5
+        {
+            return;
+        }
         state.user_frame = frame;
-        Self::apply(app, &state, false);
-        tracing::info!(
-            "resize move frame={:?}",
-            (frame.x, frame.y, frame.width, frame.height)
-        );
+        // Only position and size change during a drag; skip the full apply()
+        // (which also resets min/max) to halve the window ops per event.
+        let _ = window.set_position(tauri::LogicalPosition::new(frame.x, frame.y));
+        let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
+        let log_now = std::time::Instant::now();
+        let due = state
+            .resize_log_at
+            .is_none_or(|at| log_now.duration_since(at).as_millis() >= 250);
+        if due {
+            state.resize_log_at = Some(log_now);
+            tracing::info!(
+                "resize move frame={:?}",
+                (frame.x, frame.y, frame.width, frame.height)
+            );
+        }
     }
 
     /// Ends a resize drag and persists the final frame.
