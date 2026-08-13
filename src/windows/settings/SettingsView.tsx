@@ -41,14 +41,29 @@ export function SettingsView() {
   const saveSettings = useStore((state) => state.saveSettings);
   const setOverlayLocked = useStore((state) => state.setOverlayLocked);
 
-  const [showsServiceSettings, setShowsServiceSettings] = useState(false);
+  const [showsServiceSettings, setShowsServiceSettings] = useState(
+    () =>
+      settings.workspaceID.trim() === "" ||
+      !settings.hasAPIKey ||
+      settings.credentialLoadError !== null,
+  );
   const [credentialMessage, setCredentialMessage] = useState<string | null>(
     null,
   );
   const [credentialMessageIsError, setCredentialMessageIsError] =
     useState(false);
   const [workspaceID, setWorkspaceID] = useState(settings.workspaceID);
+  const [previousWorkspaceID, setPreviousWorkspaceID] = useState(
+    settings.workspaceID,
+  );
   const [apiKey, setApiKey] = useState("");
+
+  // Keep the editable Workspace ID in sync with settings loaded asynchronously
+  // after mount (React's "adjust state during render" pattern).
+  if (settings.workspaceID !== previousWorkspaceID) {
+    setPreviousWorkspaceID(settings.workspaceID);
+    setWorkspaceID(settings.workspaceID);
+  }
 
   const isActive = session.isActive;
   const isChangingSession =
@@ -58,12 +73,6 @@ export function SettingsView() {
   useEffect(() => {
     const draft = listeningPreferencesDraft(settings);
     if (draft) void saveSettings(draft).catch(() => {});
-    setShowsServiceSettings(
-      settings.workspaceID.trim() === "" ||
-        !settings.hasAPIKey ||
-        settings.credentialLoadError !== null,
-    );
-    setWorkspaceID(settings.workspaceID);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -583,13 +592,12 @@ function SettingsStatusIndicator({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    if (!isActive || reduceMotion) {
-      setExpanded(false);
-      return;
-    }
+    if (!isActive || reduceMotion) return;
     const id = setInterval(() => setExpanded((value) => !value), 400);
     return () => clearInterval(id);
   }, [isActive, reduceMotion]);
+
+  const pulseExpanded = isActive && !reduceMotion && expanded;
 
   return (
     <div style={{ width: 16, height: 16, position: "relative" }}>
@@ -604,11 +612,11 @@ function SettingsStatusIndicator({
       >
         <div
           style={{
-            width: expanded ? 16 : 8,
-            height: expanded ? 16 : 8,
+            width: pulseExpanded ? 16 : 8,
+            height: pulseExpanded ? 16 : 8,
             borderRadius: "50%",
             background: color,
-            opacity: expanded ? 0.16 : 0,
+            opacity: pulseExpanded ? 0.16 : 0,
             transition: reduceMotion ? "none" : "all 550ms ease-in-out",
           }}
         />

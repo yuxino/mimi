@@ -15,31 +15,26 @@ type WindowLabel = "overlay" | "tray-panel" | "settings";
  * query parameter selects the preview (defaults to "settings").
  */
 export default function App() {
-  const [label, setLabel] = useState<WindowLabel | null>(null);
+  const [label] = useState<WindowLabel>(resolveInitialLabel);
   const init = useStore((state) => state.init);
 
   useEffect(() => {
     void init();
-
-    if (isTauri) {
-      getCurrentWindow()
-        .label.then((value) => setLabel(value as WindowLabel))
-        .catch(() => setLabel("settings"));
-    } else {
-      const param = new URLSearchParams(window.location.search).get("window");
-      setLabel(
-        param === "overlay" || param === "tray-panel" ? param : "settings",
-      );
-    }
   }, [init]);
 
   useEffect(() => {
     document.body.classList.toggle("settings-body", label === "settings");
   }, [label]);
 
-  if (label === null) return null;
-
   if (label === "overlay") return <OverlayWindow />;
   if (label === "tray-panel") return <TrayPanel />;
   return <SettingsView />;
+}
+
+function resolveInitialLabel(): WindowLabel {
+  if (isTauri) {
+    return getCurrentWindow().label as WindowLabel;
+  }
+  const param = new URLSearchParams(window.location.search).get("window");
+  return param === "overlay" || param === "tray-panel" ? param : "settings";
 }

@@ -1,6 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// `process` is provided by Node when Vite loads this config; the ambient
+// declaration keeps the type check self-contained (no @types/node dependency).
+declare const process: { env: Record<string, string | undefined> };
+
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
