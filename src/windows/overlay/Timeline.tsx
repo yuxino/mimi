@@ -21,11 +21,15 @@ interface TimelineProps {
 /** Scrolling subtitle timeline; auto-scrolls to the newest row. */
 export function Timeline({ rows, fontSize, draft = false }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Keep the newest content pinned to the bottom: rows.length changes when a
+  // new row appears, and the last row's text length changes while a draft
+  // grows (wrapping into more lines) without changing the row count.
+  const lastTextLength = rows[rows.length - 1]?.text.length ?? 0;
 
   useEffect(() => {
     const element = containerRef.current;
     if (element) element.scrollTop = element.scrollHeight;
-  }, [rows.length]);
+  }, [rows.length, lastTextLength]);
 
   return (
     <div
