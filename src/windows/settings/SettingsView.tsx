@@ -33,7 +33,12 @@ const SECONDARY = "rgba(255,255,255,0.55)";
 
 /** Main settings window; 1:1 port of `SettingsView.swift`. */
 export function SettingsView() {
-  const session = useStore((state) => state.session);
+  // Narrow selectors: the settings window never shows subtitle text, so
+  // subscribing to the whole session object would re-render it on every
+  // streaming event.
+  const sessionStatus = useStore((state) => state.session.status);
+  const sessionIsPaused = useStore((state) => state.session.isPaused);
+  const sessionIsActive = useStore((state) => state.session.isActive);
   const settings = useStore((state) => state.settings);
   const start = useStore((state) => state.start);
   const stop = useStore((state) => state.stop);
@@ -70,10 +75,10 @@ export function SettingsView() {
     setApiKey(settings.apiKey);
   }
 
-  const isActive = session.isActive;
+  const isActive = sessionIsActive;
   const isChangingSession =
-    session.status.kind === "connecting" || session.status.kind === "stopping";
-  const isListening = session.status.kind === "listening";
+    sessionStatus.kind === "connecting" || sessionStatus.kind === "stopping";
+  const isListening = sessionStatus.kind === "listening";
 
   useEffect(() => {
     const draft = listeningPreferencesDraft(settings);
@@ -136,18 +141,18 @@ export function SettingsView() {
               </span>
               <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
                 <SettingsStatusIndicator
-                  color={sessionStatusColor(session)}
-                  isActive={isListening && !session.isPaused}
+                  color={sessionStatusColor(sessionStatus, sessionIsPaused)}
+                  isActive={isListening && !sessionIsPaused}
                 />
                 <span
                   style={{
                     fontSize: 12.5,
                     fontWeight: 500,
-                    color: sessionStatusColor(session),
+                    color: sessionStatusColor(sessionStatus, sessionIsPaused),
                     lineHeight: 1.3,
                   }}
                 >
-                  {sessionStatusText(session, settings)}
+                  {sessionStatusText(sessionStatus, sessionIsPaused, settings)}
                 </span>
               </div>
             </div>
@@ -156,7 +161,7 @@ export function SettingsView() {
 
             <button
               type="button"
-              disabled={session.status.kind === "stopping"}
+              disabled={sessionStatus.kind === "stopping"}
               onClick={() => (isActive ? void stop() : startListening())}
               className="flex items-center"
               style={{
@@ -171,8 +176,8 @@ export function SettingsView() {
                 fontSize: 14,
                 fontWeight: 600,
                 cursor:
-                  session.status.kind === "stopping" ? "default" : "pointer",
-                opacity: session.status.kind === "stopping" ? 0.5 : 1,
+                  sessionStatus.kind === "stopping" ? "default" : "pointer",
+                opacity: sessionStatus.kind === "stopping" ? 0.5 : 1,
               }}
             >
               <Icon name={isActive ? "stop" : "play"} style={{ fontSize: 12 }} />
@@ -222,7 +227,7 @@ export function SettingsView() {
                   />
                 ))}
               </div>
-              <CaptionText>{sourceLanguageHelp(session, settings)}</CaptionText>
+              <CaptionText>{sourceLanguageHelp(sessionStatus, settings)}</CaptionText>
             </div>
 
             <Divider />
@@ -654,11 +659,12 @@ const textFieldStyle: CSSProperties = {
 };
 
 function sessionStatusText(
-  session: SessionStateEvent,
+  status: SessionStateEvent["status"],
+  isPaused: boolean,
   settings: SettingsSnapshot,
 ): string {
-  if (session.isPaused) return I18N.overlay.paused;
-  switch (session.status.kind) {
+  if (isPaused) return I18N.overlay.paused;
+  switch (status.kind) {
     case "idle":
       return I18N.settings.sessionReady;
     case "connecting":
@@ -674,9 +680,12 @@ function sessionStatusText(
   }
 }
 
-function sessionStatusColor(session: SessionStateEvent): string {
-  if (session.isPaused) return ORANGE;
-  switch (session.status.kind) {
+function sessionStatusColor(
+  status: SessionStateEvent["status"],
+  isPaused: boolean,
+): string {
+  if (isPaused) return ORANGE;
+  switch (status.kind) {
     case "listening":
       return GREEN;
     case "connecting":
@@ -714,15 +723,15 @@ function translationModeHelp(mode: TranslationMode): string {
 }
 
 function sourceLanguageHelp(
-  session: SessionStateEvent,
+  status: SessionStateEvent["status"],
   settings: SettingsSnapshot,
 ): string {
   if (settings.sourceLanguage === "zh") {
-    return session.status.kind === "listening"
+    return status.kind === "listening"
       ? I18N.settings.recognizingChineseListening
       : I18N.settings.recognizingChineseIdle;
   }
-  if (session.status.kind === "listening") {
+  if (status.kind === "listening") {
     return I18N.settings.sourceHelpReconnecting;
   }
   return I18N.settings.sourceHelpIdle;
