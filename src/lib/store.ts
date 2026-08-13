@@ -217,13 +217,14 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   setOverlayCollapsed: async (collapsed) => {
-    if (isTauri) {
-      await overlaySetCollapsed(collapsed);
-      return;
-    }
+    // Optimistic local update so the overlay layout switches immediately;
+    // the backend event confirms it afterwards.
     set((state) => ({
       session: { ...state.session, isOverlayCollapsed: collapsed },
     }));
+    if (isTauri) {
+      await overlaySetCollapsed(collapsed);
+    }
   },
 
   setOverlayLocked: async (locked) => {

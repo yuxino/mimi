@@ -639,7 +639,8 @@ impl SessionManager {
 
     // MARK: state publishing
 
-    fn publish_state(&self) {
+    /// Broadcasts the current session state to the frontend.
+    pub fn publish_state(&self) {
         let state = self.controller.lock().unwrap().state.clone();
         let mut event = SessionStateEvent::from(&state);
         event.is_paused = self.is_paused();

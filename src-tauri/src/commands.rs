@@ -246,6 +246,10 @@ pub fn overlay_set_collapsed(
 ) -> Result<(), String> {
     state.session.set_overlay_collapsed(collapsed);
     OverlayWindowManager::set_collapsed(&app, &state.settings, collapsed);
+    // The frontend's collapse UI state only updates through the
+    // session-state event; without this the overlay renders the wrong
+    // layout after collapsing/expanding.
+    state.session.publish_state();
     Ok(())
 }
 

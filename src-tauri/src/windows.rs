@@ -155,26 +155,29 @@ impl OverlayWindowManager {
         }
 
         // Settle the exact size once animations have had time to finish,
-        // mirroring the Swift `settleFrame` pass.
+        // mirroring the Swift `settleFrame` pass: the collapsed bar, or the
+        // remembered expanded size when un-collapsing.
         let window_settle = window.clone();
-        let target = tauri::LogicalSize::new(
-            if collapsed {
-                SubtitleOverlayMetrics::COLLAPSED_WIDTH
-            } else {
-                SubtitleOverlayMetrics::REFERENCE_WIDTH
-            },
-            if collapsed {
-                SubtitleOverlayMetrics::COLLAPSED_HEIGHT
-            } else {
-                SubtitleOverlayMetrics::REFERENCE_HEIGHT
-            },
-        );
+        let target = if collapsed {
+            tauri::LogicalSize::new(
+                SubtitleOverlayMetrics::COLLAPSED_WIDTH,
+                SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
+            )
+        } else {
+            let prefs = settings.preferences();
+            let trusted = (prefs.frame_layout_version >= OVERLAY_FRAME_LAYOUT_VERSION)
+                .then(|| prefs.overlay_frame.clone())
+                .flatten();
+            let frame = trusted.unwrap_or(OverlayFrame {
+                x: 0.0,
+                y: 0.0,
+                width: SubtitleOverlayMetrics::REFERENCE_WIDTH,
+                height: SubtitleOverlayMetrics::REFERENCE_HEIGHT,
+            });
+            tauri::LogicalSize::new(frame.width, frame.height)
+        };
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-            if !collapsed {
-                // Re-assert the remembered size rather than the reference.
-                return;
-            }
             let _ = window_settle.set_size(target);
         });
     }
