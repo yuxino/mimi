@@ -133,6 +133,20 @@ impl LiveTranslateClient {
                                     .received_session_finished
                                     .store(true, Ordering::SeqCst);
                             }
+                            // The stream protocol has no "translation started"
+                            // message: the transcript completes first and the
+                            // final translation follows as response.text.done.
+                            // Synthesize TranslationStarted at the source
+                            // final so the UI can show the waiting-for-final
+                            // state (the session controller clears it when the
+                            // final translation lands, or on errors/stop).
+                            if matches!(event, LiveTranslateServerEvent::SourceFinal { .. })
+                                && events
+                                    .send(LiveTranslateServerEvent::TranslationStarted)
+                                    .is_err()
+                            {
+                                break;
+                            }
                             if events.send(event).is_err() {
                                 break;
                             }
