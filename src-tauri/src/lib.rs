@@ -32,6 +32,8 @@ pub fn run() {
         .setup(|app| {
             tracing::info!("mimi starting");
 
+            #[cfg(target_os = "macos")]
+            set_dock_icon(app.handle());
 
             let app_handle = app.handle().clone();
             let is_ui_test = std::env::var("MIMI_UI_TEST").as_deref() == Ok("1");
@@ -331,4 +333,77 @@ fn setup_global_shortcut(
         .map_err(|error| std::io::Error::other(error.to_string()))?;
     tracing::info!("global shortcut registered");
     Ok(())
+}
+
+/// Sets the macOS Dock icon at runtime so `tauri dev` (which runs the bare
+/// binary without an app bundle) shows the mimi icon instead of the generic
+/// executable glyph. Uses dynamic class lookup (no extra AppKit binding
+/// crates) and never panics: it runs inside the AppKit delegate callback
+/// where panics cannot unwind, so every step falls back silently.
+#[cfg(target_os = "macos")]
+fn set_dock_icon(app: &tauri::AppHandle) {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    use objc2_foundation::{NSSize, NSString};
+    use std::ffi::c_void;
+
+    let Some(icon) = app.default_window_icon() else {
+        return;
+    };
+    let width = icon.width() as i64;
+    let height = icon.height() as i64;
+    let rgba = icon.rgba();
+
+    unsafe {
+        let Some(rep_class) = AnyClass::get(c"NSBitmapImageRep") else {
+            return;
+        };
+        let Some(image_class) = AnyClass::get(c"NSImage") else {
+            return;
+        };
+        let Some(app_class) = AnyClass::get(c"NSApplication") else {
+            return;
+        };
+
+        let color_space = NSString::from_str("NSCalibratedRGBColorSpace");
+        let rep: *mut AnyObject = msg_send![rep_class, alloc];
+        let rep: *mut AnyObject = msg_send![
+            rep,
+            initWithBitmapDataPlanes: std::ptr::null::<*mut c_void>(),
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8i64,
+            samplesPerPixel: 4i64,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: &*color_space,
+            bytesPerRow: width * 4,
+            bitsPerPixel: 32i64
+        ];
+        if rep.is_null() {
+            return;
+        }
+        let data_ptr: *mut c_void = msg_send![rep, bitmapData];
+        if data_ptr.is_null() {
+            return;
+        }
+        std::ptr::copy_nonoverlapping(rgba.as_ptr(), data_ptr as *mut u8, rgba.len());
+
+        let image: *mut AnyObject = msg_send![image_class, alloc];
+        let image: *mut AnyObject = msg_send![
+            image,
+            initWithSize: NSSize::new(width as f64, height as f64)
+        ];
+        if image.is_null() {
+            return;
+        }
+        let _: () = msg_send![image, addRepresentation: rep];
+
+        let shared: *mut AnyObject = msg_send![app_class, sharedApplication];
+        if shared.is_null() {
+            return;
+        }
+        let _: () = msg_send![shared, setApplicationIconImage: image];
+        tracing::info!("dock icon applied");
+    }
 }
