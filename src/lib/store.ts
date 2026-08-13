@@ -54,6 +54,7 @@ const INITIAL_SESSION: SessionStateEvent = {
 
 const INITIAL_SETTINGS: SettingsSnapshot = {
   workspaceID: "",
+  apiKey: "",
   hasAPIKey: false,
   sourceLanguage: "auto",
   targetLanguage: "zh",

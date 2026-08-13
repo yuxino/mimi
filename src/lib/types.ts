@@ -52,7 +52,8 @@ export interface SessionStateEvent {
 
 export interface SettingsSnapshot {
   workspaceID: string;
-  /** The API key is never echoed back to the frontend. */
+  /** Loaded from the OS keychain so the settings field can be prefilled. */
+  apiKey: string;
   hasAPIKey: boolean;
   sourceLanguage: SourceLanguage;
   targetLanguage: TargetLanguage;

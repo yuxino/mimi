@@ -257,6 +257,8 @@ export function OverlayWindow() {
     return (
       <div
         className="relative h-full w-full"
+        role="group"
+        aria-label={`字幕已收起，${phaseLabel}`}
         style={{
           borderRadius: 14,
           background: "rgba(0,0,0,0.68)",

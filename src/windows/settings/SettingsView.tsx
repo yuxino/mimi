@@ -56,13 +56,18 @@ export function SettingsView() {
   const [previousWorkspaceID, setPreviousWorkspaceID] = useState(
     settings.workspaceID,
   );
-  const [apiKey, setApiKey] = useState("");
+  const [previousAPIKey, setPreviousAPIKey] = useState(settings.apiKey);
+  const [apiKey, setApiKey] = useState(settings.apiKey);
 
-  // Keep the editable Workspace ID in sync with settings loaded asynchronously
+  // Keep the editable fields in sync with settings loaded asynchronously
   // after mount (React's "adjust state during render" pattern).
   if (settings.workspaceID !== previousWorkspaceID) {
     setPreviousWorkspaceID(settings.workspaceID);
     setWorkspaceID(settings.workspaceID);
+  }
+  if (settings.apiKey !== previousAPIKey) {
+    setPreviousAPIKey(settings.apiKey);
+    setApiKey(settings.apiKey);
   }
 
   const isActive = session.isActive;

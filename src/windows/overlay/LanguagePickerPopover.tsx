@@ -160,29 +160,25 @@ export function LanguagePickerPopover({
             />
           ))}
 
-          {translatesAudio && (
-            <>
-              <div
-                style={{
-                  height: 1,
-                  background: "rgba(255,255,255,0.1)",
-                  margin: "5px 0",
-                }}
-              />
-              <PopoverHeader>{I18N.overlay.translationMode}</PopoverHeader>
-              {TRANSLATION_MODE_CASES.map((mode) => (
-                <PickerRow
-                  key={mode}
-                  title={TRANSLATION_MODE_DISPLAY_NAMES[mode]}
-                  selected={settings.translationMode === mode}
-                  onSelect={() => {
-                    setOpen(false);
-                    onSwitchTranslationMode(mode);
-                  }}
-                />
-              ))}
-            </>
-          )}
+          <div
+            style={{
+              height: 1,
+              background: "rgba(255,255,255,0.1)",
+              margin: "5px 0",
+            }}
+          />
+          <PopoverHeader>{I18N.overlay.translationMode}</PopoverHeader>
+          {TRANSLATION_MODE_CASES.map((mode) => (
+            <PickerRow
+              key={mode}
+              title={TRANSLATION_MODE_DISPLAY_NAMES[mode]}
+              selected={settings.translationMode === mode}
+              onSelect={() => {
+                setOpen(false);
+                onSwitchTranslationMode(mode);
+              }}
+            />
+          ))}
         </div>
       )}
     </div>

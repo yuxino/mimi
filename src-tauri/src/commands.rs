@@ -18,6 +18,10 @@ pub struct AppState {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsSnapshotPayload {
     pub workspace_id: String,
+    /// Loaded from the OS keychain so the settings field can be prefilled,
+    /// mirroring the original app's in-memory binding. Never persisted.
+    #[serde(rename = "apiKey")]
+    pub api_key: String,
     #[serde(rename = "hasAPIKey")]
     pub has_api_key: bool,
     pub source_language: SourceLanguage,
@@ -33,9 +37,11 @@ pub struct SettingsSnapshotPayload {
 impl SettingsSnapshotPayload {
     pub fn from_store(store: &SettingsStore) -> Self {
         let prefs = store.preferences();
+        let api_key = store.load_api_key().ok().flatten().unwrap_or_default();
         Self {
             workspace_id: prefs.workspace_id,
-            has_api_key: store.has_api_key(),
+            has_api_key: !api_key.is_empty(),
+            api_key,
             source_language: prefs.source_language,
             target_language: prefs.target_language,
             translation_mode: prefs.translation_mode,
@@ -60,7 +66,17 @@ pub struct SettingsDraft {
 
 #[tauri::command]
 pub fn settings_get(state: State<'_, AppState>) -> Result<SettingsSnapshotPayload, String> {
-    tracing::info!("settings_get invoked from frontend");
+    tracing::info!(
+        "settings_get invoked from frontend hasKey={} keyLen={}",
+        u8::from(state.settings.has_api_key()),
+        state
+            .settings
+            .load_api_key()
+            .ok()
+            .flatten()
+            .map(|k| k.len())
+            .unwrap_or(0)
+    );
     Ok(SettingsSnapshotPayload::from_store(&state.settings))
 }
 
