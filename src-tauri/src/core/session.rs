@@ -62,7 +62,8 @@ impl TranslationSessionController {
     }
 
     pub fn clear_subtitles(&mut self) {
-        self.subtitle_reducer.apply(crate::core::models::SubtitleEvent::Clear);
+        self.subtitle_reducer
+            .apply(crate::core::models::SubtitleEvent::Clear);
         self.state.subtitles = self.subtitle_reducer.snapshot.clone();
     }
 
@@ -146,7 +147,9 @@ mod tests {
             text: "Hello wor".into(),
             language: Some("en".into()),
         });
-        controller.handle(LiveTranslateServerEvent::TranslationDraft("你好，世".into()));
+        controller.handle(LiveTranslateServerEvent::TranslationDraft(
+            "你好，世".into(),
+        ));
 
         assert_eq!(controller.state.subtitles.source.text, "Hello wor");
         assert!(!controller.state.subtitles.source.is_final);
@@ -156,12 +159,19 @@ mod tests {
             text: "Hello world.".into(),
             language: Some("en".into()),
         });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal("你好，世界。".into()));
+        controller.handle(LiveTranslateServerEvent::TranslationFinal(
+            "你好，世界。".into(),
+        ));
 
         assert_eq!(controller.state.subtitles.history.len(), 1);
         assert!(controller.state.subtitles.translation.is_final);
         assert_eq!(
-            controller.state.detected_language.as_ref().unwrap().display_name(),
+            controller
+                .state
+                .detected_language
+                .as_ref()
+                .unwrap()
+                .display_name(),
             "English"
         );
     }
@@ -174,7 +184,12 @@ mod tests {
             language: Some("ja".into()),
         });
         assert_eq!(
-            controller.state.detected_language.as_ref().unwrap().display_name(),
+            controller
+                .state
+                .detected_language
+                .as_ref()
+                .unwrap()
+                .display_name(),
             "日本語"
         );
 
@@ -191,7 +206,10 @@ mod tests {
             message: "Bad language".into(),
         });
 
-        assert_eq!(controller.state.status, SessionStatus::Error("Bad language".into()));
+        assert_eq!(
+            controller.state.status,
+            SessionStatus::Error("Bad language".into())
+        );
     }
 
     #[test]
@@ -202,7 +220,9 @@ mod tests {
         controller.handle(LiveTranslateServerEvent::TranslationStarted);
         assert!(controller.state.is_translation_pending);
 
-        controller.handle(LiveTranslateServerEvent::TranslationFinal("翻译完成。".into()));
+        controller.handle(LiveTranslateServerEvent::TranslationFinal(
+            "翻译完成。".into(),
+        ));
         assert!(!controller.state.is_translation_pending);
 
         controller.handle(LiveTranslateServerEvent::TranslationStarted);
@@ -218,7 +238,9 @@ mod tests {
             text: "Please wait.".into(),
             language: Some("en".into()),
         });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal("请稍等。".into()));
+        controller.handle(LiveTranslateServerEvent::TranslationFinal(
+            "请稍等。".into(),
+        ));
         controller.handle(LiveTranslateServerEvent::TranslationStarted);
         let subtitles_before_pause = controller.state.subtitles.clone();
 
@@ -253,7 +275,9 @@ mod tests {
             text: "Last real line.".into(),
             language: Some("en".into()),
         });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal("最后一句正常字幕。".into()));
+        controller.handle(LiveTranslateServerEvent::TranslationFinal(
+            "最后一句正常字幕。".into(),
+        ));
         let subtitles_before_stopping = controller.state.subtitles.clone();
 
         controller.begin_stopping();
@@ -261,7 +285,9 @@ mod tests {
             text: "Translation mode ended.".into(),
             language: Some("en".into()),
         });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal("翻译模式已结束。".into()));
+        controller.handle(LiveTranslateServerEvent::TranslationFinal(
+            "翻译模式已结束。".into(),
+        ));
         controller.handle(LiveTranslateServerEvent::SessionFinished);
 
         assert_eq!(controller.state.status, SessionStatus::Stopping);
@@ -304,7 +330,9 @@ mod tests {
             text: "こんにちは。今日は天気がいいですね。".into(),
             language: Some("ja".into()),
         });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal("你好。今天天气很好。".into()));
+        controller.handle(LiveTranslateServerEvent::TranslationFinal(
+            "你好。今天天气很好。".into(),
+        ));
         assert_eq!(controller.state.subtitles.history.len(), 1);
 
         // The server final supersedes that local commit: revoke, then commit

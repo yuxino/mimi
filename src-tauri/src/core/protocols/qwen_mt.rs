@@ -38,9 +38,7 @@ pub enum QwenMTClientError {
 impl QwenMTClientError {
     pub fn is_authentication_failure(&self) -> bool {
         match self {
-            Self::RequestFailed { status_code, .. } => {
-                *status_code == 401 || *status_code == 403
-            }
+            Self::RequestFailed { status_code, .. } => *status_code == 401 || *status_code == 403,
             Self::MissingAPIKey => true,
             Self::InvalidHTTPResponse | Self::RequestTimedOut => false,
         }
@@ -159,6 +157,7 @@ impl QwenMTMemoryPair {
 pub enum QwenMTRequestEncoder {}
 
 impl QwenMTRequestEncoder {
+    #[allow(clippy::too_many_arguments)]
     pub fn request(
         text: &str,
         source_language: SourceLanguage,
@@ -239,7 +238,10 @@ impl QwenMTStreamDecoder {
 
         let response: Response =
             serde_json::from_str(text).map_err(|_| QwenMTProtocolError::InvalidJSON)?;
-        Ok(response.choices.first().and_then(|c| c.delta.content.clone()))
+        Ok(response
+            .choices
+            .first()
+            .and_then(|c| c.delta.content.clone()))
     }
 }
 
@@ -274,8 +276,7 @@ impl QwenMTDomainHint {
                  meaningful filler."
             }
         };
-        let source_guidance =
-            source_guidance(source_language, target_language);
+        let source_guidance = source_guidance(source_language, target_language);
         format!(
             "Natural spoken dialogue for watching TV dramas and films. {language_guidance} \
              {source_guidance} Preserve the speaker's tone, emotion, and implied subjects \
@@ -304,7 +305,11 @@ impl QwenMTDomainHint {
         target_language: TargetLanguage,
     ) -> Vec<QwenMTTerm> {
         let sources: &[SourceLanguage] = if source_language == SourceLanguage::Automatic {
-            &[SourceLanguage::Japanese, SourceLanguage::English, SourceLanguage::Korean]
+            &[
+                SourceLanguage::Japanese,
+                SourceLanguage::English,
+                SourceLanguage::Korean,
+            ]
         } else {
             std::slice::from_ref(&source_language)
         };
@@ -315,10 +320,7 @@ impl QwenMTDomainHint {
     }
 }
 
-fn filler_terms_for(
-    source: &SourceLanguage,
-    target: TargetLanguage,
-) -> Vec<QwenMTTerm> {
+fn filler_terms_for(source: &SourceLanguage, target: TargetLanguage) -> Vec<QwenMTTerm> {
     use SourceLanguage as S;
     use TargetLanguage as T;
 
@@ -449,10 +451,7 @@ fn source_guidance(source: SourceLanguage, target: TargetLanguage) -> &'static s
 mod tests {
     use super::*;
 
-    fn request(
-        text: &str,
-        source_language: SourceLanguage,
-    ) -> Value {
+    fn request(text: &str, source_language: SourceLanguage) -> Value {
         QwenMTRequestEncoder::request(
             text,
             source_language,
@@ -545,8 +544,10 @@ mod tests {
 
     #[test]
     fn spoken_dialogue_guidance_preserves_vocal_sounds() {
-        let guidance =
-            QwenMTDomainHint::spoken_dialogue(SourceLanguage::Japanese, TargetLanguage::SimplifiedChinese);
+        let guidance = QwenMTDomainHint::spoken_dialogue(
+            SourceLanguage::Japanese,
+            TargetLanguage::SimplifiedChinese,
+        );
 
         assert!(guidance.contains("gasps, moans, and cries"));
         assert!(guidance.contains("嗯、啊、呢、吧、嘛"));
@@ -562,8 +563,10 @@ mod tests {
 
     #[test]
     fn filler_glossary_pins_japanese_tone_words_for_chinese() {
-        let terms =
-            QwenMTDomainHint::filler_terms(SourceLanguage::Japanese, TargetLanguage::SimplifiedChinese);
+        let terms = QwenMTDomainHint::filler_terms(
+            SourceLanguage::Japanese,
+            TargetLanguage::SimplifiedChinese,
+        );
         assert!(terms.contains(&QwenMTTerm::new("えっと", "那个")));
         assert!(terms.contains(&QwenMTTerm::new("うーん", "嗯")));
         assert!(terms.contains(&QwenMTTerm::new("あぁ", "啊")));
@@ -572,16 +575,20 @@ mod tests {
 
     #[test]
     fn filler_glossary_combines_languages_for_automatic_source() {
-        let terms =
-            QwenMTDomainHint::filler_terms(SourceLanguage::Automatic, TargetLanguage::SimplifiedChinese);
+        let terms = QwenMTDomainHint::filler_terms(
+            SourceLanguage::Automatic,
+            TargetLanguage::SimplifiedChinese,
+        );
         assert!(terms.contains(&QwenMTTerm::new("えっと", "那个")));
         assert!(terms.contains(&QwenMTTerm::new("um", "嗯")));
     }
 
     #[test]
     fn request_encodes_the_filler_glossary_in_translation_options() {
-        let terms =
-            QwenMTDomainHint::filler_terms(SourceLanguage::Japanese, TargetLanguage::SimplifiedChinese);
+        let terms = QwenMTDomainHint::filler_terms(
+            SourceLanguage::Japanese,
+            TargetLanguage::SimplifiedChinese,
+        );
         let json = QwenMTRequestEncoder::request(
             "えっと、うーん、あぁ。",
             SourceLanguage::Japanese,

@@ -3,6 +3,7 @@
 use crate::audio::SystemAudioCaptureError;
 use tokio::sync::mpsc;
 
+#[derive(Clone)]
 pub struct UnsupportedSystemAudioCapture;
 
 impl UnsupportedSystemAudioCapture {

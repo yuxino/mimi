@@ -28,14 +28,14 @@ fn realtime_url(workspace_id: &str, model: &str) -> Result<url::Url, LiveTransla
     if !is_valid_workspace_id(workspace_id) {
         return Err(LiveTranslateProtocolError::InvalidWorkspaceID);
     }
-    let raw = format!(
-        "wss://{workspace_id}{WORKSPACE_HOST_SUFFIX}/api-ws/v1/realtime?model={model}"
-    );
+    let raw =
+        format!("wss://{workspace_id}{WORKSPACE_HOST_SUFFIX}/api-ws/v1/realtime?model={model}");
     url::Url::parse(&raw).map_err(|_| LiveTranslateProtocolError::InvalidEndpoint)
 }
 
 /// `qwen3.5-livetranslate-flash-realtime` endpoint: realtime transcription with
 /// simultaneous translation.
+#[derive(Clone)]
 pub struct LiveTranslateEndpoint {
     pub url: url::Url,
 }
@@ -166,24 +166,35 @@ impl RealtimeASRRequestEncoder {
 pub enum LiveTranslateServerEvent {
     SessionCreated,
     SessionUpdated,
-    SourceDraft { text: String, language: Option<String> },
-    SourceFinal { text: String, language: Option<String> },
+    SourceDraft {
+        text: String,
+        language: Option<String>,
+    },
+    SourceFinal {
+        text: String,
+        language: Option<String>,
+    },
     TranslationStarted,
     TranslationDraft(String),
     TranslationFinal(String),
     SessionFinished,
-    Error { code: String, message: String },
+    Error {
+        code: String,
+        message: String,
+    },
     /// Client-internal signal: the last confirmed subtitle entry is a
     /// provisional local commit and should be revoked before the authoritative
     /// server final for the same sentence is committed.
     SubtitleRevoked,
-    Ignored { kind: String },
+    Ignored {
+        kind: String,
+    },
 }
 
 impl LiveTranslateServerEvent {
     pub fn decode(text: &str) -> Result<Self, LiveTranslateProtocolError> {
-        let json: Value = serde_json::from_str(text)
-            .map_err(|_| LiveTranslateProtocolError::InvalidJSON)?;
+        let json: Value =
+            serde_json::from_str(text).map_err(|_| LiveTranslateProtocolError::InvalidJSON)?;
         Self::decode_value(&json)
     }
 
@@ -200,7 +211,10 @@ impl LiveTranslateServerEvent {
 
             "conversation.item.input_audio_transcription.text" => Ok(Self::SourceDraft {
                 text: combined_text(json),
-                language: json.get("language").and_then(Value::as_str).map(String::from),
+                language: json
+                    .get("language")
+                    .and_then(Value::as_str)
+                    .map(String::from),
             }),
 
             "conversation.item.input_audio_transcription.completed" => Ok(Self::SourceFinal {
@@ -210,7 +224,10 @@ impl LiveTranslateServerEvent {
                     .unwrap_or("")
                     .trim()
                     .to_string(),
-                language: json.get("language").and_then(Value::as_str).map(String::from),
+                language: json
+                    .get("language")
+                    .and_then(Value::as_str)
+                    .map(String::from),
             }),
 
             "response.text.text" | "response.audio_transcript.text" => {
@@ -330,7 +347,10 @@ mod tests {
             Some("event-hotwords"),
         )
         .unwrap();
-        assert_eq!(data["session"]["translation"]["corpus"]["phrases"]["mimi"], "耳");
+        assert_eq!(
+            data["session"]["translation"]["corpus"]["phrases"]["mimi"],
+            "耳"
+        );
     }
 
     #[test]
@@ -393,8 +413,9 @@ mod tests {
 
     #[test]
     fn asr_audio_and_finish_requests_use_realtime_event_types() {
-        let audio = RealtimeASRRequestEncoder::audio_append(&[0x00, 0x7F, 0xFF], Some("event-audio"))
-            .unwrap();
+        let audio =
+            RealtimeASRRequestEncoder::audio_append(&[0x00, 0x7F, 0xFF], Some("event-audio"))
+                .unwrap();
         let finish = RealtimeASRRequestEncoder::finish(Some("event-finish")).unwrap();
 
         assert_eq!(audio["type"], "input_audio_buffer.append");
@@ -458,7 +479,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(preview, LiveTranslateServerEvent::TranslationDraft("你好，世界".into()));
+        assert_eq!(
+            preview,
+            LiveTranslateServerEvent::TranslationDraft("你好，世界".into())
+        );
         assert_eq!(
             final_event,
             LiveTranslateServerEvent::TranslationFinal("你好，世界。".into())

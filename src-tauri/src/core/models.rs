@@ -65,20 +65,11 @@ impl SourceLanguage {
             || normalized == "mandarin"
         {
             Some(SourceLanguage::Chinese)
-        } else if normalized == "ja"
-            || normalized.starts_with("ja-")
-            || normalized == "japanese"
-        {
+        } else if normalized == "ja" || normalized.starts_with("ja-") || normalized == "japanese" {
             Some(SourceLanguage::Japanese)
-        } else if normalized == "en"
-            || normalized.starts_with("en-")
-            || normalized == "english"
-        {
+        } else if normalized == "en" || normalized.starts_with("en-") || normalized == "english" {
             Some(SourceLanguage::English)
-        } else if normalized == "ko"
-            || normalized.starts_with("ko-")
-            || normalized == "korean"
-        {
+        } else if normalized == "ko" || normalized.starts_with("ko-") || normalized == "korean" {
             Some(SourceLanguage::Korean)
         } else {
             None
@@ -125,7 +116,8 @@ impl SourceLanguage {
         if self == SourceLanguage::Chinese {
             return TargetLanguage::Original;
         }
-        if previous_source == SourceLanguage::Chinese && current_target == TargetLanguage::Original {
+        if previous_source == SourceLanguage::Chinese && current_target == TargetLanguage::Original
+        {
             return TargetLanguage::SimplifiedChinese;
         }
         current_target
@@ -447,17 +439,12 @@ mod tests {
     fn automatic_language_status_includes_the_detected_language() {
         let japanese = DetectedLanguage::from_reported(Some("ja-JP"));
         assert_eq!(
-            SourceLanguage::Automatic.status_display_name(
-                japanese.as_ref(),
-                TargetLanguage::SimplifiedChinese
-            ),
+            SourceLanguage::Automatic
+                .status_display_name(japanese.as_ref(), TargetLanguage::SimplifiedChinese),
             "自动识别（日本語）"
         );
         assert_eq!(
-            SourceLanguage::Automatic.status_display_name(
-                None,
-                TargetLanguage::SimplifiedChinese
-            ),
+            SourceLanguage::Automatic.status_display_name(None, TargetLanguage::SimplifiedChinese),
             "自动识别中"
         );
         assert_eq!(
@@ -495,15 +482,21 @@ mod tests {
     #[test]
     fn detected_languages_normalize_service_codes_for_display() {
         assert_eq!(
-            DetectedLanguage::from_reported(Some("ja-JP")).unwrap().display_name(),
+            DetectedLanguage::from_reported(Some("ja-JP"))
+                .unwrap()
+                .display_name(),
             "日本語"
         );
         assert_eq!(
-            DetectedLanguage::from_reported(Some("yue")).unwrap().display_name(),
+            DetectedLanguage::from_reported(Some("yue"))
+                .unwrap()
+                .display_name(),
             "粤语"
         );
         assert_eq!(
-            DetectedLanguage::from_reported(Some("unknown")).unwrap().display_name(),
+            DetectedLanguage::from_reported(Some("unknown"))
+                .unwrap()
+                .display_name(),
             "UNKNOWN"
         );
     }

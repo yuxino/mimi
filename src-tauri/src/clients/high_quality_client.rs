@@ -66,10 +66,12 @@ impl HighQualityTranslationClient {
         let asr_client = Audio3ASRClient::new(workspace_id, api_key, source_language)
             .map_err(|_| QwenMTClientError::MissingAPIKey)?;
         let streams_finals = final_model != QwenMTModel::Plus;
-        let domain_hint = Some(crate::core::protocols::qwen_mt::QwenMTDomainHint::spoken_dialogue(
-            source_language,
-            target_language,
-        ));
+        let domain_hint = Some(
+            crate::core::protocols::qwen_mt::QwenMTDomainHint::spoken_dialogue(
+                source_language,
+                target_language,
+            ),
+        );
         let filler_terms = crate::core::protocols::qwen_mt::QwenMTDomainHint::filler_terms(
             source_language,
             target_language,
@@ -116,13 +118,12 @@ impl HighQualityTranslationClient {
         let task_id = Uuid::new_v4().simple().to_string();
         let (asr_tx, mut asr_rx) = mpsc::unbounded_channel();
         self.asr_client.set_event_sender(asr_tx).await;
-        self.asr_client
-            .connect(&task_id)
-            .await
-            .map_err(|error| QwenMTClientError::RequestFailed {
+        self.asr_client.connect(&task_id).await.map_err(|error| {
+            QwenMTClientError::RequestFailed {
                 status_code: 0,
                 message: error.to_string(),
-            })?;
+            }
+        })?;
 
         // Bridge ASR events into this pipeline's handler.
         let self_arc = self.clone();
@@ -136,13 +137,12 @@ impl HighQualityTranslationClient {
     }
 
     pub async fn send_audio(&self, pcm_data: &[u8]) -> Result<(), QwenMTClientError> {
-        self.asr_client
-            .send_audio(pcm_data)
-            .await
-            .map_err(|error| QwenMTClientError::RequestFailed {
+        self.asr_client.send_audio(pcm_data).await.map_err(|error| {
+            QwenMTClientError::RequestFailed {
                 status_code: 0,
                 message: error.to_string(),
-            })
+            }
+        })
     }
 
     pub async fn ping(&self, timeout: Duration) -> Result<(), QwenMTClientError> {
@@ -158,7 +158,8 @@ impl HighQualityTranslationClient {
     pub async fn finish(&self) {
         self.asr_client.finish(Duration::from_secs(3)).await;
         self.commit_pending_draft("session-finish").await;
-        self.wait_for_final_translations(Duration::from_secs(35)).await;
+        self.wait_for_final_translations(Duration::from_secs(35))
+            .await;
         self.reset_draft_finalization().await;
         self.cancel_final_translations().await;
         self.disconnect_asr_bridge().await;
@@ -191,7 +192,9 @@ impl HighQualityTranslationClient {
                     "audio3 asr draft length={} pendingLength={} language={}",
                     text.chars().count(),
                     uncommitted_text.chars().count(),
-                    language.as_deref().unwrap_or(self.source_language.raw_value())
+                    language
+                        .as_deref()
+                        .unwrap_or(self.source_language.raw_value())
                 );
                 if !has_pending {
                     return;
@@ -224,7 +227,7 @@ impl HighQualityTranslationClient {
                     return;
                 }
                 self.cancel_draft_timers().await;
-                        self.inner.lock().await.latest_draft_language = None;
+                self.inner.lock().await.latest_draft_language = None;
 
                 let (uncommitted_text, was_replaced) = {
                     let mut inner = self.inner.lock().await;
@@ -237,8 +240,13 @@ impl HighQualityTranslationClient {
                 pipeline_log!(
                     "audio3 asr final length={} pendingLength={} language={} queuedFinals={}",
                     text.chars().count(),
-                    uncommitted_text.as_ref().map(|t| t.chars().count()).unwrap_or(0),
-                    language.as_deref().unwrap_or(self.source_language.raw_value()),
+                    uncommitted_text
+                        .as_ref()
+                        .map(|t| t.chars().count())
+                        .unwrap_or(0),
+                    language
+                        .as_deref()
+                        .unwrap_or(self.source_language.raw_value()),
                     self.inner.lock().await.final_queue.len()
                 );
                 let Some(uncommitted_text) = uncommitted_text else {
@@ -309,9 +317,12 @@ impl HighQualityTranslationClient {
             "audio3 asr local final boundary={} length={} language={}",
             boundary,
             text.chars().count(),
-            language.as_deref().unwrap_or(self.source_language.raw_value())
+            language
+                .as_deref()
+                .unwrap_or(self.source_language.raw_value())
         );
-        self.enqueue_confirmed_source(text, language, boundary).await;
+        self.enqueue_confirmed_source(text, language, boundary)
+            .await;
     }
 
     async fn enqueue_confirmed_source(
@@ -391,7 +402,9 @@ impl HighQualityTranslationClient {
             let started_at = tokio::time::Instant::now();
             pipeline_log!(
                 "mt plus final started waitMs={} remaining={}",
-                started_at.saturating_duration_since(request.enqueued_at).as_millis(),
+                started_at
+                    .saturating_duration_since(request.enqueued_at)
+                    .as_millis(),
                 self.inner.lock().await.final_queue.len()
             );
             self.emit(LiveTranslateServerEvent::TranslationStarted);
@@ -422,7 +435,9 @@ impl HighQualityTranslationClient {
                         started_at.elapsed().as_millis(),
                         self.inner.lock().await.final_queue.len()
                     );
-                    self.emit(LiveTranslateServerEvent::TranslationFinal(translation.clone()));
+                    self.emit(LiveTranslateServerEvent::TranslationFinal(
+                        translation.clone(),
+                    ));
                     self.remember(&request.text, &translation).await;
                 }
                 Err(error) => {
@@ -509,7 +524,9 @@ impl HighQualityTranslationClient {
 
     async fn remember(&self, source: &str, translation: &str) {
         let mut inner = self.inner.lock().await;
-        inner.translation_memory.retain(|pair| pair.source != source);
+        inner
+            .translation_memory
+            .retain(|pair| pair.source != source);
         inner.translation_memory.push(QwenMTMemoryPair {
             source: source.to_string(),
             target: translation.to_string(),
@@ -552,4 +569,3 @@ impl HighQualityTranslationClient {
         let _ = self.events.send(event);
     }
 }
-

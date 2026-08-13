@@ -98,18 +98,18 @@ mod tests {
     #[test]
     fn sentence_punctuation_creates_stable_subtitle_segments() {
         assert_eq!(
-            SubtitleTextSegmenter::segments("第一句话已经说完。第二句话也说完了！第三句还在继续", 28),
-            vec![
-                "第一句话已经说完。",
-                "第二句话也说完了！",
-                "第三句还在继续"
-            ]
+            SubtitleTextSegmenter::segments(
+                "第一句话已经说完。第二句话也说完了！第三句还在继续",
+                28
+            ),
+            vec!["第一句话已经说完。", "第二句话也说完了！", "第三句还在继续"]
         );
     }
 
     #[test]
     fn continuous_cjk_speech_is_bounded_without_losing_text() {
-        let text = "这是一段完全没有句号而且会持续不断增长的字幕内容用来模拟视频里人物一直讲话的情况";
+        let text =
+            "这是一段完全没有句号而且会持续不断增长的字幕内容用来模拟视频里人物一直讲话的情况";
         let segments = SubtitleTextSegmenter::segments(text, 14);
 
         assert!(segments.len() > 1, "long continuous speech should be split");
@@ -137,9 +137,12 @@ mod tests {
 
     #[test]
     fn extending_a_long_draft_preserves_completed_segment_prefixes() {
-        let first = SubtitleTextSegmenter::segments("持续讲话时字幕会不断增长直到超过一行然后继续", 12);
-        let extended =
-            SubtitleTextSegmenter::segments("持续讲话时字幕会不断增长直到超过一行然后继续显示后面的新增内容", 12);
+        let first =
+            SubtitleTextSegmenter::segments("持续讲话时字幕会不断增长直到超过一行然后继续", 12);
+        let extended = SubtitleTextSegmenter::segments(
+            "持续讲话时字幕会不断增长直到超过一行然后继续显示后面的新增内容",
+            12,
+        );
 
         let first_len = first.len();
         assert_eq!(&extended[..first_len - 1], &first[..first_len - 1]);

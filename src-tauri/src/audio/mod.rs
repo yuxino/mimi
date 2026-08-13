@@ -36,3 +36,28 @@ pub type SystemAudioCapture = windows::WindowsSystemAudioCapture;
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub type SystemAudioCapture = unsupported::UnsupportedSystemAudioCapture;
+
+impl SystemAudioCapture {
+    /// Creates the platform capture handle for this app. On macOS the
+    /// ScreenCaptureKit objects are confined to the main thread through the
+    /// app handle's run-on-main-thread executor.
+    pub fn for_app(app: &tauri::AppHandle) -> Self {
+        #[cfg(target_os = "macos")]
+        {
+            let app = app.clone();
+            macos::MacSystemAudioCapture::new(std::sync::Arc::new(
+                move |task: Box<dyn FnOnce() + Send>| {
+                    let _ = app.run_on_main_thread(task);
+                },
+            ))
+        }
+        #[cfg(target_os = "windows")]
+        {
+            windows::WindowsSystemAudioCapture::new()
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            unsupported::UnsupportedSystemAudioCapture::new()
+        }
+    }
+}

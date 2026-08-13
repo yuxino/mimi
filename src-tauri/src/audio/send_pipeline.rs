@@ -20,10 +20,7 @@ pub struct AudioSendPipeline {
 }
 
 impl AudioSendPipeline {
-    pub fn spawn<F, Fut>(
-        send_audio: F,
-        on_error: impl Fn(String) + Send + Sync + 'static,
-    ) -> Self
+    pub fn spawn<F, Fut>(send_audio: F, on_error: impl Fn(String) + Send + Sync + 'static) -> Self
     where
         F: Fn(Vec<u8>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send,

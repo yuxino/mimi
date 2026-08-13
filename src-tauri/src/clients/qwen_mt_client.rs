@@ -23,6 +23,7 @@ pub struct QwenMTClient {
 }
 
 impl QwenMTClient {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         workspace_id: &str,
         api_key: &str,
@@ -75,27 +76,28 @@ impl QwenMTClient {
             .map_err(|_| QwenMTClientError::RequestTimedOut)?;
 
         let status = response.status();
-        let bytes = response.bytes().await.map_err(|_| QwenMTClientError::InvalidHTTPResponse)?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|_| QwenMTClientError::InvalidHTTPResponse)?;
         if !status.is_success() {
             return Err(QwenMTClientError::RequestFailed {
                 status_code: status.as_u16(),
                 message: error_message(&bytes),
             });
         }
-        QwenMTResponseDecoder::decode(&String::from_utf8_lossy(&bytes))
-            .map_err(|error| match error {
-                QwenMTProtocolError::InvalidJSON => QwenMTClientError::InvalidHTTPResponse,
-                QwenMTProtocolError::MissingTranslation => {
-                    QwenMTClientError::RequestFailed {
-                        status_code: status.as_u16(),
-                        message: "Qwen-MT returned no translated text.".into(),
-                    }
-                }
-                other => QwenMTClientError::RequestFailed {
-                    status_code: status.as_u16(),
-                    message: other.to_string(),
-                },
-            })
+        QwenMTResponseDecoder::decode(&String::from_utf8_lossy(&bytes)).map_err(|error| match error
+        {
+            QwenMTProtocolError::InvalidJSON => QwenMTClientError::InvalidHTTPResponse,
+            QwenMTProtocolError::MissingTranslation => QwenMTClientError::RequestFailed {
+                status_code: status.as_u16(),
+                message: "Qwen-MT returned no translated text.".into(),
+            },
+            other => QwenMTClientError::RequestFailed {
+                status_code: status.as_u16(),
+                message: other.to_string(),
+            },
+        })
     }
 
     /// Streams the translation, invoking `on_partial` with the accumulated
@@ -118,11 +120,10 @@ impl QwenMTClient {
             .header("Accept", "text/event-stream")
             .body(body);
 
-        let streamed = tokio::time::timeout(timeout, async {
-            self.stream(request, &on_partial).await
-        })
-        .await
-        .map_err(|_| QwenMTClientError::RequestTimedOut)??;
+        let streamed =
+            tokio::time::timeout(timeout, async { self.stream(request, &on_partial).await })
+                .await
+                .map_err(|_| QwenMTClientError::RequestTimedOut)??;
         Ok(streamed)
     }
 
@@ -236,7 +237,10 @@ pub fn spoken_dialogue_config(
     target_language: TargetLanguage,
 ) -> (Option<String>, Vec<QwenMTTerm>) {
     (
-        Some(QwenMTDomainHint::spoken_dialogue(source_language, target_language)),
+        Some(QwenMTDomainHint::spoken_dialogue(
+            source_language,
+            target_language,
+        )),
         QwenMTDomainHint::filler_terms(source_language, target_language),
     )
 }

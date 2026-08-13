@@ -113,7 +113,10 @@ mod tests {
         reducer.apply(SubtitleEvent::SourceDraft("Hello wor".into()));
         reducer.apply(SubtitleEvent::TranslationDraft("你好，世".into()));
 
-        assert_eq!(reducer.snapshot.source, SubtitleLine::new("Hello wor", false));
+        assert_eq!(
+            reducer.snapshot.source,
+            SubtitleLine::new("Hello wor", false)
+        );
         assert_eq!(
             reducer.snapshot.translation,
             SubtitleLine::new("你好，世", false)
@@ -136,7 +139,11 @@ mod tests {
         );
         assert_eq!(
             reducer.snapshot.history,
-            vec![SubtitlePair::new("Hello world.".into(), "你好，世界。".into(), 0)]
+            vec![SubtitlePair::new(
+                "Hello world.".into(),
+                "你好，世界。".into(),
+                0
+            )]
         );
     }
 
@@ -170,7 +177,11 @@ mod tests {
 
         assert_eq!(
             reducer.snapshot.history,
-            vec![SubtitlePair::new("今日は晴れです。".into(), "今天天气很好。".into(), 0)]
+            vec![SubtitlePair::new(
+                "今日は晴れです。".into(),
+                "今天天气很好。".into(),
+                0
+            )]
         );
         assert_eq!(
             reducer.snapshot.translation,
@@ -187,7 +198,11 @@ mod tests {
 
         assert_eq!(
             reducer.snapshot.history,
-            vec![SubtitlePair::new("First sentence.".into(), "第一句。".into(), 0)]
+            vec![SubtitlePair::new(
+                "First sentence.".into(),
+                "第一句。".into(),
+                0
+            )]
         );
         assert_eq!(
             reducer.snapshot.source,
@@ -242,7 +257,9 @@ mod tests {
         let mut reducer = SubtitleReducer::new(2);
         for index in 1..=3 {
             reducer.apply(SubtitleEvent::SourceFinal(format!("source {index}")));
-            reducer.apply(SubtitleEvent::TranslationFinal(format!("translation {index}")));
+            reducer.apply(SubtitleEvent::TranslationFinal(format!(
+                "translation {index}"
+            )));
         }
 
         assert_eq!(
