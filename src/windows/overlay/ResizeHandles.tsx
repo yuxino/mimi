@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { isTauri, overlayCommitFrame } from "../../lib/ipc";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
 type Region =
@@ -94,6 +95,9 @@ export function ResizeHandles({ disabled, onResize }: ResizeHandlesProps) {
 
   const end = () => {
     dragRef.current = null;
+    // Persist the final frame now that the drag finished (the Resized
+    // handler may have been suppressed while a popover was enlarged).
+    if (isTauri) void overlayCommitFrame().catch(() => {});
   };
 
   return (

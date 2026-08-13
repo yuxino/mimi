@@ -297,6 +297,12 @@ pub fn overlay_set_height(app: AppHandle, height: f64) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn overlay_commit_frame(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    crate::windows::OverlayWindowManager::commit_frame(&app, &state.settings);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn tray_panel_hide(app: AppHandle) -> Result<(), String> {
     TrayPanelManager::hide(&app);
     Ok(())

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { I18N } from "../../lib/i18n";
-import { isTauri, overlaySetHeight } from "../../lib/ipc";
+import { isTauri, overlayCommitFrame, overlaySetHeight } from "../../lib/ipc";
 import {
   OVERLAY_ACTIVITY_PHASES,
   SOURCE_LANGUAGE_MANUAL_CASES,
@@ -57,7 +57,9 @@ export function LanguagePickerPopover({
   // clipped by the window edge.
   useEffect(() => {
     if (!isTauri) return;
-    void overlaySetHeight(open ? 400 : 0);
+    void overlaySetHeight(open ? 400 : 0).then(() => {
+      if (!open) void overlayCommitFrame().catch(() => {});
+    });
   }, [open]);
 
   if (status === null) return null;
