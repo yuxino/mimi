@@ -191,11 +191,16 @@ impl OverlayWindowManager {
     }
 
     pub fn sync_visibility(app: &AppHandle, is_active: bool) {
-        if is_active {
-            if let Some(window) = app.get_webview_window("overlay") {
-                let _ = window.show();
-            }
-        } else if let Some(window) = app.get_webview_window("overlay") {
+        let Some(window) = app.get_webview_window("overlay") else {
+            return;
+        };
+        let visible = window.is_visible().unwrap_or(false);
+        // Only act when the visibility actually changes: `show()` on an
+        // already-visible window re-activates it and steals focus, which
+        // closed the language popover on every subtitle update.
+        if is_active && !visible {
+            let _ = window.show();
+        } else if !is_active && visible {
             let _ = window.hide();
         }
     }
