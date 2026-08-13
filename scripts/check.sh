@@ -1,11 +1,52 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Canonical automated check for the mimi Tauri application:
+# Rust formatting + clippy (warnings as errors) + the full unit-test suite,
+# then the frontend typecheck/lint/test/build pipeline, and finally a
+# whitespace/error check on the diff.
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
 cd "$PROJECT_DIR"
-swift run mimi-core-tests
-swift build -c release -Xswiftc -warnings-as-errors
+
+# Local tool caches (the home caches on CI machines can be root-owned).
+export CARGO_HOME="${CARGO_HOME:-$PROJECT_DIR/.cargo-home}"
+export npm_config_cache="${npm_config_cache:-$PROJECT_DIR/.npm-cache}"
+
+echo "==> cargo fmt --check"
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+echo "==> cargo clippy -D warnings"
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+echo "==> cargo test"
+cargo test --manifest-path src-tauri/Cargo.toml
+
+# Windows compile-level verification when explicitly requested (the MSVC
+# target's C dependencies cannot cross-compile from macOS; CI runs the full
+# Rust suite on windows-latest instead).
+if [[ "${MIMI_CHECK_WINDOWS:-0}" == "1" ]]; then
+  echo "==> cargo check (windows-msvc)"
+  cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
+else
+  echo "==> skipping windows-msvc check (set MIMI_CHECK_WINDOWS=1 to enable)"
+fi
+
+echo "==> frontend typecheck"
+npx tsc -b
+
+echo "==> frontend lint"
+npm run lint
+
+echo "==> frontend tests"
+npm run test
+
+echo "==> frontend build"
+npm run build
+
+echo "==> git diff --check"
 git diff --check
 git diff --cached --check
+
+echo "All checks passed."

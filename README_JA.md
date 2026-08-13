@@ -1,89 +1,66 @@
 <div align="center">
-  <img src="Resources/Assets/mimi-icon.png" width="96" alt="mimi">
+  <img src="src-tauri/icons/128x128@2x.png" width="96" alt="mimi">
   <h1>mimi</h1>
-  <p>Macのリアルタイム翻訳字幕</p>
+  <p>Mac / Windows で再生中の音声にリアルタイム翻訳字幕</p>
   <p>
     <a href="https://github.com/yuxino/mimi/releases/latest"><strong>mimiをダウンロード</strong></a>
-    · <a href="README.md">简体中文</a>
-    · <a href="README_EN.md">English</a>
+    · <a href="README_ZH.md">简体中文</a>
+    · <a href="README.md">English</a>
   </p>
 </div>
 
-mimiは、日本語の「耳（みみ）」に由来する名前です。Macで再生中の中国語・日本語・英語・韓国語を原文字幕として表示したり、簡体字中国語・英語・日本語へリアルタイム翻訳したりできます。
+mimiは、日本語の「耳（みみ）」に由来する名前です。デバイスで再生中の中国語・日本語・英語・韓国語を原文字幕として表示したり、簡体字中国語・英語・日本語へリアルタイム翻訳したりできます。Tauri v2（Rust + React）製で、同じコードベースが macOS と Windows の両方に対応しています。
 
 ブラウザ、動画プレイヤー、オンライン会議、オンライン授業、デスクトップアプリで使えます。
 
-<table>
-  <tr>
-    <td width="33.33%"><img src="docs/images/mimi-film-real-ja.jpg" alt="海外ドラマにリアルタイム日本語字幕を表示するmimi"></td>
-    <td width="33.33%"><img src="docs/images/mimi-game-real-ja.jpg" alt="写実的なストーリーゲームにリアルタイム日本語字幕を表示するmimi"></td>
-    <td width="33.33%"><img src="docs/images/mimi-live-real-ja.jpg" alt="旅行ライブ配信にリアルタイム日本語字幕を表示するmimi"></td>
-  </tr>
-  <tr>
-    <td align="center">字幕のない海外映画を楽しむ</td>
-    <td align="center">台詞の多いストーリーゲームを楽しむ</td>
-    <td align="center">ライブ、ポッドキャスト、旅動画を理解する</td>
-  </tr>
-  <tr>
-    <td width="33.33%"><img src="docs/images/mimi-romance-real-ja.jpg" alt="海外のショートドラマにリアルタイム日本語字幕を表示するmimi"></td>
-    <td width="33.33%"><img src="docs/images/mimi-meeting-real-ja.jpg" alt="多言語のオンライン会議にリアルタイム日本語字幕を表示するmimi"></td>
-    <td width="33.33%"><img src="docs/images/mimi-course-real-ja.jpg" alt="海外のオンライン授業にリアルタイム日本語字幕を表示するmimi"></td>
-  </tr>
-  <tr>
-    <td align="center">海外のショートドラマや会話を追いかける</td>
-    <td align="center">多言語のオンライン会議に参加する</td>
-    <td align="center">海外のオンライン授業や講義を理解する</td>
-  </tr>
-</table>
+## 機能
 
-## 主な機能
+- **リアルタイム字幕** — ブラウザ・プレイヤー・ゲーム・会議・デスクトップアプリに対応。
+- **リアルタイム翻訳** — 極速 / 低遅延 / 高品質の3モード。
+- **柔軟な字幕ウィンドウ** — 移動・リサイズ・折りたたみ・クリック透過ロック。
+- **多言語** — 中国語・日本語・英語・韓国語の認識。
+- **プライバシー** — マイク不使用、アカウント不要、音声や字幕履歴の保存なし。
+- **グローバルショートカット** — macOS は **⌘ ⇧ Space**、Windows は **Ctrl+Shift+Space** で開始/停止。
 
-- 字幕ウィンドウの移動、サイズ変更、固定、コンパクト表示
-- 現在の台詞を強調し、確定済み字幕を時刻付きで表示
-- 一時停止、消去、認識言語の切り替え、短い通信エラーからの自動復旧
-- 翻訳モードは「高速・低遅延・高品質」の3つ。字幕ウィンドウ左上から直接切り替え
-- **⌘ ⇧ Space** でリアルタイム字幕を開始 / 停止
+## はじめ方
 
-## はじめる
+1. [Releases](https://github.com/yuxino/mimi/releases/latest) からお使いのプラットフォーム版をダウンロードします。
+2. アリババクラウド Model Studio の Workspace ID と API キーを設定します。
+3. 動画などを再生し、「開始」をクリックします。
 
-1. [Releases](https://github.com/yuxino/mimi/releases/latest)から最新版をダウンロード
-2. Alibaba Cloud Model StudioのWorkspace IDとAPI Keyを入力
-3. 動画を再生するか、会議・オンライン授業に入り、**Start Listening**をクリック
+API キーは OS のキーチェーン（macOS キーチェーン / Windows 資格情報マネージャー）に保存されます。Workspace ID と API キーは同じ華北2（北京）リージョンのワークスペースのものを使用してください。モデル利用には料金がかかる場合があります。
 
-> mimiは、まだAppleの公証を受けていません。初回起動時にmacOSでブロックされた場合は、「システム設定 → プライバシーとセキュリティ」から「このまま開く」を選んでください。
+[API キーの作成](https://help.aliyun.com/zh/model-studio/get-api-key) · [Workspace ID の確認](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)
 
-## プライバシーと設定
+### プラットフォームについて
 
-mimiはマイクを使いません。アカウント登録も不要で、音声や字幕の履歴を保存することもありません。API KeyはmacOSのキーチェーンに保管されます。
+- **macOS**：初回のリスニング時に「画面収録」の許可が求められます（システム音声の取得のみに使用し、画面は記録しません。mimi 自身の音声も除外されます）。
+- **Windows**：WASAPI ループバックで既定の再生デバイスのミックス全体を取得します。許可は不要です。mimi は音を再生しないためエコーもありません。
 
-[API Keyを作成](https://help.aliyun.com/en/model-studio/get-api-key) · [Workspace IDを確認](https://help.aliyun.com/en/model-studio/obtain-the-app-id-and-workspace-id)
+## ソースからビルド
 
-> Workspace IDとAPI Keyは、同じ中国（北京）リージョンのワークスペースで発行されたものを使用してください。モデルの利用には料金がかかる場合があります。
-
-## 使い方のヒント
-
-- 上部中央の短いハンドルをドラッグして移動。四辺と四隅から自由にサイズ変更できます
-- 上部をダブルクリックして、字幕ウィンドウを折りたたみ / 展開できます
-- 固定すると、字幕の上からそのまま動画や会議画面を操作できます
-- 左上で言語や翻訳モードを切り替え、右上で一時停止や字幕の消去ができます
-<details>
-<summary>ソースからビルド</summary>
-
-macOS 14以降と、Xcode 16またはSwift 6を含むXcode Command Line Toolsが必要です。
+Rust 1.85+ と Node.js 20+ が必要です（macOS は Xcode Command Line Tools も必要）。
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
 cd mimi
-swift run mimi-core-tests
-swift build -c release -Xswiftc -warnings-as-errors
-./scripts/package-app.sh
-open dist/mimi.app
+npm install
+npm run tauri dev        # 開発実行
+./scripts/check.sh       # 全チェック（fmt/clippy/テスト/フロントエンドビルド）
+./scripts/package-app.sh # パッケージ化（macOS: .dmg / Windows: .msi/.nsis）
 ```
 
-</details>
+Windows 向けパッケージは Windows マシンでビルドしてください（Rust の C 依存は macOS から MSVC ターゲットへクロスコンパイルできません）。CI は macOS と Windows の両方で Rust テスト一式を実行します。
 
-## mimiに参加する
+## テスト
 
-[Issue](https://github.com/yuxino/mimi/issues)やPull Requestを歓迎します。開発を始める前に[CONTRIBUTING.md](CONTRIBUTING.md)を読み、セキュリティ上の問題は[SECURITY.md](SECURITY.md)に従って非公開で報告してください。
+```bash
+cd src-tauri && cargo test   # Rust ユニットテスト（プロトコル、字幕組み立て、設定、PCM など）
+npm run test                 # フロントエンド vitest
+```
+
+UI スモークテストは `MIMI_UI_TEST=1`（デモ認証情報）と `MIMI_AUTO_START=1`（起動時に自動セッション開始、エラー経路の確認用）を付けて `npm run tauri dev` を実行します。
+
+詳細は [CONTRIBUTING.md](CONTRIBUTING.md) と [SECURITY.md](SECURITY.md) をご覧ください。
 
 [MIT](LICENSE) © 2026 yuxino
