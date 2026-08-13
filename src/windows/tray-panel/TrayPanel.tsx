@@ -22,7 +22,11 @@ const SECONDARY = "rgba(255,255,255,0.55)";
 
 /** Menu-bar style control panel; 1:1 port of `MenuBarView.swift`. */
 export function TrayPanel() {
-  const session = useStore((state) => state.session);
+  // Narrow selectors: this window never shows subtitle text, so subscribing
+  // to the whole session object would re-render it on every streaming event.
+  const sessionStatus = useStore((state) => state.session.status);
+  const isActive = useStore((state) => state.session.isActive);
+  const isPaused = useStore((state) => state.session.isPaused);
   const settings = useStore((state) => state.settings);
   const start = useStore((state) => state.start);
   const stop = useStore((state) => state.stop);
@@ -35,8 +39,8 @@ export function TrayPanel() {
   const quit = useStore((state) => state.quit);
 
   const isChangingSession =
-    session.status.kind === "connecting" || session.status.kind === "stopping";
-  const isListening = session.status.kind === "listening";
+    sessionStatus.kind === "connecting" || sessionStatus.kind === "stopping";
+  const isListening = sessionStatus.kind === "listening";
 
   useEffect(() => {
     prepareLanguagePreferences(settings, saveSettings);
@@ -84,11 +88,11 @@ export function TrayPanel() {
             <span
               style={{
                 fontSize: 12,
-                color: statusColor(session),
+                color: statusColor(sessionStatus, isPaused),
                 lineHeight: 1.3,
               }}
             >
-              {statusText(session, settings)}
+              {statusText(sessionStatus, isPaused, settings)}
             </span>
           </div>
         </div>
@@ -96,10 +100,10 @@ export function TrayPanel() {
         <Divider />
 
         <ToggleRow
-          icon={session.isActive ? "waveform" : "waveform-slash"}
+          icon={isActive ? "waveform" : "waveform-slash"}
           label={I18N.tray.liveSubtitles}
           hint={shortcutHint()}
-          checked={session.isActive}
+          checked={isActive}
           onChange={handleLiveSubtitles}
         />
 
@@ -109,7 +113,7 @@ export function TrayPanel() {
           </span>
           <select
             value={pickerValue}
-            disabled={isChangingSession || session.isPaused}
+            disabled={isChangingSession || isPaused}
             aria-label={I18N.tray.sourceLanguage}
             onChange={(event) =>
               void switchSourceLanguage(event.target.value as SourceLanguage)
@@ -122,7 +126,7 @@ export function TrayPanel() {
               color: "rgba(255,255,255,0.9)",
               border: "1px solid rgba(255,255,255,0.12)",
               fontSize: 13,
-              opacity: isChangingSession || session.isPaused ? 0.5 : 1,
+              opacity: isChangingSession || isPaused ? 0.5 : 1,
             }}
           >
             {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
@@ -257,12 +261,13 @@ function Divider() {
 }
 
 function statusText(
-  session: SessionStateEvent,
+  status: SessionStateEvent["status"],
+  isPaused: boolean,
   settings: SettingsSnapshot,
 ): string {
-  if (session.isPaused) return I18N.tray.paused;
+  if (isPaused) return I18N.tray.paused;
 
-  switch (session.status.kind) {
+  switch (status.kind) {
     case "idle":
       return settings.workspaceID.trim() === "" || !settings.hasAPIKey
         ? I18N.tray.setupRequired
@@ -274,13 +279,16 @@ function statusText(
     case "stopping":
       return I18N.tray.stopping;
     case "error":
-      return session.status.message;
+      return status.message;
   }
 }
 
-function statusColor(session: SessionStateEvent): string {
-  if (session.isPaused) return ORANGE;
-  switch (session.status.kind) {
+function statusColor(
+  status: SessionStateEvent["status"],
+  isPaused: boolean,
+): string {
+  if (isPaused) return ORANGE;
+  switch (status.kind) {
     case "listening":
       return GREEN;
     case "error":

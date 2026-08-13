@@ -315,9 +315,9 @@ impl OverlayWindowManager {
         {
             let mut state = state.lock().unwrap();
             state.last_geometry_event = Some(now);
-            // One debounced commit task is enough: it re-reads the timestamp
-            // when it wakes, so later events are still folded in without
-            // spawning a task per event.
+            // One debounced commit task is enough: the in-flight task tails
+            // newer timestamps until events settle, so no commit is lost and
+            // no task is spawned per event.
             if state.geometry_task_pending {
                 return;
             }
@@ -327,24 +327,31 @@ impl OverlayWindowManager {
         let state = Arc::clone(state);
         let settings = Arc::clone(settings);
         tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(350)).await;
-            let mut state = state.lock().unwrap();
-            state.geometry_task_pending = false;
-            // A newer event arrived while we slept; it owns the commit.
-            if state.last_geometry_event != Some(now) {
+            let mut expected = now;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+                let mut state = state.lock().unwrap();
+                if state.last_geometry_event != Some(expected) {
+                    // Newer events arrived while we slept; tail them instead
+                    // of dropping their commit (the single-flight flag made
+                    // them skip spawning their own task).
+                    expected = state.last_geometry_event.expect("checked as Some");
+                    continue;
+                }
+                state.geometry_task_pending = false;
+                match state.mode {
+                    OverlayMode::Expanded => {
+                        sync_user_frame_from_window(&app, &mut state);
+                        persist_user_frame(&settings, &state.user_frame);
+                    }
+                    OverlayMode::Collapsed => {
+                        // Only the position is meaningful while collapsed; the
+                        // remembered expanded size must survive.
+                        sync_position_from_window(&app, &mut state.user_frame);
+                        persist_user_frame(&settings, &state.user_frame);
+                    }
+                }
                 return;
-            }
-            match state.mode {
-                OverlayMode::Expanded => {
-                    sync_user_frame_from_window(&app, &mut state);
-                    persist_user_frame(&settings, &state.user_frame);
-                }
-                OverlayMode::Collapsed => {
-                    // Only the position is meaningful while collapsed; the
-                    // remembered expanded size must survive.
-                    sync_position_from_window(&app, &mut state.user_frame);
-                    persist_user_frame(&settings, &state.user_frame);
-                }
             }
         });
     }

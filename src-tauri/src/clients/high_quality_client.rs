@@ -40,6 +40,9 @@ struct Inner {
     draft_maximum_wait_task: Option<JoinHandle<()>>,
     final_worker: Option<JoinHandle<()>>,
     asr_bridge: Option<JoinHandle<()>>,
+    /// Throttles the per-draft diagnostic log (drafts stream several times
+    /// per second while speech flows).
+    last_draft_log_at: Option<tokio::time::Instant>,
 }
 
 #[derive(Clone)]
@@ -107,6 +110,7 @@ impl HighQualityTranslationClient {
                 draft_maximum_wait_task: None,
                 final_worker: None,
                 asr_bridge: None,
+                last_draft_log_at: None,
             })),
             stable_draft_delay,
             maximum_wait_delay,
@@ -161,9 +165,12 @@ impl HighQualityTranslationClient {
     }
 
     pub async fn finish(&self) {
-        self.asr_client.finish(Duration::from_secs(3)).await;
+        // Snappy stop: allow ~1s for the ASR teardown plus ~3s for the
+        // in-flight translation; unfinished work is dropped afterwards
+        // instead of blocking the stop for up to 35s.
+        self.asr_client.finish(Duration::from_secs(1)).await;
         self.commit_pending_draft("session-finish").await;
-        self.wait_for_final_translations(Duration::from_secs(35))
+        self.wait_for_final_translations(Duration::from_secs(3))
             .await;
         self.reset_draft_finalization().await;
         self.cancel_final_translations().await;
@@ -193,14 +200,27 @@ impl HighQualityTranslationClient {
                     let has_pending = inner.committer.has_pending_text();
                     (uncommitted, has_pending)
                 };
-                pipeline_log!(
-                    "audio3 asr draft length={} pendingLength={} language={}",
-                    text.chars().count(),
-                    uncommitted_text.chars().count(),
-                    language
-                        .as_deref()
-                        .unwrap_or(self.source_language.raw_value())
-                );
+                // Throttled: drafts stream several times per second while
+                // speech flows; one line per second is enough to see the
+                // pipeline shape without log flood.
+                let now = tokio::time::Instant::now();
+                let log_due = self
+                    .inner
+                    .lock()
+                    .await
+                    .last_draft_log_at
+                    .is_none_or(|at| now.duration_since(at).as_millis() >= 1000);
+                if log_due {
+                    self.inner.lock().await.last_draft_log_at = Some(now);
+                    pipeline_log!(
+                        "audio3 asr draft length={} pendingLength={} language={}",
+                        text.chars().count(),
+                        uncommitted_text.chars().count(),
+                        language
+                            .as_deref()
+                            .unwrap_or(self.source_language.raw_value())
+                    );
+                }
                 if !has_pending {
                     return;
                 }

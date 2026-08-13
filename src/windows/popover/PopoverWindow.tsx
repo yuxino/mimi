@@ -21,7 +21,10 @@ const ACCENT = "#7AA8FF";
  * size and position are never affected by the menu.
  */
 export function PopoverWindow() {
-  const session = useStore((state) => state.session);
+  // Narrow selectors: this window never shows subtitle text, so subscribing
+  // to the whole session object would re-render it on every streaming event.
+  const sessionStatus = useStore((state) => state.session.status);
+  const isPaused = useStore((state) => state.session.isPaused);
   const settings = useStore((state) => state.settings);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
   const switchTranslationMode = useStore(
@@ -31,9 +34,9 @@ export function PopoverWindow() {
   // Interactive whenever not mid-connection: idle (before starting)
   // and listening both allow quick language/mode switching.
   const canInteract =
-    !session.isPaused &&
-    session.status.kind !== "connecting" &&
-    session.status.kind !== "stopping";
+    !isPaused &&
+    sessionStatus.kind !== "connecting" &&
+    sessionStatus.kind !== "stopping";
 
   const close = () => {
     if (isTauri) {
