@@ -282,10 +282,3 @@ function mergeSettings(
         : current.hasAPIKey,
   };
 }
-
-/** Releases any event subscriptions; used by tests to avoid leaking listeners. */
-export function resetStoreSubscriptions(): void {
-  for (const unlisten of unlisteners.splice(0)) {
-    unlisten();
-  }
-}

@@ -56,7 +56,6 @@ export function PopoverWindow() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectSourceLanguage = (language: SourceLanguage) => {

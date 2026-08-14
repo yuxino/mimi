@@ -85,14 +85,6 @@ export type SourceLanguage = "auto" | "zh" | "en" | "ja" | "ko";
 export type TargetLanguage = "original" | "zh" | "en" | "ja";
 export type TranslationMode = "lowLatency" | "highQuality" | "turbo";
 
-/** Manual picker order (matches `SourceLanguage.manualCases`). */
-export const SOURCE_LANGUAGE_MANUAL_CASES: readonly SourceLanguage[] = [
-  "ja",
-  "en",
-  "ko",
-  "zh",
-];
-
 /** Picker order including automatic detection ("自动识别"), which runs the
  * low-latency pipeline and detects the language per utterance. */
 export const SOURCE_LANGUAGE_QUICK_CASES: readonly SourceLanguage[] = [
