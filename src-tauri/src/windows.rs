@@ -22,11 +22,48 @@
 //! directly and negotiated via a global `POPOVER_RESIZING` flag, which caused
 //! oscillation, stuck drags, height corruption and lost frames.
 
-/// Window and tooltip title for the current build: dev builds (the bare
-/// binary with no .app bundle) get a "(dev)" marker so they can be told
-/// apart from the installed release app at a glance.
-pub fn dev_title(base: &str) -> String {
+/// True when this is a dev build: a debug build (`tauri::is_dev`) or the
+/// bundled dev wrapper (bundle id `app.yuxino.mimi.dev`, which is a release
+/// build so macOS renders its Dock icon with the standard mask).
+pub fn is_dev_build() -> bool {
     if tauri::is_dev() {
+        return true;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+        use std::ffi::{c_char, CStr};
+        unsafe {
+            let Some(bundle_class) = AnyClass::get(c"NSBundle") else {
+                return false;
+            };
+            let main_bundle: *mut AnyObject = msg_send![bundle_class, mainBundle];
+            if main_bundle.is_null() {
+                return false;
+            }
+            let identifier: *mut AnyObject = msg_send![main_bundle, bundleIdentifier];
+            if identifier.is_null() {
+                return false;
+            }
+            let ptr: *const c_char = msg_send![identifier, UTF8String];
+            if ptr.is_null() {
+                return false;
+            }
+            CStr::from_ptr(ptr).to_str() == Ok("app.yuxino.mimi.dev")
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+/// Window and tooltip title for the current build: dev builds get a "(dev)"
+/// marker so they can be told apart from the installed release app at a
+/// glance.
+pub fn dev_title(base: &str) -> String {
+    if is_dev_build() {
         format!("{base} (dev)")
     } else {
         base.to_string()

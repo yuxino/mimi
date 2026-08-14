@@ -32,23 +32,10 @@ pub fn run() {
         .setup(|app| {
             tracing::info!("mimi starting");
 
-            // Runtime dock-icon override is for the bare dev binary only: a
-            // bare binary has no .app bundle, so the generic icon needs
-            // replacing. The release bundle ships the real icon.icns and macOS
-            // reads it from the bundle — overriding it there would swap the
-            // correct launchpad icon for a small PNG rendition the moment the
-            // app starts. The dev wrapper script (scripts/dev-app.sh) runs the
-            // same binary inside a real .app bundle, in which case macOS also
-            // handles the icon natively and this override is skipped.
-            #[cfg(target_os = "macos")]
-            if tauri::is_dev() && !is_app_bundle() {
-                set_dock_icon(app.handle());
-            }
-
             // Dev-build marker: the settings window is created from the
             // static config title, so adjust it at runtime so the dev binary
             // is distinguishable from the installed release app.
-            if tauri::is_dev() {
+            if windows::is_dev_build() {
                 if let Some(window) = app.get_webview_window("settings") {
                     let _ = window.set_title(&windows::dev_title("mimi 设置"));
                 }
@@ -499,127 +486,4 @@ fn setup_global_shortcut(
         .map_err(|error| std::io::Error::other(error.to_string()))?;
     tracing::info!("global shortcut registered");
     Ok(())
-}
-
-/// True when the process runs from an `.app` bundle (the release app or the
-/// dev wrapper created by `scripts/dev-app.sh`). Only the bare dev binary
-/// (no bundle, no Info.plist) needs a runtime dock-icon override.
-#[cfg(target_os = "macos")]
-fn is_app_bundle() -> bool {
-    use objc2::msg_send;
-    use objc2::runtime::{AnyClass, AnyObject};
-    unsafe {
-        let Some(bundle_class) = AnyClass::get(c"NSBundle") else {
-            return false;
-        };
-        let main_bundle: *mut AnyObject = msg_send![bundle_class, mainBundle];
-        if main_bundle.is_null() {
-            return false;
-        }
-        let identifier: *mut AnyObject = msg_send![main_bundle, bundleIdentifier];
-        !identifier.is_null()
-    }
-}
-
-/// Sets the macOS Dock icon at runtime so `tauri dev` (which runs the bare
-/// binary without an app bundle) shows the mimi icon instead of the generic
-/// executable glyph. Uses dynamic class lookup (no extra AppKit binding
-/// crates) and never panics: it runs inside the AppKit delegate callback
-/// where panics cannot unwind, so every step falls back silently.
-#[cfg(target_os = "macos")]
-fn set_dock_icon(app: &tauri::AppHandle) {
-    // Prefer the dedicated high-resolution rendition of the original app
-    // artwork with the macOS squircle corners baked in: macOS masks bundle
-    // icons at display time but does not mask icons set at runtime, so the
-    // dev binary (which has no bundle) would otherwise show a raw square.
-    let embedded = tauri::image::Image::from_bytes(include_bytes!("../icons/dock-icon.png"));
-    match embedded {
-        Ok(icon) => {
-            tracing::info!(
-                "dock icon: embedded rendition {}x{}",
-                icon.width(),
-                icon.height()
-            );
-            set_dock_icon_image(icon);
-        }
-        Err(err) => {
-            tracing::warn!("dock icon: embedded rendition failed ({err}), falling back");
-            if let Some(icon) = app.default_window_icon().cloned() {
-                tracing::info!(
-                    "dock icon: default window icon {}x{}",
-                    icon.width(),
-                    icon.height()
-                );
-                set_dock_icon_image(icon);
-            }
-        }
-    }
-}
-
-/// Applies an RGBA image as the macOS Dock icon. Never panics: it runs
-/// inside the AppKit delegate callback where panics cannot unwind, so every
-/// step falls back silently.
-#[cfg(target_os = "macos")]
-fn set_dock_icon_image(icon: tauri::image::Image<'_>) {
-    use objc2::msg_send;
-    use objc2::runtime::{AnyClass, AnyObject};
-    use objc2_foundation::{NSSize, NSString};
-    use std::ffi::c_void;
-
-    let width = icon.width() as i64;
-    let height = icon.height() as i64;
-    let rgba = icon.rgba();
-
-    unsafe {
-        let Some(rep_class) = AnyClass::get(c"NSBitmapImageRep") else {
-            return;
-        };
-        let Some(image_class) = AnyClass::get(c"NSImage") else {
-            return;
-        };
-        let Some(app_class) = AnyClass::get(c"NSApplication") else {
-            return;
-        };
-
-        let color_space = NSString::from_str("NSCalibratedRGBColorSpace");
-        let rep: *mut AnyObject = msg_send![rep_class, alloc];
-        let rep: *mut AnyObject = msg_send![
-            rep,
-            initWithBitmapDataPlanes: std::ptr::null::<*mut c_void>(),
-            pixelsWide: width,
-            pixelsHigh: height,
-            bitsPerSample: 8i64,
-            samplesPerPixel: 4i64,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: &*color_space,
-            bytesPerRow: width * 4,
-            bitsPerPixel: 32i64
-        ];
-        if rep.is_null() {
-            return;
-        }
-        let data_ptr: *mut c_void = msg_send![rep, bitmapData];
-        if data_ptr.is_null() {
-            return;
-        }
-        std::ptr::copy_nonoverlapping(rgba.as_ptr(), data_ptr as *mut u8, rgba.len());
-
-        let image: *mut AnyObject = msg_send![image_class, alloc];
-        let image: *mut AnyObject = msg_send![
-            image,
-            initWithSize: NSSize::new(width as f64, height as f64)
-        ];
-        if image.is_null() {
-            return;
-        }
-        let _: () = msg_send![image, addRepresentation: rep];
-
-        let shared: *mut AnyObject = msg_send![app_class, sharedApplication];
-        if shared.is_null() {
-            return;
-        }
-        let _: () = msg_send![shared, setApplicationIconImage: image];
-        tracing::info!("dock icon applied");
-    }
 }
