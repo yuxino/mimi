@@ -58,12 +58,17 @@ Requires Rust 1.85+ and Node.js 20+ (macOS also needs the Xcode Command Line Too
 git clone https://github.com/yuxino/mimi.git
 cd mimi
 npm install
-npm run tauri dev        # develop
+npm run tauri dev        # develop (bare binary)
 ./scripts/check.sh       # full check (fmt/clippy/tests/frontend build)
 ./scripts/package-app.sh # package (macOS: .dmg; Windows: .msi/.nsis)
 ```
 
 Build the Windows package on a Windows machine (Rust's C dependencies cannot cross-compile from macOS to the MSVC target); CI runs the full Rust suite on both macOS and Windows.
+
+### macOS dev notes
+
+- `npm run tauri dev` runs the bare binary, which has no `.app` bundle — macOS then shows a generic icon in the Dock (macOS only reads icons from bundles). Use `./scripts/dev-app.sh` instead for the icon-correct run: it builds the debug binary, wraps it in a real `.app` (the original icon, window titles/tooltip marked "(dev)"), and launches it, so the Dock icon matches the release app exactly.
+- Local builds are signed with the stable `mimi Local Development` identity when present (`scripts/codesign-identity.sh`), so Screen Recording and keychain grants survive rebuilds. Permissions must be granted once per app identity.
 
 ## Tests
 
