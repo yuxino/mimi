@@ -129,7 +129,6 @@ export const RecognitionActivityIndicator = memo(function RecognitionActivityInd
               height: BAR_MAX_HEIGHT,
               borderRadius: 999,
               transformOrigin: "center",
-              willChange: "transform",
               background: barColor,
             }}
           />

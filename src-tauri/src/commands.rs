@@ -393,3 +393,12 @@ pub fn app_quit(app: AppHandle) -> Result<(), String> {
     app.exit(0);
     Ok(())
 }
+
+/// TEMP diagnostic: the overlay waveform reports its measured rAF cadence so
+/// the compositor fix can be verified from the Rust log (content-free: only
+/// a frame rate).
+#[tauri::command]
+pub fn wave_fps_report(fps: f64) -> Result<(), String> {
+    tracing::info!("wave fps={fps:.1}");
+    Ok(())
+}
