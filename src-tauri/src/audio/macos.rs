@@ -379,7 +379,10 @@ fn start_capture_on_main(
     // `setShowsCursor:`.
     let _: () = unsafe { msg_send![&*configuration, setShowsCursor: false] };
 
-    // Handler + stream.
+    // Handler + stream. `start_error_tx` is the same channel the handler's
+    // runtime failures use, so a start failure takes the exact same
+    // auto-recovery path as a mid-session stop.
+    let start_error_tx = error_tx.clone();
     let state = Box::new(AudioHandlerState {
         audio_tx,
         error_tx,
@@ -404,17 +407,19 @@ fn start_capture_on_main(
     }
     pipeline_log!("audio3 capture output attached");
 
-    // Start capture; on failure, clean everything up.
-    let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
+    // Start capture. The completion can take hundreds of milliseconds on the
+    // first stream (ScreenCaptureKit enumerates windows and apps while
+    // building the session), so it must NOT be waited on synchronously — this
+    // function runs on the main thread and blocking it here freezes every
+    // window's rendering right at session start. Failures surface
+    // asynchronously through the existing error channel, which the session
+    // manager routes into its auto-recovery path.
     stream.start_capture(move |error| {
-        let _ = tx.send(error.map(|error| error.to_string()));
+        if let Some(error) = error {
+            let _ = start_error_tx.send(format!("System audio capture failed to start: {error}"));
+        }
     });
-    if let Ok(Some(error)) = rx.recv_timeout(std::time::Duration::from_secs(15)) {
-        let _ = stream.remove_stream_output(output, SCStreamOutputType::Audio);
-        return Err(error);
-    }
-
-    pipeline_log!("audio3 capture started");
+    pipeline_log!("audio3 capture start requested (async)");
     MAIN_STREAM.set(Some(stream));
     MAIN_HANDLER.set(Some(handler));
     MAIN_STATE.set(Some(state));
