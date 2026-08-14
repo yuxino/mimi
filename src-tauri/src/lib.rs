@@ -142,8 +142,14 @@ pub fn run() {
                     windows::LanguagePopoverManager::schedule_hide(app);
                 }
                 WindowEvent::CloseRequested { api, .. }
-                    if window.label() == "overlay" || window.label() == "tray-panel" =>
+                    if window.label() == "overlay"
+                        || window.label() == "tray-panel"
+                        || window.label() == "settings" =>
                 {
+                    // Hiding instead of closing keeps the window alive so
+                    // later "settings"/"show" actions can always re-show it.
+                    // A destroyed settings window would make the tray's
+                    // "设置" a silent no-op.
                     api.prevent_close();
                     let _ = window.hide();
                 }
@@ -358,10 +364,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                     // The tray panel is always-on-top; hide it so the
                     // settings window is not obscured behind it.
                     windows::TrayPanelManager::hide(app);
-                    if let Some(window) = app.get_webview_window("settings") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
+                    windows::ensure_settings_window(app);
                 }
                 "quit" => app.exit(0),
                 _ => {}

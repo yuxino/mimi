@@ -27,8 +27,6 @@ import {
   settingsSave,
   trayPanelHide,
 } from "./ipc";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { invoke } from "@tauri-apps/api/core";
 import type {
   SessionStateEvent,
   SettingsDraft,
@@ -97,47 +95,27 @@ export const useStore = create<StoreState>()((set, get) => ({
   init: async () => {
     if (get().initialized) return;
     if (isTauri) {
-      const report = (state: string) =>
-        void invoke("ui_probe_report", {
-          window: "init-step",
-          state: `${getCurrentWindow().label} ${state}`,
-        }).catch(() => {});
-      report("begin");
       try {
         const [snapshot, session] = await Promise.all([
           settingsGet(),
           sessionGetState(),
         ]);
-        report("fetched");
         set({ settings: snapshot, session });
       } catch {
-        report("fetch-failed");
+        // Boot without settings if the backend is unreachable; the event
+        // listeners below will fill in the real state when it emits.
       }
       try {
         unlisteners.push(
           await listenSessionState((session) => set({ session })),
-          await listenSettingsChanged((settings) => {
-            set({ settings });
-            // TEMP DIAGNOSTIC: report what each window sees on the event.
-            void invoke("ui_probe_report", {
-              window: "settings-sync",
-              state: `${getCurrentWindow().label} mode=${settings.translationMode} source=${settings.sourceLanguage}`,
-            }).catch(() => {});
-          }),
+          await listenSettingsChanged((settings) => set({ settings })),
         );
-        report("listeners-attached");
-      } catch (error) {
-        report(`listeners-failed ${String(error).slice(0, 300)}`);
+      } catch {
+        // No listeners, no live updates — the window still renders its boot
+        // snapshot.
       }
     }
     set({ initialized: true });
-    // TEMP DIAGNOSTIC: report each window's boot snapshot.
-    if (isTauri) {
-      void invoke("ui_probe_report", {
-        window: "boot-state",
-        state: `${getCurrentWindow().label} mode=${get().settings.translationMode} source=${get().settings.sourceLanguage}`,
-      }).catch(() => {});
-    }
   },
 
   start: async () => {
