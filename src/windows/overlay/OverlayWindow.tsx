@@ -11,6 +11,8 @@ import { RecognitionActivityIndicator } from "./RecognitionActivityIndicator";
 import { ResizeHandles } from "./ResizeHandles";
 import { Timeline } from "./Timeline";
 import { WaveformIndicator } from "./WaveformIndicator";
+import { useStableText } from "./animation";
+import { visibleDraftSegments } from "./segmenter";
 import {
   computeActivityPhase,
   computeVisibleRows,
@@ -20,6 +22,7 @@ import {
   isWaitingForFinalTranslation,
   languageStatus,
   subtitleSegmentLength,
+  visibleDraft,
 } from "./overlayModel";
 
 const ACCENT = "#7AA8FF";
@@ -65,8 +68,19 @@ export function OverlayWindow() {
     () => computeVisibleRows(session.subtitles, segmentLength),
     [session.subtitles, segmentLength],
   );
+  // The live preview line lives OUTSIDE the scrolling timeline (fixed bottom
+  // line), so streaming churn never nudges history. Its text is stabilized:
+  // the shown value settles ~400ms after the last update instead of flickering
+  // on every recognition block. A final-but-not-yet-committed line is shown
+  // as-is (it no longer changes).
+  const draft = useMemo(() => visibleDraft(session.subtitles), [session.subtitles]);
+  const draftText = useStableText(
+    draft?.text ?? "",
+    draft?.isFinal ? 0 : 400,
+  );
   const status = languageStatus(settings, detectedLanguage);
   const hasContent = hasSubtitleContent(session.subtitles);
+  const hasAnyRows = rows.length > 0 || draftText !== "";
 
   const phaseLabel = OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel;
   const pauseLabel = session.isPaused
@@ -181,7 +195,7 @@ export function OverlayWindow() {
               height: "100%",
             }}
           >
-          {rows.length === 0 ? (
+          {rows.length === 0 && draftText === "" ? (
             <div
               className="flex flex-1 flex-col items-center justify-center"
               style={{ gap: 12 }}
@@ -206,17 +220,19 @@ export function OverlayWindow() {
               </div>
             </div>
           ) : (
-            <Timeline
-              rows={rows}
-              fontSize={settings.fontSize}
-              draft={
-                session.subtitles.translation.text !== "" &&
-                !session.subtitles.translation.isFinal
-              }
-            />
+            <>
+              <Timeline rows={rows} fontSize={settings.fontSize} />
+              {draftText !== "" && (
+                <DraftLine
+                  text={draftText}
+                  fontSize={settings.fontSize}
+                  segmentLength={segmentLength}
+                />
+              )}
+            </>
           )}
 
-          {rows.length > 0 && session.isActive && (
+          {hasAnyRows && session.isActive && (
             <div
               className="flex items-center"
               style={{ gap: 7, height: 24, padding: "5px 18px 7px" }}
@@ -346,4 +362,48 @@ export function OverlayWindow() {
       </div>
     );
   }
+}
+
+/** The fixed live-preview line pinned under the scrolling history. Settles
+ * between speech pauses (see `useStableText`), renders dimmed with a trailing
+ * ellipsis, and never scrolls or nudges the history above it. */
+function DraftLine({
+  text,
+  fontSize,
+  segmentLength,
+}: {
+  text: string;
+  fontSize: number;
+  segmentLength: number;
+}) {
+  const segments = visibleDraftSegments(text, segmentLength, 2);
+  return (
+    <div
+      className="shrink-0"
+      style={{
+        borderTop: "1px solid rgba(255,255,255,0.10)",
+        padding: "6px 18px 8px",
+        background: "rgba(0,0,0,0.18)",
+      }}
+    >
+      {segments.map((segment, index) => (
+        <div
+          key={index}
+          style={{
+            fontSize: Math.max(12, fontSize * 0.82),
+            lineHeight: 1.45,
+            color: "rgba(255,255,255,0.66)",
+            overflowWrap: "break-word",
+          }}
+        >
+          {segment}
+          {index === segments.length - 1 && (
+            <span style={{ opacity: 0.5 }} aria-hidden="true">
+              {"…"}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }

@@ -9,22 +9,16 @@ const MONO_FONT =
 interface TimelineProps {
   rows: SubtitleRow[];
   fontSize: number;
-  /**
-   * The current line is a live draft (streaming, not yet final). Draft rows
-   * (the current-line segments) render dimmed with a trailing ellipsis so the
-   * in-progress line does not dominate the stable history above it; when the
-   * line becomes final it settles to full opacity.
-   */
-  draft?: boolean;
 }
 
-/** Scrolling subtitle timeline; auto-scrolls to the newest row. Memoized:
+/** Scrolling subtitle history; auto-scrolls to the newest row. Memoized:
  * during live streaming the overlay re-renders on every session-state event,
- * but the timeline DOM only needs rebuilding when its rows actually change. */
+ * but the timeline DOM only needs rebuilding when its rows actually change.
+ * The live preview line is NOT part of this list — it is rendered as a fixed
+ * bottom line by the overlay so streaming updates never nudge history. */
 export const Timeline = memo(function Timeline({
   rows,
   fontSize,
-  draft = false,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Keep the newest content pinned to the bottom: rows.length changes when a
@@ -43,7 +37,7 @@ export const Timeline = memo(function Timeline({
       prevRowCountRef.current = rows.length;
       element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
     } else {
-      // Same row, draft text grew: pin instantly so per-character streaming
+      // Same row, text grew: pin instantly so per-character streaming
       // never stutters.
       element.scrollTop = element.scrollHeight;
     }
@@ -58,9 +52,6 @@ export const Timeline = memo(function Timeline({
       {rows.map((row, index) => {
         const isLast = index === rows.length - 1;
         const distance = rows.length - 1 - index;
-        // Current-line rows carry no timestamp; they are the live draft
-        // segments while the line is streaming.
-        const isDraftRow = draft && row.createdAt === null;
         return (
           <div
             key={row.id}
@@ -100,21 +91,12 @@ export const Timeline = memo(function Timeline({
               style={{
                 fontSize: rowFontSize(index, rows.length, fontSize),
                 fontWeight: isLast ? 500 : 400,
-                color: isDraftRow
-                  ? "rgba(255,255,255,0.72)"
-                  : `rgba(255,255,255,${rowOpacity(distance)})`,
+                color: `rgba(255,255,255,${rowOpacity(distance)})`,
                 lineHeight: 1.45,
                 overflowWrap: "break-word",
-                // Gentle settle: dimmed while streaming, full once final.
-                transition: "color 200ms ease",
               }}
             >
               {row.text}
-              {isDraftRow && (
-                <span style={{ opacity: 0.55 }} aria-hidden="true">
-                  {"…"}
-                </span>
-              )}
             </span>
           </div>
         );
