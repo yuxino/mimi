@@ -75,25 +75,19 @@ export function TrayPanel() {
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <Icon
-            name="ear-waveform"
-            style={{ fontSize: 22, color: "rgba(255,255,255,0.85)" }}
-          />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 16, fontWeight: 600, color: "#ffffff" }}>
-              {I18N.tray.appName}
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: statusColor(sessionStatus, isPaused),
-                lineHeight: 1.3,
-              }}
-            >
-              {statusText(sessionStatus, isPaused, settings)}
-            </span>
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: "#ffffff" }}>
+            {I18N.tray.appName}
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              color: statusColor(sessionStatus, isPaused),
+              lineHeight: 1.3,
+            }}
+          >
+            {statusText(sessionStatus, isPaused, settings)}
+          </span>
         </div>
 
         <Divider />
