@@ -209,6 +209,8 @@ impl OverlayWindowManager {
             let _ = window.show();
         } else if !is_active && visible {
             let _ = window.hide();
+            // The language menu cannot float alone without its capsule.
+            LanguagePopoverManager::hide(app);
         }
     }
 
@@ -722,10 +724,14 @@ impl LanguagePopoverManager {
         let Some(window) = app.get_webview_window("language-popover") else {
             return;
         };
-        let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-        let screen = current_screen_logical(app, &window, scale);
+        // Size the placement against the overlay's monitor (the popover may
+        // still sit on the primary monitor before its first move).
+        let Some(screen) = Self::screen_for_anchor(app) else {
+            return;
+        };
+        let x = Self::anchor_x_clamped(anchor_x, screen.0);
         let y = language_popover_y(anchor_y, Self::HEIGHT, screen);
-        let _ = window.set_position(tauri::LogicalPosition::new(anchor_x, y));
+        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
         let _ = window.show();
         let _ = window.set_focus();
     }
@@ -758,10 +764,25 @@ impl LanguagePopoverManager {
         let Some((anchor_x, anchor_y)) = Self::overlay_anchor(app) else {
             return;
         };
-        let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-        let screen = current_screen_logical(app, &window, scale);
+        let Some(screen) = Self::screen_for_anchor(app) else {
+            return;
+        };
+        let x = Self::anchor_x_clamped(anchor_x, screen.0);
         let y = language_popover_y(anchor_y, Self::HEIGHT, screen);
-        let _ = window.set_position(tauri::LogicalPosition::new(anchor_x, y));
+        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+    }
+
+    /// The overlay's monitor size in logical pixels (the anchor lives there).
+    fn screen_for_anchor(app: &AppHandle) -> Option<(f64, f64)> {
+        let overlay = app.get_webview_window("overlay")?;
+        let scale = overlay.scale_factor().unwrap_or(1.0).max(1.0);
+        Some(current_screen_logical(app, &overlay, scale))
+    }
+
+    /// Keeps the menu fully on screen horizontally (the y axis already
+    /// flips above the anchor when the bottom edge would overflow).
+    fn anchor_x_clamped(anchor_x: f64, screen_width: f64) -> f64 {
+        anchor_x.clamp(8.0, (screen_width - Self::WIDTH - 8.0).max(8.0))
     }
 
     pub fn hide(app: &AppHandle) {
@@ -902,6 +923,22 @@ mod geometry_tests {
     fn popover_anchor_stays_below_when_there_is_room() {
         let y = language_popover_y(100.0, 260.0, SCREEN);
         assert_eq!(y, 100.0);
+    }
+
+    #[test]
+    fn popover_x_stays_fully_on_screen() {
+        // Far-right anchor: the 200px menu pulls back inside the screen.
+        assert_eq!(
+            LanguagePopoverManager::anchor_x_clamped(1500.0, 1512.0),
+            1512.0 - 200.0 - 8.0
+        );
+        // Normal anchor passes through unchanged.
+        assert_eq!(
+            LanguagePopoverManager::anchor_x_clamped(400.0, 1512.0),
+            400.0
+        );
+        // Tiny screens degrade gracefully.
+        assert_eq!(LanguagePopoverManager::anchor_x_clamped(50.0, 100.0), 8.0);
     }
 
     #[test]

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Icon } from "../../components/Icon";
 import { I18N } from "../../lib/i18n";
@@ -50,6 +51,16 @@ export function PopoverWindow() {
       void getCurrentWindow().hide().catch(() => {});
     }
   };
+
+  // Escape dismisses the menu, matching the transient NSPopover behavior.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectSourceLanguage = (language: SourceLanguage) => {
     close();
