@@ -19,34 +19,6 @@ export function useReducedMotion(): boolean {
 }
 
 /**
- * A monotonically increasing time value (seconds) that advances on every
- * animation frame while `active` is true. Driven by requestAnimationFrame so
- * the wave motion stays smooth on any display refresh rate (a throttled 24Hz
- * cadence read as stutter in the webview). When inactive it returns 0 so
- * paused/reduced-motion waveforms render statically.
- */
-export function useTimelineTime(active: boolean): number {
-  const [time, setTime] = useState(0);
-
-  useEffect(() => {
-    if (!active) {
-      // The hook returns 0 while inactive; nothing to subscribe.
-      return;
-    }
-
-    let raf = 0;
-    const loop = (now: number) => {
-      setTime(now / 1000);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [active]);
-
-  return active ? time : 0;
-}
-
-/**
  * Stabilizes a streaming text value: the returned value only advances after
  * `settleMs` pass without a change, and even under a continuous stream it
  * advances at least every `maxWaitMs`. This turns per-character draft
@@ -60,8 +32,12 @@ export function useStableText(
 ): string {
   const [stable, setStable] = useState(text);
   const latestRef = useRef(text);
-  latestRef.current = text;
   const maxTimerRef = useRef<number | null>(null);
+
+  // Keep the latest text available to the (non-resetting) force-sync timer.
+  useEffect(() => {
+    latestRef.current = text;
+  }, [text]);
 
   useEffect(() => {
     if (text === stable) {
