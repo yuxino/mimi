@@ -57,10 +57,14 @@ impl SystemAudioCapture {
         }
         #[cfg(target_os = "windows")]
         {
+            // The AppHandle is macOS-only (ScreenCaptureKit main-thread
+            // dispatch); Windows WASAPI needs no app handle.
+            let _ = app;
             windows::WindowsSystemAudioCapture::new()
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
+            let _ = app;
             unsupported::UnsupportedSystemAudioCapture::new()
         }
     }
