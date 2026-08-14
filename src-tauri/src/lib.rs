@@ -268,6 +268,13 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             {
                 let app = tray.app_handle();
                 windows::TrayPanelManager::toggle(app);
+                // Refresh the panel's snapshots so its pickers and check
+                // states always match the current session, even if its
+                // webview missed events while hidden.
+                if let Some(state) = app.try_state::<AppState>() {
+                    state.session.publish_settings();
+                    state.session.publish_state();
+                }
             }
         })
         .build(app)?;
