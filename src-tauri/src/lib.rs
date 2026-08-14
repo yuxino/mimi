@@ -219,15 +219,21 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .item(&MenuItemBuilder::with_id("quit", "Quit mimi").build(app)?)
         .build()?;
 
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .expect("the default window icon is bundled");
+    // Menu-bar icon: a monochrome waveform template (like the original app's
+    // `ear.badge.waveform` SF Symbol). Template icons are rendered by macOS at
+    // the native menu-bar resolution — crisp at any size and adapting to the
+    // light/dark menu bar — unlike the character squircle, whose fine detail
+    // turned into a blurry blob at ~18pt.
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))
+        .ok()
+        .or_else(|| app.default_window_icon().cloned())
+        .expect("the tray icon is bundled");
 
     let live_subtitles_clone = live_subtitles.clone();
     let lock_position_clone = lock_position.clone();
     let _tray = TrayIconBuilder::with_id("mimi-tray")
         .icon(icon)
+        .icon_as_template(true)
         .tooltip(windows::dev_title("mimi"))
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -279,6 +285,11 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
         })
         .on_tray_icon_event(|tray, event| {
+            // Record the tray icon's screen position for the positioner
+            // plugin; without this, TrayBottomCenter (used by the tray panel)
+            // fails with "Tray position not set" and the panel stays at its
+            // default window position.
+            tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,

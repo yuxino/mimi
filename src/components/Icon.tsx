@@ -21,7 +21,6 @@ export type IconName =
   | "text-quote"
   | "waveform"
   | "waveform-slash"
-  | "ear-waveform"
   | "key"
   | "exclamation-triangle";
 
@@ -183,20 +182,6 @@ function renderPath(name: IconName) {
             strokeWidth="2"
             strokeLinecap="round"
           />
-        </>
-      );
-    case "ear-waveform":
-      return (
-        <>
-          <path
-            d="M12 2.5a7.5 7.5 0 0 0-7.5 7.5c0 2.2-.9 3.5-1.7 4.6-.9 1.3-1.3 2.4-1.1 3.4.3 1.3 1.4 2 2.8 2 1.3 0 2.1-.6 2.7-1.5.4-.5.9-1.1 1.5-1.1s1.1.6 1.5 1.1c.6.9 1.4 1.5 2.7 1.5 1.4 0 2.5-.7 2.8-2 .2-1-.2-2.1-1.1-3.4-.8-1.1-1.7-2.4-1.7-4.6A7.5 7.5 0 0 0 12 2.5z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          />
-          <rect x="14.5" y="15" width="1.6" height="3" rx="0.8" />
-          <rect x="17.2" y="13.6" width="1.6" height="5.8" rx="0.8" />
-          <rect x="19.9" y="15" width="1.6" height="3" rx="0.8" />
         </>
       );
     case "key":
