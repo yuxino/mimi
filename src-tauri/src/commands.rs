@@ -377,10 +377,7 @@ pub fn app_show_settings(app: AppHandle) -> Result<(), String> {
     // no-op. Same for the language popover, if open.
     TrayPanelManager::hide(&app);
     crate::windows::LanguagePopoverManager::hide(&app);
-    if let Some(window) = app.get_webview_window("settings") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    crate::windows::ensure_settings_window(&app);
     Ok(())
 }
 

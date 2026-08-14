@@ -963,6 +963,34 @@ impl TrayPanelManager {
     }
 }
 
+/// Shows the settings window, creating it first if it does not exist (the
+/// window is hidden on close — see the CloseRequested handler in lib.rs — but
+/// a stale or crashed webview could leave it missing). Mirrors the window
+/// declared in tauri.conf.json.
+pub fn ensure_settings_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("settings") else {
+        let builder =
+            WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html".into()))
+                .title(dev_title("mimi 设置"))
+                .inner_size(560.0, 570.0)
+                .resizable(false)
+                .center()
+                .visible(true);
+        if let Err(error) = builder.build() {
+            pipeline_log!("settings window re-create failed error={error}");
+            return;
+        }
+        let Some(window) = app.get_webview_window("settings") else {
+            return;
+        };
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    };
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 pub mod resize;
 
 #[cfg(test)]
