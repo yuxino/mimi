@@ -24,7 +24,6 @@ const ACCENT = "#7AA8FF";
 export function PopoverWindow() {
   // Narrow selectors: this window never shows subtitle text, so subscribing
   // to the whole session object would re-render it on every streaming event.
-  const sessionStatus = useStore((state) => state.session.status);
   const isPaused = useStore((state) => state.session.isPaused);
   const settings = useStore((state) => state.settings);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
@@ -32,12 +31,10 @@ export function PopoverWindow() {
     (state) => state.switchTranslationMode,
   );
 
-  // Interactive whenever not mid-connection: idle (before starting)
-  // and listening both allow quick language/mode switching.
-  const canInteract =
-    !isPaused &&
-    sessionStatus.kind !== "connecting" &&
-    sessionStatus.kind !== "stopping";
+  // Interactive whenever not paused: idle, listening, connecting and
+  // stopping all allow quick language/mode switching (the backend rebuilds
+  // the session when a switch lands mid-connect).
+  const canInteract = !isPaused;
   // Automatic source runs the low-latency pipeline regardless of the stored
   // mode, so the picker reflects (and locks onto) the effective mode.
   const automaticSource = settings.sourceLanguage === "auto";
