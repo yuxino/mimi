@@ -1,9 +1,58 @@
 /**
- * UI copy, copied verbatim from the Swift views (Simplified Chinese preserved).
- * Strings are grouped by window. The overlay activity-phase labels live in
- * `types.ts` (the `OverlayActivityPhase` table) so they stay adjacent to their
- * color/amplitude parameters.
+ * UI copy, copied verbatim from the Swift views. Strings are grouped by
+ * window. The tray strings and the language/mode display names follow the
+ * system language (Chinese UI on zh-* systems, English otherwise); the rest
+ * of the copy is currently the original mixed set. The overlay
+ * activity-phase labels live in `types.ts` (the `OverlayActivityPhase`
+ * table) so they stay adjacent to their color/amplitude parameters.
  */
+
+/** True when the OS/webview language is Chinese (zh-*). Strings are chosen
+ * once at startup; the app does not switch language at runtime. */
+export function isChineseSystem(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    (navigator.language ?? "").toLowerCase().startsWith("zh")
+  );
+}
+
+const TRAY_ZH = {
+  appName: "mimi",
+  liveSubtitles: "实时字幕",
+  sourceLanguage: "识别语言",
+  chineseSource: "中文原文",
+  originalOnly: "只显示中文原文",
+  lockPosition: "锁定字幕位置",
+  showSubtitleWindow: "显示字幕窗口",
+  clearSubtitles: "清空字幕",
+  settings: "设置…",
+  quit: "退出 mimi",
+  setupRequired: "需要先完成设置",
+  ready: "就绪",
+  connecting: "正在连接…",
+  listening: "正在聆听并翻译",
+  stopping: "正在停止…",
+  paused: "已暂停",
+};
+
+const TRAY_EN = {
+  appName: "mimi",
+  liveSubtitles: "Live Subtitles",
+  sourceLanguage: "Recognition Language",
+  chineseSource: "Chinese (Original)",
+  originalOnly: "Original Chinese only",
+  lockPosition: "Lock Subtitle Position",
+  showSubtitleWindow: "Show Subtitle Window",
+  clearSubtitles: "Clear Subtitles",
+  settings: "Settings…",
+  quit: "Quit mimi",
+  setupRequired: "Setup required",
+  ready: "Ready",
+  connecting: "Connecting…",
+  listening: "Listening and translating",
+  stopping: "Stopping…",
+  paused: "Paused",
+};
 
 export const I18N = {
   overlay: {
@@ -33,24 +82,7 @@ export const I18N = {
     originalOnly: "只显示原文",
   },
 
-  tray: {
-    appName: "mimi",
-    liveSubtitles: "Live Subtitles",
-    sourceLanguage: "识别语言",
-    chineseSource: "中文原文",
-    originalOnly: "只显示中文原文",
-    lockPosition: "Lock Subtitle Position",
-    showSubtitleWindow: "Show Subtitle Window",
-    clearSubtitles: "Clear Subtitles",
-    settings: "Settings…",
-    quit: "Quit mimi",
-    setupRequired: "Setup required",
-    ready: "Ready",
-    connecting: "Connecting…",
-    listening: "Listening and translating",
-    stopping: "Stopping…",
-    paused: "Paused",
-  },
+  tray: isChineseSystem() ? TRAY_ZH : TRAY_EN,
 
   settings: {
     sessionTitle: "实时字幕",

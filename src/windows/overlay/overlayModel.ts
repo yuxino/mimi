@@ -10,6 +10,7 @@ import type {
   SettingsSnapshot,
   SubtitleSnapshot,
 } from "../../lib/types";
+import { isChineseSystem } from "../../lib/i18n";
 import {
   SOURCE_LANGUAGE_DISPLAY_NAMES,
   TARGET_LANGUAGE_DISPLAY_NAMES,
@@ -198,7 +199,9 @@ export function sourceLanguageButtonTitle(
   sourceLanguage: SettingsSnapshot["sourceLanguage"],
 ): string {
   return sourceLanguage === "zh"
-    ? "中文原文"
+    ? isChineseSystem()
+      ? "中文原文"
+      : "Chinese (Original)"
     : SOURCE_LANGUAGE_DISPLAY_NAMES[sourceLanguage];
 }
 
