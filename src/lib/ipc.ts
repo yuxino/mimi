@@ -98,12 +98,6 @@ export function sessionGetState(): Promise<SessionStateEvent> {
   return invoke<SessionStateEvent>("session_get_state");
 }
 
-/** Persists the current overlay frame (explicit commit points, e.g. the end
- * of a drag-resize). */
-export function overlayCommitFrame(): Promise<void> {
-  return invoke("overlay_commit_frame");
-}
-
 export function trayPanelHide(): Promise<void> {
   return invoke("tray_panel_hide");
 }

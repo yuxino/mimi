@@ -337,21 +337,6 @@ impl OverlayWindowManager {
         Self::apply(app, &state, true);
     }
 
-    /// Persists the current window frame as the user frame (explicit commit
-    /// points: end of a resize drag).
-    pub fn commit(
-        app: &AppHandle,
-        state: &Arc<std::sync::Mutex<OverlayState>>,
-        settings: &SettingsStore,
-    ) {
-        let mut state = state.lock().unwrap();
-        if state.mode != OverlayMode::Expanded {
-            return;
-        }
-        sync_user_frame_from_window(app, &mut state);
-        persist_user_frame(settings, &state.user_frame);
-    }
-
     /// Handles OS Moved/Resized events for the overlay. Never persists
     /// immediately: a debounced task (350 ms after the last event) folds the
     /// final window frame into the user frame, so native drags are remembered

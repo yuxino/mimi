@@ -330,12 +330,6 @@ pub async fn session_get_state(state: State<'_, AppState>) -> Result<SessionStat
     Ok(state.session.current_state_event())
 }
 
-#[tauri::command]
-pub fn overlay_commit_frame(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    OverlayWindowManager::commit(&app, &state.overlay, &state.settings);
-    Ok(())
-}
-
 /// Begins an overlay resize drag. `region` is one of topLeft/top/topRight/
 /// left/right/bottomLeft/bottom/bottomRight; `x`/`y` are the pointer position
 /// in screen (logical) coordinates. Ignored unless the overlay is expanded.
@@ -391,14 +385,5 @@ pub fn app_show_settings(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn app_quit(app: AppHandle) -> Result<(), String> {
     app.exit(0);
-    Ok(())
-}
-
-/// TEMP diagnostic: the overlay waveform reports its measured rAF cadence so
-/// the compositor fix can be verified from the Rust log (content-free: only
-/// a frame rate).
-#[tauri::command]
-pub fn wave_fps_report(fps: f64) -> Result<(), String> {
-    tracing::info!("wave fps={fps:.1}");
     Ok(())
 }

@@ -137,7 +137,6 @@ pub fn run() {
             commands::overlay_set_size,
             commands::overlay_popover_toggle,
             commands::overlay_popover_hide,
-            commands::overlay_commit_frame,
             commands::session_get_state,
             commands::resize_start,
             commands::resize_move,
@@ -145,7 +144,6 @@ pub fn run() {
             commands::tray_panel_hide,
             commands::app_show_settings,
             commands::app_quit,
-            commands::wave_fps_report,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
