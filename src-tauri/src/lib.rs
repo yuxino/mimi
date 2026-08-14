@@ -460,7 +460,12 @@ fn setup_global_shortcut(
     let last_trigger = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
     let session_for_handler = Arc::clone(&session);
 
-    app.global_shortcut()
+    // Register the global shortcut. A failure must not abort startup: another
+    // app (e.g. a second mimi instance) may already own the combo, in which
+    // case macOS delivers the key to that app and this one simply has no
+    // shortcut.
+    let register = app
+        .global_shortcut()
         .on_shortcut(shortcut, move |_app, _shortcut, event| {
             if event.state() != ShortcutState::Pressed {
                 return;
@@ -488,8 +493,13 @@ fn setup_global_shortcut(
                     let _ = session.start(true).await;
                 }
             });
-        })
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
-    tracing::info!("global shortcut registered");
+        });
+    match register {
+        Ok(()) => tracing::info!("global shortcut registered"),
+        Err(error) => tracing::warn!(
+            "global shortcut could not be registered: {error} \
+             (another mimi instance may already own ⌘⇧Space)"
+        ),
+    }
     Ok(())
 }

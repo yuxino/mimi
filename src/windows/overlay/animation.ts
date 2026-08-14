@@ -20,10 +20,10 @@ export function useReducedMotion(): boolean {
 
 /**
  * A monotonically increasing time value (seconds) that advances on every
- * animation frame while `active` is true, matching the Swift `TimelineView`
- * continuous cadence (the 24fps gate produced visibly uneven bar motion).
- * When inactive it returns 0 so paused/reduced-motion waveforms render
- * statically.
+ * animation frame while `active` is true. Driven by requestAnimationFrame so
+ * the wave motion stays smooth on any display refresh rate (a throttled 24Hz
+ * cadence read as stutter in the webview). When inactive it returns 0 so
+ * paused/reduced-motion waveforms render statically.
  */
 export function useTimelineTime(active: boolean): number {
   const [time, setTime] = useState(0);

@@ -25,10 +25,22 @@ export function Timeline({ rows, fontSize, draft = false }: TimelineProps) {
   // new row appears, and the last row's text length changes while a draft
   // grows (wrapping into more lines) without changing the row count.
   const lastTextLength = rows[rows.length - 1]?.text.length ?? 0;
+  const prevRowCountRef = useRef(rows.length);
 
   useEffect(() => {
     const element = containerRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (!element) return;
+    if (rows.length !== prevRowCountRef.current) {
+      // A new row arrived: glide to the bottom (Swift's scrollTo animates
+      // too). The draft-growth pinning below is skipped this render so the
+      // two never fight.
+      prevRowCountRef.current = rows.length;
+      element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
+    } else {
+      // Same row, draft text grew: pin instantly so per-character streaming
+      // never stutters.
+      element.scrollTop = element.scrollHeight;
+    }
   }, [rows.length, lastTextLength]);
 
   return (
@@ -53,6 +65,10 @@ export function Timeline({ rows, fontSize, draft = false }: TimelineProps) {
               paddingRight: 18,
               paddingTop: isLast ? 7 : 5,
               paddingBottom: isLast ? 7 : 5,
+              // New rows settle in with a brief rise-and-fade (CSS animation
+              // runs once on mount; the key is stable per row, so streaming
+              // text updates do not re-trigger it).
+              animation: "subtitle-row-enter 240ms ease-out",
             }}
           >
             {row.createdAt !== null ? (

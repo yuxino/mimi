@@ -51,6 +51,20 @@ body.settings-body {
   animation: overlay-enter-expanded 180ms ease-in-out;
 }
 
+/* New subtitle rows rise in from below and fade — a brief settle that makes
+   the timeline feel alive without distracting from the text (runs once per
+   row on mount; streaming text updates keep the stable row id). */
+@keyframes subtitle-row-enter {
+  from {
+    opacity: 0.45;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Thin, unobtrusive scrollbars for the overlay timeline. */
 *::-webkit-scrollbar {
   width: 6px;
