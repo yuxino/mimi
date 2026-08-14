@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { hexToRgba } from "../../lib/types";
 import type { SubtitleRow } from "./overlayModel";
 
@@ -18,8 +18,14 @@ interface TimelineProps {
   draft?: boolean;
 }
 
-/** Scrolling subtitle timeline; auto-scrolls to the newest row. */
-export function Timeline({ rows, fontSize, draft = false }: TimelineProps) {
+/** Scrolling subtitle timeline; auto-scrolls to the newest row. Memoized:
+ * during live streaming the overlay re-renders on every session-state event,
+ * but the timeline DOM only needs rebuilding when its rows actually change. */
+export const Timeline = memo(function Timeline({
+  rows,
+  fontSize,
+  draft = false,
+}: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Keep the newest content pinned to the bottom: rows.length changes when a
   // new row appears, and the last row's text length changes while a draft
@@ -115,7 +121,7 @@ export function Timeline({ rows, fontSize, draft = false }: TimelineProps) {
       })}
     </div>
   );
-}
+});
 
 function rowFontSize(
   index: number,

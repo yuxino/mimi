@@ -88,6 +88,9 @@ pub struct SessionManager {
     is_paused: Arc<AtomicBool>,
     is_recovering: Arc<AtomicBool>,
     is_overlay_collapsed: Arc<AtomicBool>,
+    /// Set while a coalesced session-state broadcast is scheduled; chunks
+    /// arriving in between just flip it instead of emitting per chunk.
+    state_publish_pending: Arc<AtomicBool>,
     health_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     recovery_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     pump_task: Arc<Mutex<Option<JoinHandle<()>>>>,
@@ -107,6 +110,7 @@ impl SessionManager {
             is_paused: Arc::new(AtomicBool::new(false)),
             is_recovering: Arc::new(AtomicBool::new(false)),
             is_overlay_collapsed: Arc::new(AtomicBool::new(false)),
+            state_publish_pending: Arc::new(AtomicBool::new(false)),
             health_task: Arc::new(Mutex::new(None)),
             recovery_task: Arc::new(Mutex::new(None)),
             pump_task: Arc::new(Mutex::new(None)),
@@ -486,7 +490,7 @@ impl SessionManager {
         }
     }
 
-    pub fn clear_subtitles(&self) {
+    pub fn clear_subtitles(self: &Arc<Self>) {
         self.controller.lock().unwrap().clear_subtitles();
         self.publish_state();
     }
@@ -696,8 +700,27 @@ impl SessionManager {
         event
     }
 
-    /// Broadcasts the current session state to the frontend.
-    pub fn publish_state(&self) {
+    /// Broadcasts the current session state to the frontend, coalescing
+    /// high-frequency calls: subtitle chunks stream in at tens of events per
+    /// second and every snapshot carries the full subtitle history, so
+    /// emitting per chunk is the main UI-lag cost during live listening. The
+    /// first call schedules a single trailing broadcast ~60ms later that
+    /// always carries the latest snapshot; intermediate calls only set the
+    /// pending flag. Status-only changes therefore reach the UI within 60ms
+    /// and bursty chunks are folded into one emit.
+    pub fn publish_state(self: &Arc<Self>) {
+        if self.state_publish_pending.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let this = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+            this.publish_state_now();
+            this.state_publish_pending.store(false, Ordering::SeqCst);
+        });
+    }
+
+    fn publish_state_now(self: &Arc<Self>) {
         let event = self.current_state_event();
         let is_active = event.is_active;
         let _ = self.app.emit("session-state", event);
