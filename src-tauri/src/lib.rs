@@ -192,31 +192,124 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// Tray icon with the mimi menu (start/stop, language, lock, settings, quit)
-/// and a left-click popup control panel.
-fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let live_subtitles =
-        CheckMenuItemBuilder::with_id("live-subtitles", "Live Subtitles").build(app)?;
-    let lock_position =
-        CheckMenuItemBuilder::with_id("lock-position", "Lock Subtitle Position").build(app)?;
+/// True when the macOS system language is Chinese (zh-*). The native tray
+/// menu is built once at startup and follows the system language like the
+/// webview panels do (see `src/lib/i18n.ts`).
+#[cfg(target_os = "macos")]
+fn system_language_is_zh() -> bool {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    use std::ffi::{c_char, CStr};
+    unsafe {
+        let Some(locale_class) = AnyClass::get(c"NSLocale") else {
+            return false;
+        };
+        let current: *mut AnyObject = msg_send![locale_class, currentLocale];
+        if current.is_null() {
+            return false;
+        }
+        let code: *mut AnyObject = msg_send![current, languageCode];
+        if code.is_null() {
+            return false;
+        }
+        let ptr: *const c_char = msg_send![code, UTF8String];
+        if ptr.is_null() {
+            return false;
+        }
+        CStr::from_ptr(ptr)
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .starts_with("zh")
+    }
+}
 
-    let language_menu = SubmenuBuilder::new(app, "识别语言")
-        .item(&MenuItemBuilder::with_id("lang-auto", "自动识别").build(app)?)
-        .item(&MenuItemBuilder::with_id("lang-ja", "日本語").build(app)?)
-        .item(&MenuItemBuilder::with_id("lang-en", "English").build(app)?)
-        .item(&MenuItemBuilder::with_id("lang-ko", "한국어").build(app)?)
-        .item(&MenuItemBuilder::with_id("lang-zh", "中文原文").build(app)?)
-        .build()?;
+/// Tray icon with the mimi menu (start/stop, language, lock, settings, quit)
+/// and a left-click popup control panel. Menu copy follows the system
+/// language (Chinese UI on zh-* systems, English otherwise).
+fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    let zh = system_language_is_zh();
+    #[cfg(not(target_os = "macos"))]
+    let zh = false;
+
+    let live_subtitles = CheckMenuItemBuilder::with_id(
+        "live-subtitles",
+        if zh { "实时字幕" } else { "Live Subtitles" },
+    )
+    .build(app)?;
+    let lock_position = CheckMenuItemBuilder::with_id(
+        "lock-position",
+        if zh {
+            "锁定字幕位置"
+        } else {
+            "Lock Subtitle Position"
+        },
+    )
+    .build(app)?;
+
+    let language_menu = SubmenuBuilder::new(
+        app,
+        if zh {
+            "识别语言"
+        } else {
+            "Recognition Language"
+        },
+    )
+    .item(
+        &MenuItemBuilder::with_id("lang-auto", if zh { "自动识别" } else { "Auto Detect" })
+            .build(app)?,
+    )
+    .item(&MenuItemBuilder::with_id("lang-ja", if zh { "日语" } else { "Japanese" }).build(app)?)
+    .item(&MenuItemBuilder::with_id("lang-en", if zh { "英语" } else { "English" }).build(app)?)
+    .item(&MenuItemBuilder::with_id("lang-ko", if zh { "韩语" } else { "Korean" }).build(app)?)
+    .item(
+        &MenuItemBuilder::with_id(
+            "lang-zh",
+            if zh {
+                "中文原文"
+            } else {
+                "Chinese (Original)"
+            },
+        )
+        .build(app)?,
+    )
+    .build()?;
 
     let menu = MenuBuilder::new(app)
         .item(&live_subtitles)
         .item(&language_menu)
         .item(&lock_position)
-        .item(&MenuItemBuilder::with_id("show-subtitles", "Show Subtitle Window").build(app)?)
-        .item(&MenuItemBuilder::with_id("clear-subtitles", "Clear Subtitles").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id(
+                "show-subtitles",
+                if zh {
+                    "显示字幕窗口"
+                } else {
+                    "Show Subtitle Window"
+                },
+            )
+            .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id(
+                "clear-subtitles",
+                if zh {
+                    "清空字幕"
+                } else {
+                    "Clear Subtitles"
+                },
+            )
+            .build(app)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("settings", "Settings…").build(app)?)
-        .item(&MenuItemBuilder::with_id("quit", "Quit mimi").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("settings", if zh { "设置…" } else { "Settings…" })
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("quit", if zh { "退出 mimi" } else { "Quit mimi" })
+                .build(app)?,
+        )
         .build()?;
 
     // Menu-bar icon: a monochrome waveform template (like the original app's
