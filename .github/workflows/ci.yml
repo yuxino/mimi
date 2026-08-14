@@ -55,3 +55,44 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Release bundles for the platforms the app ships on. Runs on the main
+  # branch (and PRs so packaging regressions surface before merge). The
+  # tauri-action step builds the native bundles (.app/.dmg on macOS,
+  # .msi/.nsis on Windows) and uploads them as workflow artifacts.
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: ""
+          - os: windows-latest
+            args: ""
+    runs-on: ${{ matrix.os }}
+    needs: [rust, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Builds the native bundle (.app/.dmg on macOS, .msi/.nsis on Windows)
+      # and uploads it as a workflow artifact. Without tagName/releaseName it
+      # never creates a GitHub Release — artifacts are downloaded from the
+      # Actions run page.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
