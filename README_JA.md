@@ -11,12 +11,25 @@
 
 mimiは、日本語の「耳（みみ）」に由来する名前です。デバイスで再生中の中国語・日本語・英語・韓国語を原文字幕として表示したり、簡体字中国語・英語・日本語へリアルタイム翻訳したりできます。Tauri v2（Rust + React）製で、同じコードベースが macOS と Windows の両方に対応しています。
 
+<table>
+  <tr>
+    <td width="33.33%"><img src="docs/images/mimi-film-real-ja.jpg" alt="ドラマに字幕を重ねた mimi"></td>
+    <td width="33.33%"><img src="docs/images/mimi-game-real-ja.jpg" alt="ノベルゲームに字幕を重ねた mimi"></td>
+    <td width="33.33%"><img src="docs/images/mimi-meeting-real-ja.jpg" alt="オンライン会議に字幕を重ねた mimi"></td>
+  </tr>
+  <tr>
+    <td align="center">映画・動画</td>
+    <td align="center">ゲーム・ライブ配信</td>
+    <td align="center">会議・オンライン授業</td>
+  </tr>
+</table>
+
 ブラウザ、動画プレイヤー、オンライン会議、オンライン授業、デスクトップアプリで使えます。
 
 ## 機能
 
 - **リアルタイム字幕** — ブラウザ・プレイヤー・ゲーム・会議・デスクトップアプリに対応。
-- **リアルタイム翻訳** — 極速 / 低遅延 / 高品質の3モード。
+- **リアルタイム翻訳** — 超高速 / 低遅延 / 高品質の3モード。
 - **柔軟な字幕ウィンドウ** — 移動・リサイズ・折りたたみ・クリック透過ロック。
 - **多言語** — 中国語・日本語・英語・韓国語の認識。
 - **プライバシー** — マイク不使用、アカウント不要、音声や字幕履歴の保存なし。
@@ -51,6 +64,11 @@ npm run tauri dev        # 開発実行
 ```
 
 Windows 向けパッケージは Windows マシンでビルドしてください（Rust の C 依存は macOS から MSVC ターゲットへクロスコンパイルできません）。CI は macOS と Windows の両方で Rust テスト一式を実行します。
+
+### macOS の開発メモ
+
+- `npm run tauri dev` は裸のバイナリとして実行されるため `.app` バンドルがなく、macOS はバンドルからしかアイコンを読み込まないので Dock に汎用アイコンが表示されます。正しいアイコンで実行するには `./scripts/dev-app.sh` を使ってください。これは `tauri build` と同じ方法（`--features tauri/custom-protocol` 付き。この機能がないと Tauri はビルドを dev 扱いし、実行時に Dock アイコンをマスクなしの四角形へ置き換えます）で release バイナリをビルドし、本物の `.app`（オリジナルアイコン、ウィンドウタイトル/ツールチップに「(dev)」マーク付き）に包んで起動します。Dock アイコンは正式版と完全に一致します。
+- ローカルビルドは `mimi Local Development` の安定した署名アイデンティティが存在する場合にそれで署名されます（`scripts/codesign-identity.sh`）。これにより画面収録とキーチェーンの許可が再ビルド後も維持されます（アプリのアイデンティティごとに一度だけ許可が必要です）。
 
 ## テスト
 
