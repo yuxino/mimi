@@ -666,9 +666,11 @@ pub struct LanguagePopoverManager;
 static POPOVER_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl LanguagePopoverManager {
-    /// Window size: the 184px menu panel plus 8px shadow margins.
+    /// Window size: the 184px menu panel plus 8px shadow margins. The
+    /// height fits the language group (automatic + 4 languages) and the
+    /// mode group (3 modes) with padding (~281px content).
     pub const WIDTH: f64 = 200.0;
-    pub const HEIGHT: f64 = 266.0;
+    pub const HEIGHT: f64 = 292.0;
     /// Height of the language capsule the menu anchors below (for flipping).
     pub const CAPSULE_HEIGHT: f64 = 20.0;
     /// Capsule anchor offset from the overlay origin (logical px): canvas
