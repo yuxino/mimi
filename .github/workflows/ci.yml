@@ -89,16 +89,22 @@ jobs:
       - run: npm ci
 
       # Builds the native bundle (.app/.dmg on macOS, .msi/.nsis on Windows).
-      # Without tagName/releaseName it never creates a GitHub Release; the
-      # next step uploads the bundles as workflow artifacts, which are
-      # downloaded from the Actions run page.
+      # On a v* tag push, tauri-action also creates a GitHub Release and
+      # attaches the installers (releaseName/tagName only set for tags, so a
+      # plain main-branch push just uploads workflow artifacts instead).
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('mimi {0}', github.ref_name) || '' }}
+          releaseBody: "See the assets below for installers (macOS .dmg, Windows .msi/.exe)."
+          releaseDraft: false
+          prerelease: false
 
       - name: Upload bundles
+        if: ${{ github.ref_type != 'tag' }}
         uses: actions/upload-artifact@v4
         with:
           name: mimi-${{ matrix.os }}
