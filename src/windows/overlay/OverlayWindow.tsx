@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { I18N } from "../../lib/i18n";
 import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
 import { isTauri, overlaySetSize } from "../../lib/ipc";
@@ -60,20 +60,25 @@ export function OverlayWindow() {
     settings.targetLanguage,
     detectedLanguage,
   );
-  // Recompute rows only when the subtitle content actually changes; the
-  // overlay re-renders on every session-state event (status/isActive/flags),
-  // but running the segmenter over the whole history per event is the main
-  // cost during live streaming.
+  // Recompute rows only when HISTORY changes. The live draft streams at tens
+  // of events per second and must not re-run the segmenter over the whole
+  // history (that was the main cost during live listening). Rows depend on
+  // the history array reference, not the whole subtitles object.
   const rows = useMemo(
     () => computeVisibleRows(session.subtitles, segmentLength),
-    [session.subtitles, segmentLength],
+    // computeVisibleRows reads only subtitles.history; keying on the array
+    // reference (plus segmentLength) makes draft churn a no-op here.
+    [session.subtitles.history, segmentLength],
   );
   // The live preview line lives OUTSIDE the scrolling timeline (fixed bottom
   // line), so streaming churn never nudges history. Its text is stabilized:
   // the shown value settles ~400ms after the last update instead of flickering
   // on every recognition block. A final-but-not-yet-committed line is shown
   // as-is (it no longer changes).
-  const draft = useMemo(() => visibleDraft(session.subtitles), [session.subtitles]);
+  const draft = useMemo(
+    () => visibleDraft(session.subtitles),
+    [session.subtitles.translation, session.subtitles.history],
+  );
   const draftText = useStableText(
     draft?.text ?? "",
     draft?.isFinal ? 0 : 400,
@@ -366,8 +371,10 @@ export function OverlayWindow() {
 
 /** The fixed live-preview line pinned under the scrolling history. Settles
  * between speech pauses (see `useStableText`), renders dimmed with a trailing
- * ellipsis, and never scrolls or nudges the history above it. */
-function DraftLine({
+ * ellipsis, and never scrolls or nudges the history above it. Memoized: the
+ * stabilized text changes only on speech pauses, so the overlay's
+ * high-frequency re-renders should not re-segment it. */
+const DraftLine = memo(function DraftLine({
   text,
   fontSize,
   segmentLength,
@@ -406,4 +413,4 @@ function DraftLine({
       ))}
     </div>
   );
-}
+});
