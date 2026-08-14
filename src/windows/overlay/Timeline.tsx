@@ -9,16 +9,20 @@ const MONO_FONT =
 interface TimelineProps {
   rows: SubtitleRow[];
   fontSize: number;
+  /** True when the trailing row(s) are the live draft preview. Draft rows
+   * (id prefix `draft-`) render dimmed with a trailing ellipsis so the
+   * in-progress line does not dominate the stable history above it; history
+   * rows never take this style. */
+  draft?: boolean;
 }
 
 /** Scrolling subtitle history; auto-scrolls to the newest row. Memoized:
  * during live streaming the overlay re-renders on every session-state event,
- * but the timeline DOM only needs rebuilding when its rows actually change.
- * The live preview line is NOT part of this list — it is rendered as a fixed
- * bottom line by the overlay so streaming updates never nudge history. */
+ * but the timeline DOM only needs rebuilding when its rows actually change. */
 export const Timeline = memo(function Timeline({
   rows,
   fontSize,
+  draft = false,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Keep the newest content pinned to the bottom: rows.length changes when a
@@ -52,6 +56,10 @@ export const Timeline = memo(function Timeline({
       {rows.map((row, index) => {
         const isLast = index === rows.length - 1;
         const distance = rows.length - 1 - index;
+        // Draft rows are the trailing `draft-*` rows of the live preview
+        // line (identified by id prefix, never by createdAt — history rows
+        // beyond the first segment also carry null timestamps).
+        const isDraftRow = draft && row.id.startsWith("draft-");
         return (
           <div
             key={row.id}
@@ -68,7 +76,7 @@ export const Timeline = memo(function Timeline({
               animation: "subtitle-row-enter 240ms ease-out",
             }}
           >
-            {row.createdAt !== null ? (
+            {row.createdAt !== null && !isDraftRow ? (
               <span
                 style={{
                   width: 31,
@@ -91,12 +99,19 @@ export const Timeline = memo(function Timeline({
               style={{
                 fontSize: rowFontSize(index, rows.length, fontSize),
                 fontWeight: isLast ? 500 : 400,
-                color: `rgba(255,255,255,${rowOpacity(distance)})`,
+                color: isDraftRow
+                  ? "rgba(255,255,255,0.72)"
+                  : `rgba(255,255,255,${rowOpacity(distance)})`,
                 lineHeight: 1.45,
                 overflowWrap: "break-word",
               }}
             >
               {row.text}
+              {isDraftRow && (
+                <span style={{ opacity: 0.55 }} aria-hidden="true">
+                  {"…"}
+                </span>
+              )}
             </span>
           </div>
         );

@@ -156,9 +156,10 @@ export function computeVisibleRows(
 
 /**
  * The live preview line: the current unconfirmed translation (or a just-final
- * line that has not yet entered history). Rendered outside the scrolling
- * timeline — a fixed bottom line — so streaming updates never nudge history.
- * Returns `null` when there is nothing to preview.
+ * line that has not yet entered history). The overlay renders it as the
+ * timeline's last row — dimmed with a trailing ellipsis — so streaming
+ * updates never look like a separate pile at the bottom. Returns `null` when
+ * there is nothing to preview.
  */
 export function visibleDraft(
   subtitles: SubtitleSnapshot,
