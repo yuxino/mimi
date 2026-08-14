@@ -392,14 +392,44 @@ fn setup_global_shortcut(
 /// where panics cannot unwind, so every step falls back silently.
 #[cfg(target_os = "macos")]
 fn set_dock_icon(app: &tauri::AppHandle) {
+    // Prefer the dedicated high-resolution rendition of the original app
+    // artwork with the macOS squircle corners baked in: macOS masks bundle
+    // icons at display time but does not mask icons set at runtime, so the
+    // dev binary (which has no bundle) would otherwise show a raw square.
+    let embedded = tauri::image::Image::from_bytes(include_bytes!("../icons/dock-icon.png"));
+    match embedded {
+        Ok(icon) => {
+            tracing::info!(
+                "dock icon: embedded rendition {}x{}",
+                icon.width(),
+                icon.height()
+            );
+            set_dock_icon_image(icon);
+        }
+        Err(err) => {
+            tracing::warn!("dock icon: embedded rendition failed ({err}), falling back");
+            if let Some(icon) = app.default_window_icon().cloned() {
+                tracing::info!(
+                    "dock icon: default window icon {}x{}",
+                    icon.width(),
+                    icon.height()
+                );
+                set_dock_icon_image(icon);
+            }
+        }
+    }
+}
+
+/// Applies an RGBA image as the macOS Dock icon. Never panics: it runs
+/// inside the AppKit delegate callback where panics cannot unwind, so every
+/// step falls back silently.
+#[cfg(target_os = "macos")]
+fn set_dock_icon_image(icon: tauri::image::Image<'_>) {
     use objc2::msg_send;
     use objc2::runtime::{AnyClass, AnyObject};
     use objc2_foundation::{NSSize, NSString};
     use std::ffi::c_void;
 
-    let Some(icon) = app.default_window_icon() else {
-        return;
-    };
     let width = icon.width() as i64;
     let height = icon.height() as i64;
     let rgba = icon.rgba();
