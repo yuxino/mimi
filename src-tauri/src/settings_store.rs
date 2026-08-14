@@ -48,6 +48,10 @@ pub struct Preferences {
     pub overlay_locked: bool,
     pub overlay_frame: Option<OverlayFrame>,
     pub frame_layout_version: u64,
+    /// The app identity (bundle id) the keychain item's access-control list
+    /// was last rebound to (see `SettingsStore::rebind_keychain_acl`).
+    /// `None` means it has never been rebound for this identity.
+    pub keychain_rebound_identity: Option<String>,
 }
 
 impl Default for Preferences {
@@ -61,6 +65,7 @@ impl Default for Preferences {
             overlay_locked: false,
             overlay_frame: None,
             frame_layout_version: 0,
+            keychain_rebound_identity: None,
         }
     }
 }
@@ -186,8 +191,44 @@ impl SettingsStore {
             return cached;
         }
         let result = self.secret.load();
+        if let Ok(Some(value)) = &result {
+            self.rebind_keychain_acl(value);
+        }
         *cache = Some(result.clone());
         result
+    }
+
+    /// The keychain item may have been created by an older build whose
+    /// (ad-hoc) signature differs from this app's current identity, so macOS
+    /// prompts for keychain authorization on every launch. Deleting and
+    /// re-creating the item binds its access-control list to the current
+    /// code-signing identity (stable thanks to `mimi Local Development`),
+    /// after which reads no longer prompt. Runs once per identity; a failure
+    /// leaves the flag unset so it retries next launch.
+    fn rebind_keychain_acl(&self, value: &str) {
+        let identity = current_app_identity();
+        let already = self.prefs.lock().unwrap().keychain_rebound_identity.clone();
+        if already.as_deref() == Some(identity.as_str()) {
+            return;
+        }
+        let Ok(entry) = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) else {
+            return;
+        };
+        let rebound = entry
+            .delete_credential()
+            .and_then(|_| entry.set_password(value));
+        match rebound {
+            Ok(()) => {
+                self.update_preferences(|prefs| {
+                    prefs.keychain_rebound_identity = Some(identity.clone());
+                });
+                self.persist();
+                tracing::info!("keychain item ACL rebound to app identity {identity}");
+            }
+            Err(error) => {
+                tracing::warn!("keychain ACL rebind failed ({error}); will retry next launch");
+            }
+        }
     }
 
     pub fn credential_load_error(&self) -> Option<String> {
@@ -275,6 +316,39 @@ impl SettingsStore {
             let _ = std::fs::write(&self.prefs_path, text);
         }
     }
+}
+
+/// The identity this app presents to the keychain: the macOS bundle
+/// identifier (dev wrapper: `app.yuxino.mimi.dev`, release:
+/// `app.yuxino.mimi`). Both apps share the same config dir and keychain
+/// service, so the rebind marker must distinguish them; the code-signing
+/// certificate is stable ("mimi Local Development"), so the bundle id alone
+/// is a stable per-app key.
+fn current_app_identity() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+        use std::ffi::{c_char, CStr};
+        unsafe {
+            if let Some(bundle_class) = AnyClass::get(c"NSBundle") {
+                let main_bundle: *mut AnyObject = msg_send![bundle_class, mainBundle];
+                if !main_bundle.is_null() {
+                    let identifier: *mut AnyObject = msg_send![main_bundle, bundleIdentifier];
+                    if !identifier.is_null() {
+                        let ptr: *const c_char = msg_send![identifier, UTF8String];
+                        if !ptr.is_null() {
+                            if let Ok(id) = CStr::from_ptr(ptr).to_str() {
+                                return id.to_string();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Non-macOS or lookup failure: fall back to the shared identifier.
+    "app.yuxino.mimi".to_string()
 }
 
 #[cfg(test)]
