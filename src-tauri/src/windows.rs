@@ -907,9 +907,53 @@ impl TrayPanelManager {
             return;
         }
         use tauri_plugin_positioner::{Position, WindowExt};
-        let _ = window.move_window(Position::TrayBottomCenter);
+
+        // Position the panel below the tray icon. The positioner plugin
+        // records the tray icon's rect from every tray event (see the
+        // on_tray_event call in lib.rs); if it is not available yet, fall
+        // back to the top-right of the current monitor so the panel never
+        // pops up at the window's default location.
+        if let Err(error) = window.move_window(Position::TrayBottomCenter) {
+            tracing::debug!("tray panel: TrayBottomCenter unavailable ({error}), falling back");
+            Self::position_top_right(&window);
+        }
+        if let Ok(position) = window.outer_position() {
+            tracing::debug!("tray panel: positioned at {position:?}");
+        }
         let _ = window.show();
         let _ = window.set_focus();
+
+        // The first move can run before the window reports its final size,
+        // which skews TrayBottomCenter's horizontal centering. Re-apply the
+        // position shortly after the panel is visible.
+        let window = window.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+            if let Err(error) = window.move_window(Position::TrayBottomCenter) {
+                tracing::debug!("tray panel: re-position unavailable ({error}), falling back");
+                Self::position_top_right(&window);
+            }
+            if let Ok(position) = window.outer_position() {
+                tracing::debug!("tray panel: re-positioned at {position:?}");
+            }
+        });
+    }
+
+    /// Fallback placement: top-right of the window's current monitor, just
+    /// below the menu bar, so the panel stays visible and near its anchor.
+    fn position_top_right(window: &tauri::WebviewWindow) {
+        let Some(monitor) = window.current_monitor().ok().flatten() else {
+            return;
+        };
+        let monitor_pos = monitor.position();
+        let monitor_size = monitor.size();
+        let window_size = window.outer_size().unwrap_or_default();
+        let margin = 8.0_f64;
+        let x =
+            (monitor_pos.x as f64 + monitor_size.width as f64 - window_size.width as f64 - margin)
+                .max(monitor_pos.x as f64);
+        let y = monitor_pos.y as f64 + margin;
+        let _ = window.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
     }
 
     pub fn hide(app: &AppHandle) {
