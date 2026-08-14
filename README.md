@@ -67,7 +67,7 @@ Build the Windows package on a Windows machine (Rust's C dependencies cannot cro
 
 ### macOS dev notes
 
-- `npm run tauri dev` runs the bare binary, which has no `.app` bundle — macOS then shows a generic icon in the Dock (macOS only reads icons from bundles). Use `./scripts/dev-app.sh` instead for the icon-correct run: it builds the debug binary, wraps it in a real `.app` (the original icon, window titles/tooltip marked "(dev)"), and launches it, so the Dock icon matches the release app exactly.
+- `npm run tauri dev` runs the bare binary, which has no `.app` bundle — macOS then shows a generic icon in the Dock (macOS only reads icons from bundles). Use `./scripts/dev-app.sh` instead for the icon-correct run: it builds a release binary with `--features tauri/custom-protocol` (the same build `tauri build` performs), wraps it in a real `.app` (the original icon, window titles/tooltip marked "(dev)"), and launches it, so the Dock icon matches the release app exactly. (Without the `custom-protocol` feature, Tauri treats the build as dev and replaces the Dock icon with an unmasked square at runtime.)
 - Local builds are signed with the stable `mimi Local Development` identity when present (`scripts/codesign-identity.sh`), so Screen Recording and keychain grants survive rebuilds. Permissions must be granted once per app identity.
 
 ## Tests
