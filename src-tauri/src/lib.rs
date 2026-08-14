@@ -355,6 +355,9 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 "show-subtitles" => windows::OverlayWindowManager::show(app),
                 "clear-subtitles" => state.session.clear_subtitles(),
                 "settings" => {
+                    // The tray panel is always-on-top; hide it so the
+                    // settings window is not obscured behind it.
+                    windows::TrayPanelManager::hide(app);
                     if let Some(window) = app.get_webview_window("settings") {
                         let _ = window.show();
                         let _ = window.set_focus();
