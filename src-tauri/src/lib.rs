@@ -32,8 +32,15 @@ pub fn run() {
         .setup(|app| {
             tracing::info!("mimi starting");
 
+            // Runtime dock-icon override is for dev builds only: dev has no
+            // .app bundle, so the generic icon needs replacing. The release
+            // bundle ships the real icon.icns and macOS reads it from the
+            // bundle — overriding it here would swap the correct launchpad
+            // icon for a small PNG rendition the moment the app starts.
             #[cfg(target_os = "macos")]
-            set_dock_icon(app.handle());
+            if tauri::is_dev() {
+                set_dock_icon(app.handle());
+            }
 
             let app_handle = app.handle().clone();
             let is_ui_test = std::env::var("MIMI_UI_TEST").as_deref() == Ok("1");
