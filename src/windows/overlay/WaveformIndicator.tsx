@@ -5,6 +5,7 @@ import {
   type OverlayActivityPhaseKind,
 } from "../../lib/types";
 import { useReducedMotion } from "./animation";
+import { invoke } from "@tauri-apps/api/core";
 
 interface WaveformIndicatorProps {
   phase: OverlayActivityPhaseKind;
@@ -68,6 +69,10 @@ export const WaveformIndicator = memo(function WaveformIndicator({
     }
 
     let raf = 0;
+    // TEMP diagnostic: measure the real rAF cadence to confirm the compositor
+    // fix. Reports average fps over ~2s windows (dev-only console output).
+    let frameCount = 0;
+    let windowStart = performance.now();
     const loop = (now: number) => {
       const time = now / 1000;
       const currentInfo = OVERLAY_ACTIVITY_PHASES[phaseRef.current];
@@ -82,6 +87,14 @@ export const WaveformIndicator = memo(function WaveformIndicator({
         );
         element.style.transform = `scaleY(${height / maxHeight})`;
       });
+      frameCount += 1;
+      const elapsed = now - windowStart;
+      if (elapsed >= 2000) {
+        const fps = (frameCount * 1000) / elapsed;
+        void invoke("wave_fps_report", { fps }).catch(() => {});
+        frameCount = 0;
+        windowStart = now;
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -101,7 +114,11 @@ export const WaveformIndicator = memo(function WaveformIndicator({
             height: `${maxHeight}px`,
             borderRadius: 999,
             transformOrigin: "center",
-            willChange: "transform",
+            // Deliberately NO `willChange: transform`: promoting each bar to
+            // its own compositing layer makes the transparent overlay window
+            // software-composite N layers per frame (the macOS WKWebView
+            // transparent-window path does not use GPU compositing), which is
+            // the stutter source. One shared layer keeps a single composite.
             background: overlayPhaseColor(phase, barOpacity(index, compact)),
           }}
         />

@@ -145,6 +145,7 @@ pub fn run() {
             commands::tray_panel_hide,
             commands::app_show_settings,
             commands::app_quit,
+            commands::wave_fps_report,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
