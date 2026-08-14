@@ -101,8 +101,11 @@ pub struct SettingsDraft {
     pub is_overlay_locked: Option<bool>,
 }
 
+/// Reads the settings snapshot. Async: the keychain read (and the one-time
+/// ACL rebind) must not block the main thread — wry dispatches sync commands
+/// on the main thread, and every window calls this at boot.
 #[tauri::command]
-pub fn settings_get(state: State<'_, AppState>) -> Result<SettingsSnapshotPayload, String> {
+pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsSnapshotPayload, String> {
     tracing::info!(
         "settings_get invoked from frontend hasKey={} keyLen={}",
         u8::from(state.settings.has_api_key()),
@@ -117,8 +120,11 @@ pub fn settings_get(state: State<'_, AppState>) -> Result<SettingsSnapshotPayloa
     Ok(SettingsSnapshotPayload::from_store(&state.settings))
 }
 
+/// Saves settings. Async: keychain writes and preference persistence are
+/// disk I/O that must not run on the main thread (sync Tauri commands run on
+/// the main thread in wry, blocking every window's rendering).
 #[tauri::command]
-pub fn settings_save(
+pub async fn settings_save(
     app: AppHandle,
     state: State<'_, AppState>,
     draft: SettingsDraft,
@@ -317,9 +323,10 @@ pub fn overlay_popover_hide(app: AppHandle) -> Result<(), String> {
 }
 
 /// The current session state snapshot, for windows that boot after the last
-/// broadcast (e.g. the language popover).
+/// broadcast (e.g. the language popover). Async: cloning the full controller
+/// state (subtitle history included) must not run on the main thread.
 #[tauri::command]
-pub fn session_get_state(state: State<'_, AppState>) -> Result<SessionStateEvent, String> {
+pub async fn session_get_state(state: State<'_, AppState>) -> Result<SessionStateEvent, String> {
     Ok(state.session.current_state_event())
 }
 
@@ -384,12 +391,5 @@ pub fn app_show_settings(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn app_quit(app: AppHandle) -> Result<(), String> {
     app.exit(0);
-    Ok(())
-}
-
-/// Content-free UI diagnostics probe used by the launch-time DOM check.
-#[tauri::command]
-pub fn ui_probe_report(window: String, state: String) -> Result<(), String> {
-    tracing::info!("ui probe window={} state={}", window, state);
     Ok(())
 }
