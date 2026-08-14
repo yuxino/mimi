@@ -87,12 +87,23 @@ jobs:
 
       - run: npm ci
 
-      # Builds the native bundle (.app/.dmg on macOS, .msi/.nsis on Windows)
-      # and uploads it as a workflow artifact. Without tagName/releaseName it
-      # never creates a GitHub Release — artifacts are downloaded from the
-      # Actions run page.
+      # Builds the native bundle (.app/.dmg on macOS, .msi/.nsis on Windows).
+      # Without tagName/releaseName it never creates a GitHub Release; the
+      # next step uploads the bundles as workflow artifacts, which are
+      # downloaded from the Actions run page.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: mimi-${{ matrix.os }}
+          path: |
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.app.tar.gz
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+          if-no-files-found: error
