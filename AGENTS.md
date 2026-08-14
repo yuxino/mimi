@@ -23,7 +23,8 @@ Preserve these product constraints:
 - `mimi-web/`: the product website (marketing site, not the app).
 - `docs/plans/`: accepted design notes and implementation plans.
 - `scripts/check.sh`: canonical automated test and strict-build entry point.
-- `scripts/package-app.sh`: release build via `tauri build`.
+- `scripts/package-app.sh`: release build via `tauri build`, re-signed with the stable local identity.
+- `scripts/codesign-identity.sh`: picks the code-signing identity for local builds (`MIMI_CODESIGN_IDENTITY` → `mimi Local Development` → ad-hoc). Stable identity keeps Screen Recording / keychain grants valid across rebuilds.
 - `.github/workflows/ci.yml`: CI (Rust fmt/clippy/test on macOS and Windows, frontend checks).
 
 ## Working agreements

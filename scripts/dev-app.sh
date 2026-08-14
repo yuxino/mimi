@@ -83,8 +83,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 
 # Ad-hoc sign so the system accepts the wrapper (arm64 binaries need a
-# signature to run; the debug binary itself is already ad-hoc signed).
-codesign --force --sign - "$APP" 2>/dev/null || true
+# signature to run; the debug binary itself is already ad-hoc signed). Use
+# the stable local identity when available so Screen Recording / keychain
+# grants survive rebuilds (see codesign-identity.sh).
+IDENTITY="$("$SCRIPT_DIR/codesign-identity.sh")"
+codesign --force --sign "$IDENTITY" "$APP" 2>/dev/null || true
 
 echo "launching $APP"
 open "$APP"
