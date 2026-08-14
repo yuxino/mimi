@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   OVERLAY_ACTIVITY_PHASES,
   overlayPhaseColor,
@@ -23,8 +23,9 @@ const RING_BOX = 18;
  * by `transform: scale()` written directly to the DOM from an rAF loop —
  * never via React state and never via `width`/`height` (which would reflow
  * the layout every frame and stutter inside the transparent overlay window).
+ * Memoized: only re-renders when its phase actually changes.
  */
-export function RecognitionActivityIndicator({
+export const RecognitionActivityIndicator = memo(function RecognitionActivityIndicator({
   phase,
 }: RecognitionActivityIndicatorProps) {
   const reduceMotion = useReducedMotion();
@@ -136,7 +137,7 @@ export function RecognitionActivityIndicator({
       </div>
     </div>
   );
-}
+});
 
 function barHeight(
   index: number,

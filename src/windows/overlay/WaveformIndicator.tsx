@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   OVERLAY_ACTIVITY_PHASES,
   overlayPhaseColor,
@@ -26,8 +26,10 @@ const MAX_HEIGHT_COMPACT = 22;
  * `transform: scaleY()` written directly to the DOM from a requestAnimationFrame
  * loop — never via React state and never via `height` (which would reflow the
  * layout every frame and stutter inside the transparent overlay window).
+ * Memoized: the overlay re-renders on every session-state event, but the wave
+ * only needs to re-render when its phase or variant actually changes.
  */
-export function WaveformIndicator({
+export const WaveformIndicator = memo(function WaveformIndicator({
   phase,
   compact = false,
 }: WaveformIndicatorProps) {
@@ -106,7 +108,7 @@ export function WaveformIndicator({
       ))}
     </div>
   );
-}
+});
 
 function barHeight(
   index: number,
