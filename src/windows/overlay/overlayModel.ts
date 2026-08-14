@@ -16,7 +16,7 @@ import {
   TARGET_LANGUAGE_DISPLAY_NAMES,
   sourceLanguageStatusDisplayName,
 } from "../../lib/types";
-import { segments, visibleDraftSegments } from "./segmenter";
+import { segments } from "./segmenter";
 
 export interface SubtitleRow {
   id: string;
@@ -151,22 +151,26 @@ export function computeVisibleRows(
     });
   }
 
+  return rows;
+}
+
+/**
+ * The live preview line: the current unconfirmed translation (or a just-final
+ * line that has not yet entered history). Rendered outside the scrolling
+ * timeline — a fixed bottom line — so streaming updates never nudge history.
+ * Returns `null` when there is nothing to preview.
+ */
+export function visibleDraft(
+  subtitles: SubtitleSnapshot,
+): { text: string; isFinal: boolean } | null {
   const currentLine = subtitles.translation;
+  if (currentLine.text === "") return null;
   const currentIsAlreadyInHistory =
     currentLine.isFinal &&
     subtitles.history[subtitles.history.length - 1]?.translation ===
       currentLine.text;
-
-  if (currentLine.text !== "" && !currentIsAlreadyInHistory) {
-    const currentSegments = currentLine.isFinal
-      ? segments(currentLine.text, segmentLength)
-      : visibleDraftSegments(currentLine.text, segmentLength, 2);
-    currentSegments.forEach((text, index) => {
-      rows.push({ id: `current-${index}`, text, createdAt: null });
-    });
-  }
-
-  return rows;
+  if (currentIsAlreadyInHistory) return null;
+  return { text: currentLine.text, isFinal: currentLine.isFinal };
 }
 
 export interface LanguageStatus {
