@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { I18N } from "../../lib/i18n";
 import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
 import { isTauri, overlaySetSize } from "../../lib/ipc";
@@ -57,7 +57,14 @@ export function OverlayWindow() {
     settings.targetLanguage,
     detectedLanguage,
   );
-  const rows = computeVisibleRows(session.subtitles, segmentLength);
+  // Recompute rows only when the subtitle content actually changes; the
+  // overlay re-renders on every session-state event (status/isActive/flags),
+  // but running the segmenter over the whole history per event is the main
+  // cost during live streaming.
+  const rows = useMemo(
+    () => computeVisibleRows(session.subtitles, segmentLength),
+    [session.subtitles, segmentLength],
+  );
   const status = languageStatus(settings, detectedLanguage);
   const hasContent = hasSubtitleContent(session.subtitles);
 
