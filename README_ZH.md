@@ -58,12 +58,17 @@ API Key 保存在系统钥匙串中（macOS 钥匙串 / Windows 凭据管理器�
 git clone https://github.com/yuxino/mimi.git
 cd mimi
 npm install
-npm run tauri dev        # 开发运行
+npm run tauri dev        # 开发运行（裸二进制）
 ./scripts/check.sh       # 完整检查（fmt/clippy/测试/前端构建）
 ./scripts/package-app.sh # 打包（macOS: .dmg；Windows: .msi/.nsis）
 ```
 
 Windows 打包请在 Windows 机器上执行（Rust 依赖的 C 代码无法从 macOS 交叉编译到 MSVC 目标）；CI 会在 macOS 与 Windows 两个平台跑完整的 Rust 测试。
+
+### macOS 开发说明
+
+- `npm run tauri dev` 运行的是裸二进制，没有 `.app` 包——macOS 只从 bundle 读图标，所以 Dock 里只会显示通用图标。要看到正确的应用图标，请改用 `./scripts/dev-app.sh`：它会构建 debug 二进制、包成真正的 `.app`（原版图标，窗口标题/托盘提示带 "(dev)" 标记）再启动，Dock 图标与正式版完全一致。
+- 本机构建优先用稳定的 `mimi Local Development` 签名身份（见 `scripts/codesign-identity.sh`），这样屏幕录制与钥匙串授权在每次重新构建后仍然有效（每个应用身份需各授权一次）。
 
 ## 测试
 
