@@ -242,7 +242,6 @@ export function OverlayWindow() {
               isHovering={isHovering}
               isPaused={session.isPaused}
               isWaitingForFinalTranslation={isWaiting}
-              statusKind={session.status.kind}
               settings={settings}
               detectedLanguage={detectedLanguage}
               onSwitchSourceLanguage={(language) =>

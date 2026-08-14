@@ -11,7 +11,6 @@ import {
   overlayPhaseColor,
   targetLanguageTranslatesAudio,
   type OverlayActivityPhaseKind,
-  type SessionStatus,
   type SettingsSnapshot,
   type SourceLanguage,
   type TranslationMode,
@@ -30,7 +29,6 @@ interface LanguagePickerPopoverProps {
   isHovering: boolean;
   isPaused: boolean;
   isWaitingForFinalTranslation: boolean;
-  statusKind: SessionStatus["kind"];
   settings: SettingsSnapshot;
   detectedLanguage: string | null;
   onSwitchSourceLanguage: (language: SourceLanguage) => void;
@@ -48,7 +46,6 @@ export function LanguagePickerPopover({
   isHovering,
   isPaused,
   isWaitingForFinalTranslation,
-  statusKind,
   settings,
   detectedLanguage,
   onSwitchSourceLanguage,
@@ -59,10 +56,10 @@ export function LanguagePickerPopover({
 
   if (status === null) return null;
 
-  // Interactive whenever not mid-connection: idle (before starting)
-  // and listening both allow quick language/mode switching.
-  const canInteract =
-    !isPaused && statusKind !== "connecting" && statusKind !== "stopping";
+  // Interactive whenever not paused: idle, listening, connecting and
+  // stopping all allow quick language/mode switching (the backend rebuilds
+  // the session when a switch lands mid-connect).
+  const canInteract = !isPaused;
   const translatesAudio = targetLanguageTranslatesAudio(settings.targetLanguage);
   // Automatic source runs the low-latency pipeline regardless of the stored
   // mode; the capsule badge shows the effective mode.

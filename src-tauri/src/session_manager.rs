@@ -159,25 +159,63 @@ impl SessionManager {
     async fn establish_session(self: &Arc<Self>, clear_subtitles: bool) -> Result<(), String> {
         self.stop_health_checks().await;
 
-        let configuration = match self.active_settings.lock().unwrap().clone() {
-            Some(configuration) => configuration,
-            None => {
-                let configuration = self.settings.configuration()?;
-                *self.active_settings.lock().unwrap() = Some(configuration.clone());
-                configuration
+        let mut clear = clear_subtitles;
+        // A language/mode switch may land while connecting (the picker stays
+        // usable during connecting); at most one rebuild picks up the change
+        // so a rapid switch storm cannot loop forever.
+        let mut attempts = 0usize;
+        loop {
+            attempts += 1;
+            let configuration = match self.active_settings.lock().unwrap().clone() {
+                Some(configuration) => configuration,
+                None => {
+                    let configuration = self.settings.configuration()?;
+                    *self.active_settings.lock().unwrap() = Some(configuration.clone());
+                    configuration
+                }
+            };
+
+            pipeline_log!("session connecting clear={}", u8::from(clear));
+            if clear {
+                self.controller.lock().unwrap().clear_subtitles();
             }
-        };
+            self.controller.lock().unwrap().begin_connecting();
+            self.publish_state();
 
-        pipeline_log!("session connecting clear={}", u8::from(clear_subtitles));
-        if clear_subtitles {
-            self.controller.lock().unwrap().clear_subtitles();
-        }
-        self.controller.lock().unwrap().begin_connecting();
-        self.publish_state();
+            let result = Arc::clone(self)
+                .connect_and_listen(configuration.clone())
+                .await;
+            if let Err(error) = result {
+                pipeline_log!("session establish failed error={}", error);
+                self.stop_pipeline().await;
+                let capture = self.audio.lock().unwrap().clone();
+                capture.stop().await;
+                let taken = self.client.lock().unwrap().take();
+                if let Some(client) = taken {
+                    client.disconnect().await;
+                }
+                if !self.is_recovering.load(Ordering::SeqCst) {
+                    *self.active_settings.lock().unwrap() = None;
+                }
+                self.controller.lock().unwrap().did_fail(error.clone());
+                self.publish_state();
+                return Err(error);
+            }
 
-        let result = Arc::clone(self).connect_and_listen(configuration).await;
-        if let Err(error) = result {
-            pipeline_log!("session establish failed error={}", error);
+            // The picker allows switching while connecting; if the settings
+            // changed under the in-flight connect, rebuild the session with
+            // the fresh configuration instead of going live with the stale
+            // one (the user sees the capsule state and the session diverge
+            // otherwise).
+            let fresh = self.settings.configuration().ok();
+            let stale = fresh.as_ref().is_none_or(|fresh| fresh != &configuration);
+            if !stale || attempts >= 2 {
+                return Ok(());
+            }
+            if let Some(fresh) = fresh {
+                *self.active_settings.lock().unwrap() = Some(fresh);
+            }
+            pipeline_log!("session rebuild for settings changed mid-connect");
             self.stop_pipeline().await;
             let capture = self.audio.lock().unwrap().clone();
             capture.stop().await;
@@ -185,14 +223,8 @@ impl SessionManager {
             if let Some(client) = taken {
                 client.disconnect().await;
             }
-            if !self.is_recovering.load(Ordering::SeqCst) {
-                *self.active_settings.lock().unwrap() = None;
-            }
-            self.controller.lock().unwrap().did_fail(error.clone());
-            self.publish_state();
-            return Err(error);
+            clear = false;
         }
-        Ok(())
     }
 
     fn connect_and_listen(
