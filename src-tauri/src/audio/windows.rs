@@ -6,7 +6,6 @@
 use crate::audio::SystemAudioCaptureError;
 use crate::core::pcm16::PCM16Encoder;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use rubato::audioadapter::Adapter as _;
 use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
 use rubato::{FixedSync, Resampler};
 use std::sync::atomic::{AtomicBool, Ordering};
