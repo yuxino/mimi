@@ -372,6 +372,11 @@ pub fn tray_panel_hide(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn app_show_settings(app: AppHandle) -> Result<(), String> {
+    // Close the tray panel first: it is always-on-top, so the settings
+    // window would otherwise open behind it and the click would look like a
+    // no-op. Same for the language popover, if open.
+    TrayPanelManager::hide(&app);
+    crate::windows::LanguagePopoverManager::hide(&app);
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
         let _ = window.set_focus();
