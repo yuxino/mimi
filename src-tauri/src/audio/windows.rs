@@ -18,19 +18,19 @@ const CHUNK_SIZE_IN: usize = 1024;
 
 #[derive(Clone)]
 pub struct WindowsSystemAudioCapture {
-    stream: Mutex<Option<cpal::Stream>>,
+    stream: Arc<Mutex<Option<cpal::Stream>>>,
     active: Arc<AtomicBool>,
-    audio_tx: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
-    error_tx: Mutex<Option<mpsc::UnboundedSender<String>>>,
+    audio_tx: Arc<Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>>,
+    error_tx: Arc<Mutex<Option<mpsc::UnboundedSender<String>>>>,
 }
 
 impl WindowsSystemAudioCapture {
     pub fn new() -> Self {
         Self {
-            stream: Mutex::new(None),
+            stream: Arc::new(Mutex::new(None)),
             active: Arc::new(AtomicBool::new(false)),
-            audio_tx: Mutex::new(None),
-            error_tx: Mutex::new(None),
+            audio_tx: Arc::new(Mutex::new(None)),
+            error_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -56,7 +56,8 @@ impl WindowsSystemAudioCapture {
             .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?;
         let sample_format = input_config.sample_format();
         let channel_count = input_config.channels() as usize;
-        let sample_rate = input_config.sample_rate().0 as f64;
+        // cpal 0.18: `SampleRate` is a `u32` type alias (not a tuple struct).
+        let sample_rate = input_config.sample_rate() as f64;
 
         let resampler = build_resampler(sample_rate, channel_count)?;
         let resampler = Arc::new(Mutex::new(resampler));
@@ -71,7 +72,7 @@ impl WindowsSystemAudioCapture {
                 let active_for_cb = active.clone();
                 output_device
                     .build_input_stream(
-                        &input_config.into(),
+                        input_config.clone().into(),
                         move |data: &[f32], _info| {
                             if !active_for_cb.load(Ordering::SeqCst) {
                                 return;
@@ -98,7 +99,7 @@ impl WindowsSystemAudioCapture {
                 let active_for_cb = active.clone();
                 output_device
                     .build_input_stream(
-                        &input_config.into(),
+                        input_config.clone().into(),
                         move |data: &[i16], _info| {
                             if !active_for_cb.load(Ordering::SeqCst) {
                                 return;
