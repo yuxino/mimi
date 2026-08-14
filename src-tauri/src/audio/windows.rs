@@ -72,7 +72,7 @@ impl WindowsSystemAudioCapture {
                 let active_for_cb = active.clone();
                 output_device
                     .build_input_stream(
-                        input_config.clone().into(),
+                        input_config.into(),
                         move |data: &[f32], _info| {
                             if !active_for_cb.load(Ordering::SeqCst) {
                                 return;
@@ -99,7 +99,7 @@ impl WindowsSystemAudioCapture {
                 let active_for_cb = active.clone();
                 output_device
                     .build_input_stream(
-                        input_config.clone().into(),
+                        input_config.into(),
                         move |data: &[i16], _info| {
                             if !active_for_cb.load(Ordering::SeqCst) {
                                 return;
