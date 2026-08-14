@@ -293,9 +293,19 @@ pub fn overlay_set_size(
 /// Toggles the language/mode popover window, anchored under the overlay's
 /// language capsule (the anchor is derived from the overlay window's own
 /// position). The overlay window itself is never resized for the menu.
+/// Opening refreshes the popover's snapshots so its checkmarks always match
+/// the current state, even if its webview missed events while hidden.
 #[tauri::command]
-pub fn overlay_popover_toggle(app: AppHandle) -> Result<(), String> {
+pub fn overlay_popover_toggle(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let was_visible = app
+        .get_webview_window("language-popover")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false);
     crate::windows::LanguagePopoverManager::toggle(&app);
+    if !was_visible {
+        state.session.publish_settings();
+        state.session.publish_state();
+    }
     Ok(())
 }
 

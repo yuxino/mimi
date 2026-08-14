@@ -673,8 +673,9 @@ impl SessionManager {
     }
 
     /// Broadcasts the current settings snapshot to every window (used after
-    /// preference writes so no window keeps a stale selection).
-    fn publish_settings(&self) {
+    /// preference writes so no window keeps a stale selection, and when a
+    /// window re-shows in case its webview missed events while hidden).
+    pub fn publish_settings(&self) {
         let _ = self.app.emit(
             "settings-changed",
             crate::commands::SettingsSnapshotPayload::from_store(&self.settings),
