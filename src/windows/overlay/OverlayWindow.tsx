@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { I18N } from "../../lib/i18n";
 import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
 import { isTauri, overlaySetSize } from "../../lib/ipc";
@@ -70,11 +70,11 @@ export function OverlayWindow() {
     // reference (plus segmentLength) makes draft churn a no-op here.
     [session.subtitles.history, segmentLength],
   );
-  // The live preview line lives OUTSIDE the scrolling timeline (fixed bottom
-  // line), so streaming churn never nudges history. Its text is stabilized:
-  // the shown value settles ~400ms after the last update instead of flickering
-  // on every recognition block. A final-but-not-yet-committed line is shown
-  // as-is (it no longer changes).
+  // The live preview line is the timeline's LAST row (dimmed with a trailing
+  // ellipsis), so it naturally follows history instead of piling up at the
+  // bottom of the panel. Its text is stabilized: the shown value settles
+  // ~400ms after the last update instead of flickering on every recognition
+  // block. A final-but-not-yet-committed line is shown as-is.
   const draft = useMemo(
     () => visibleDraft(session.subtitles),
     [session.subtitles.translation, session.subtitles.history],
@@ -83,9 +83,25 @@ export function OverlayWindow() {
     draft?.text ?? "",
     draft?.isFinal ? 0 : 400,
   );
+  // Full row list: history rows plus the stabilized draft segments as the
+  // trailing rows. Rebuilt only when history or the (settled) draft changes.
+  const allRows = useMemo(() => {
+    if (draftText === "") {
+      return rows;
+    }
+    const draftSegments = visibleDraftSegments(draftText, segmentLength, 2);
+    return [
+      ...rows,
+      ...draftSegments.map((text, index) => ({
+        id: `draft-${index}`,
+        text,
+        createdAt: null,
+      })),
+    ];
+  }, [rows, draftText, segmentLength]);
   const status = languageStatus(settings, detectedLanguage);
   const hasContent = hasSubtitleContent(session.subtitles);
-  const hasAnyRows = rows.length > 0 || draftText !== "";
+  const hasAnyRows = allRows.length > 0;
 
   const phaseLabel = OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel;
   const pauseLabel = session.isPaused
@@ -200,7 +216,7 @@ export function OverlayWindow() {
               height: "100%",
             }}
           >
-          {rows.length === 0 && draftText === "" ? (
+          {allRows.length === 0 ? (
             <div
               className="flex flex-1 flex-col items-center justify-center"
               style={{ gap: 12 }}
@@ -225,16 +241,11 @@ export function OverlayWindow() {
               </div>
             </div>
           ) : (
-            <>
-              <Timeline rows={rows} fontSize={settings.fontSize} />
-              {draftText !== "" && (
-                <DraftLine
-                  text={draftText}
-                  fontSize={settings.fontSize}
-                  segmentLength={segmentLength}
-                />
-              )}
-            </>
+            <Timeline
+              rows={allRows}
+              fontSize={settings.fontSize}
+              draft={draftText !== ""}
+            />
           )}
 
           {hasAnyRows && session.isActive && (
@@ -368,49 +379,3 @@ export function OverlayWindow() {
     );
   }
 }
-
-/** The fixed live-preview line pinned under the scrolling history. Settles
- * between speech pauses (see `useStableText`), renders dimmed with a trailing
- * ellipsis, and never scrolls or nudges the history above it. Memoized: the
- * stabilized text changes only on speech pauses, so the overlay's
- * high-frequency re-renders should not re-segment it. */
-const DraftLine = memo(function DraftLine({
-  text,
-  fontSize,
-  segmentLength,
-}: {
-  text: string;
-  fontSize: number;
-  segmentLength: number;
-}) {
-  const segments = visibleDraftSegments(text, segmentLength, 2);
-  return (
-    <div
-      className="shrink-0"
-      style={{
-        borderTop: "1px solid rgba(255,255,255,0.10)",
-        padding: "6px 18px 8px",
-        background: "rgba(0,0,0,0.18)",
-      }}
-    >
-      {segments.map((segment, index) => (
-        <div
-          key={index}
-          style={{
-            fontSize: Math.max(12, fontSize * 0.82),
-            lineHeight: 1.45,
-            color: "rgba(255,255,255,0.66)",
-            overflowWrap: "break-word",
-          }}
-        >
-          {segment}
-          {index === segments.length - 1 && (
-            <span style={{ opacity: 0.5 }} aria-hidden="true">
-              {"…"}
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-});
