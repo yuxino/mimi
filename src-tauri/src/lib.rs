@@ -32,14 +32,26 @@ pub fn run() {
         .setup(|app| {
             tracing::info!("mimi starting");
 
-            // Runtime dock-icon override is for dev builds only: dev has no
-            // .app bundle, so the generic icon needs replacing. The release
-            // bundle ships the real icon.icns and macOS reads it from the
-            // bundle — overriding it here would swap the correct launchpad
-            // icon for a small PNG rendition the moment the app starts.
+            // Runtime dock-icon override is for the bare dev binary only: a
+            // bare binary has no .app bundle, so the generic icon needs
+            // replacing. The release bundle ships the real icon.icns and macOS
+            // reads it from the bundle — overriding it there would swap the
+            // correct launchpad icon for a small PNG rendition the moment the
+            // app starts. The dev wrapper script (scripts/dev-app.sh) runs the
+            // same binary inside a real .app bundle, in which case macOS also
+            // handles the icon natively and this override is skipped.
             #[cfg(target_os = "macos")]
-            if tauri::is_dev() {
+            if tauri::is_dev() && !is_app_bundle() {
                 set_dock_icon(app.handle());
+            }
+
+            // Dev-build marker: the settings window is created from the
+            // static config title, so adjust it at runtime so the dev binary
+            // is distinguishable from the installed release app.
+            if tauri::is_dev() {
+                if let Some(window) = app.get_webview_window("settings") {
+                    let _ = window.set_title(&windows::dev_title("mimi 设置"));
+                }
             }
 
             let app_handle = app.handle().clone();
@@ -216,7 +228,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let lock_position_clone = lock_position.clone();
     let _tray = TrayIconBuilder::with_id("mimi-tray")
         .icon(icon)
-        .tooltip("mimi")
+        .tooltip(windows::dev_title("mimi"))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| {
@@ -383,6 +395,26 @@ fn setup_global_shortcut(
         .map_err(|error| std::io::Error::other(error.to_string()))?;
     tracing::info!("global shortcut registered");
     Ok(())
+}
+
+/// True when the process runs from an `.app` bundle (the release app or the
+/// dev wrapper created by `scripts/dev-app.sh`). Only the bare dev binary
+/// (no bundle, no Info.plist) needs a runtime dock-icon override.
+#[cfg(target_os = "macos")]
+fn is_app_bundle() -> bool {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    unsafe {
+        let Some(bundle_class) = AnyClass::get(c"NSBundle") else {
+            return false;
+        };
+        let main_bundle: *mut AnyObject = msg_send![bundle_class, mainBundle];
+        if main_bundle.is_null() {
+            return false;
+        }
+        let identifier: *mut AnyObject = msg_send![main_bundle, bundleIdentifier];
+        !identifier.is_null()
+    }
 }
 
 /// Sets the macOS Dock icon at runtime so `tauri dev` (which runs the bare

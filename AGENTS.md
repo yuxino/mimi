@@ -49,7 +49,7 @@ It runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, and the f
 
 Additional checks by change type:
 
-- UI changes: run `npm run tauri dev` and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. `MIMI_UI_TEST=1` seeds demo credentials; `MIMI_AUTO_START=1` additionally starts a session on launch so the failure path (fake credentials) can be exercised without interaction.
+- UI changes: run `npm run tauri dev` and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. `MIMI_UI_TEST=1` seeds demo credentials; `MIMI_AUTO_START=1` additionally starts a session on launch so the failure path (fake credentials) can be exercised without interaction. For the icon-correct macOS dev run (a real .app bundle with the masked Dock icon, window titles/tooltip marked "(dev)"), use `./scripts/dev-app.sh` instead: it builds the debug binary, wraps it in `target/debug/mimi-dev.app`, and launches it. The bare `npm run tauri dev` binary has no bundle, so macOS cannot render its Dock icon with the standard rounded mask (runtime icon overrides are not reflected by the Dock).
 - Latency or streaming changes: measure against a real Alibaba Cloud session (user-supplied credentials) and report timing diagnostics as well as correctness tests.
 - Packaging or signing changes: run `./scripts/package-app.sh` and verify the resulting app opens. Windows packaging is verified on a Windows machine (or CI). Never commit `dist/`, `src-tauri/target/`, or signing identities.
 

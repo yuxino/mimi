@@ -22,6 +22,17 @@
 //! directly and negotiated via a global `POPOVER_RESIZING` flag, which caused
 //! oscillation, stuck drags, height corruption and lost frames.
 
+/// Window and tooltip title for the current build: dev builds (the bare
+/// binary with no .app bundle) get a "(dev)" marker so they can be told
+/// apart from the installed release app at a glance.
+pub fn dev_title(base: &str) -> String {
+    if tauri::is_dev() {
+        format!("{base} (dev)")
+    } else {
+        base.to_string()
+    }
+}
+
 use crate::pipeline_log;
 use crate::settings_store::{OverlayFrame, SettingsStore};
 use crate::windows::resize::{apply_drag, ResizeRegion};
@@ -172,7 +183,7 @@ impl OverlayWindowManager {
         let frame = state.lock().unwrap().user_frame;
         let builder =
             WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("index.html".into()))
-                .title("mimi Subtitles")
+                .title(dev_title("mimi Subtitles"))
                 .inner_size(frame.width, frame.height)
                 .min_inner_size(
                     SubtitleOverlayMetrics::MINIMUM_WIDTH,
@@ -688,7 +699,7 @@ impl LanguagePopoverManager {
             "language-popover",
             WebviewUrl::App("index.html".into()),
         )
-        .title("mimi")
+        .title(dev_title("mimi"))
         .inner_size(Self::WIDTH, Self::HEIGHT)
         .resizable(false)
         .transparent(true)
@@ -833,7 +844,7 @@ impl TrayPanelManager {
         }
         let builder =
             WebviewWindowBuilder::new(app, "tray-panel", WebviewUrl::App("index.html".into()))
-                .title("mimi")
+                .title(dev_title("mimi"))
                 .inner_size(290.0, 470.0)
                 .resizable(false)
                 .transparent(true)
