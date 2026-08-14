@@ -154,7 +154,7 @@ export function OverlayWindow() {
           <div
             className="absolute inset-x-0 top-0 flex items-end justify-center"
             style={{
-              height: session.isActive ? 38 : 24,
+              height: (session.isActive ? 38 : 24) + 5,
               // Always-visible drag affordance: dimmed while idle, full on
               // hover. A fully transparent handle leaves no cue that the
               // overlay can be moved.
@@ -175,8 +175,9 @@ export function OverlayWindow() {
               // buttons) floats over the canvas in this port, so reserve its
               // exact height here — mirroring the Swift in-flow drag-area
               // frame — otherwise subtitle rows slide underneath the
-              // controls and overlap them.
-              paddingTop: session.isActive ? 38 : 24,
+              // controls and overlap them. (+5 matches the handle's lowered
+              // position so the pill never overlaps the first row.)
+              paddingTop: (session.isActive ? 38 : 24) + 5,
               height: "100%",
             }}
           >
