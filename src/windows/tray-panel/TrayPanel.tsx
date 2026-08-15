@@ -7,6 +7,7 @@ import { useStore } from "../../lib/store";
 import {
   SOURCE_LANGUAGE_QUICK_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
+  detectedLanguageDisplayName,
   targetLanguageTranslatesAudio,
   type SessionStateEvent,
   type SettingsDraft,
@@ -27,6 +28,7 @@ export function TrayPanel() {
   const sessionStatus = useStore((state) => state.session.status);
   const isActive = useStore((state) => state.session.isActive);
   const isPaused = useStore((state) => state.session.isPaused);
+  const detectedLanguage = useStore((state) => state.session.detectedLanguage);
   const settings = useStore((state) => state.settings);
   const start = useStore((state) => state.start);
   const stop = useStore((state) => state.stop);
@@ -147,9 +149,15 @@ export function TrayPanel() {
             }
             style={{ fontSize: 12 }}
           />
-          {targetLanguageTranslatesAudio(settings.targetLanguage)
-            ? `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}${I18N.overlay.translationSuffix}`
-            : I18N.tray.originalOnly}
+          {(() => {
+            const detected =
+              settings.sourceLanguage === "auto" && detectedLanguage
+                ? `${detectedLanguageDisplayName(detectedLanguage)} · `
+                : "";
+            return targetLanguageTranslatesAudio(settings.targetLanguage)
+              ? `${detected}${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}${I18N.overlay.translationSuffix}`
+              : `${detected}${I18N.tray.originalOnly}`;
+          })()}
         </div>
 
         <ToggleRow

@@ -204,7 +204,7 @@ export function SettingsView() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               <SectionLabel>{I18N.settings.sourceLanguage}</SectionLabel>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
                   <SourceLanguageButton
                     key={language}
@@ -532,6 +532,8 @@ function SourceLanguageButton({
       style={{
         gap: 6,
         height: 34,
+        minWidth: 88,
+        flex: "1 1 88px",
         borderRadius: 9,
         border: `0.75px solid ${
           selected ? "rgba(52,120,240,0.34)" : "rgba(255,255,255,0.07)"

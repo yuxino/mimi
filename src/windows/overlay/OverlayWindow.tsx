@@ -40,11 +40,17 @@ export function OverlayWindow() {
 
   const [isHovering, setIsHovering] = useState(false);
   const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
-  // Keep the drag handle clear of the language capsule (~122px) and the
-  // control buttons (~140px) when the window is narrow.
+  // Keep the drag handle clear of the language capsule (which can be ~310px
+  // wide in English) and the control buttons (~150px) when the window is
+  // narrow.
   const windowWidth =
     typeof window !== "undefined" ? window.innerWidth : overlaySize.width;
-  const dragHandleWidth = Math.max(48, Math.min(120, windowWidth - 290));
+  const dragReservedLeft = 336;
+  const dragReservedRight = session.isActive ? 156 : 0;
+  const dragHandleWidth = Math.max(
+    48,
+    Math.min(120, windowWidth - dragReservedLeft - dragReservedRight),
+  );
 
   const collapsed = session.isOverlayCollapsed;
   const phase = computeActivityPhase(session, settings);
@@ -183,6 +189,8 @@ export function OverlayWindow() {
             className="absolute inset-x-0 top-0 flex items-end justify-center"
             style={{
               height: (session.isActive ? 38 : 24) + 13,
+              paddingLeft: dragReservedLeft,
+              paddingRight: dragReservedRight,
               // Always-visible drag affordance: dimmed while idle, full on
               // hover. A fully transparent handle leaves no cue that the
               // overlay can be moved.
@@ -265,12 +273,17 @@ export function OverlayWindow() {
           </div>
         )}
 
-        {session.isActive &&
-          !settings.isOverlayLocked &&
-          (isHovering || session.isPaused) && (
+        {session.isActive && !settings.isOverlayLocked && (
           <div
             className="absolute flex"
-            style={{ top: 10, right: 10, gap: 4 }}
+            style={{
+              top: 10,
+              right: 10,
+              gap: 4,
+              opacity: isHovering || session.isPaused ? 1 : 0,
+              pointerEvents: isHovering || session.isPaused ? "auto" : "none",
+              transition: "opacity 120ms ease",
+            }}
           >
             <ControlButton
               icon={session.isPaused ? "play" : "pause"}
@@ -281,6 +294,7 @@ export function OverlayWindow() {
               icon="chevron-up"
               label={I18N.overlay.collapseSubtitle}
               onClick={() => void setOverlayCollapsed(true)}
+              data-testid="collapse-subtitles"
             />
             {hasContent && (
               <ControlButton
@@ -313,6 +327,12 @@ export function OverlayWindow() {
         }}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
+        onWheel={(event) => {
+          if (event.deltaY !== 0) {
+            event.preventDefault();
+            void setOverlayCollapsed(false);
+          }
+        }}
       >
         <div
           style={{
@@ -346,6 +366,7 @@ export function OverlayWindow() {
             icon="chevron-down"
             label={I18N.overlay.expandSubtitle}
             onClick={() => void setOverlayCollapsed(false)}
+            data-testid="expand-subtitles"
           />
         </div>
       </div>
