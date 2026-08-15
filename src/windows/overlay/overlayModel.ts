@@ -10,7 +10,7 @@ import type {
   SettingsSnapshot,
   SubtitleSnapshot,
 } from "../../lib/types";
-import { isChineseSystem } from "../../lib/i18n";
+import { I18N } from "../../lib/i18n";
 import {
   SOURCE_LANGUAGE_DISPLAY_NAMES,
   TARGET_LANGUAGE_DISPLAY_NAMES,
@@ -25,7 +25,7 @@ export interface SubtitleRow {
   createdAt: number | null;
 }
 
-export function isSameLanguageMode(
+function isSameLanguageMode(
   settings: Pick<SettingsSnapshot, "sourceLanguage" | "targetLanguage">,
   detectedLanguage: string | null,
 ): boolean {
@@ -84,25 +84,25 @@ export function emptyStateText(
   session: SessionStateEvent,
   settings: Pick<SettingsSnapshot, "sourceLanguage" | "targetLanguage">,
 ): string {
-  if (session.isPaused) return "已暂停";
+  if (session.isPaused) return I18N.overlay.paused;
 
   switch (session.status.kind) {
     case "connecting":
-      return "正在连接";
+      return I18N.overlay.connecting;
     case "listening":
       return isWaitingForFinalTranslation(
         settings,
         session.detectedLanguage,
         session.isTranslationPending,
       )
-        ? "正在翻译"
-        : "正在聆听，译文会保留在这里";
+        ? I18N.overlay.translatingEmpty
+        : I18N.overlay.listeningEmpty;
     case "stopping":
-      return "正在结束";
+      return I18N.overlay.stopping;
     case "error":
       return session.status.message;
     case "idle":
-      return "mimi";
+      return I18N.overlay.idle;
   }
 }
 
@@ -135,12 +135,12 @@ export function subtitleSegmentLength(
 }
 
 export function computeVisibleRows(
-  subtitles: SubtitleSnapshot,
+  history: SubtitleSnapshot["history"],
   segmentLength: number,
 ): SubtitleRow[] {
   const rows: SubtitleRow[] = [];
 
-  for (const pair of subtitles.history) {
+  for (const pair of history) {
     const pairSegments = segments(pair.translation, segmentLength);
     pairSegments.forEach((text, index) => {
       rows.push({
@@ -162,16 +162,15 @@ export function computeVisibleRows(
  * there is nothing to preview.
  */
 export function visibleDraft(
-  subtitles: SubtitleSnapshot,
+  translation: SubtitleSnapshot["translation"],
+  history: SubtitleSnapshot["history"],
 ): { text: string; isFinal: boolean } | null {
-  const currentLine = subtitles.translation;
-  if (currentLine.text === "") return null;
+  if (translation.text === "") return null;
   const currentIsAlreadyInHistory =
-    currentLine.isFinal &&
-    subtitles.history[subtitles.history.length - 1]?.translation ===
-      currentLine.text;
+    translation.isFinal &&
+    history[history.length - 1]?.translation === translation.text;
   if (currentIsAlreadyInHistory) return null;
-  return { text: currentLine.text, isFinal: currentLine.isFinal };
+  return { text: translation.text, isFinal: translation.isFinal };
 }
 
 export interface LanguageStatus {
@@ -191,7 +190,7 @@ export function languageStatus(
   );
 
   if (settings.targetLanguage === "original") {
-    return { source: sourceName, separator: "·", target: "原文" };
+    return { source: sourceName, separator: "·", target: I18N.overlay.original };
   }
   return {
     source: sourceName,
@@ -204,9 +203,7 @@ export function sourceLanguageButtonTitle(
   sourceLanguage: SettingsSnapshot["sourceLanguage"],
 ): string {
   return sourceLanguage === "zh"
-    ? isChineseSystem()
-      ? "中文原文"
-      : "Chinese (Original)"
+    ? I18N.overlay.chineseSource
     : SOURCE_LANGUAGE_DISPLAY_NAMES[sourceLanguage];
 }
 

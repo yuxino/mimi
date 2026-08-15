@@ -263,7 +263,7 @@ function PickerRow({
       type="button"
       onClick={onSelect}
       disabled={disabled}
-      className="flex w-full items-center"
+      className="ux-hover ux-hover-bg flex w-full items-center"
       style={{
         gap: 8,
         height: 26,
@@ -290,7 +290,7 @@ function accessibilityLabel(
   const effectiveMode =
     settings.sourceLanguage === "auto" ? "lowLatency" : settings.translationMode;
   const mode = targetLanguageTranslatesAudio(settings.targetLanguage)
-    ? `${TRANSLATION_MODE_DISPLAY_NAMES[effectiveMode]}翻译`
+    ? `${TRANSLATION_MODE_DISPLAY_NAMES[effectiveMode]}${I18N.overlay.translationSuffix}`
     : I18N.overlay.originalOnly;
-  return `${OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel}，当前语言：${status.source} ${status.separator} ${status.target}，${mode}。打开以切换识别语言。`;
+  return `${OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel}${I18N.overlay.accessibilityCurrentLanguagePrefix}${status.source} ${status.separator} ${status.target}，${mode}${I18N.overlay.accessibilityOpenToSwitch}`;
 }

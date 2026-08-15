@@ -13,12 +13,14 @@
     "windows": [
       {
         "label": "settings",
-        "title": "mimi \u8bbe\u7f6e",
+        "title": "mimi 设置",
         "width": 560,
         "height": 570,
-        "resizable": false,
+        "resizable": true,
         "center": true,
-        "visible": true
+        "visible": true,
+        "minWidth": 560,
+        "minHeight": 570
       }
     ],
     "security": {
