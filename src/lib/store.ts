@@ -27,6 +27,7 @@ import {
   settingsSave,
   trayPanelHide,
 } from "./ipc";
+import { getStoredUiLanguage, setStoredUiLanguage } from "./i18n";
 import type {
   SessionStateEvent,
   SettingsDraft,
@@ -62,6 +63,7 @@ const INITIAL_SETTINGS: SettingsSnapshot = {
   fontSize: 18,
   isOverlayLocked: false,
   credentialLoadError: null,
+  uiLanguage: null,
 };
 
 interface StoreState {
@@ -103,6 +105,15 @@ export const useStore = create<StoreState>()((set, get) => ({
           sessionGetState(),
         ]);
         set({ settings: snapshot, session });
+        // Make sure the persisted UI language is reflected before the page
+        // renders. If the backend preference differs from the local override,
+        // apply it and reload once so all module-level i18n constants update.
+        const storedLanguage = getStoredUiLanguage() ?? "system";
+        const targetLanguage = snapshot.uiLanguage ?? "system";
+        if (storedLanguage !== targetLanguage) {
+          setStoredUiLanguage(targetLanguage);
+          window.location.reload();
+        }
       } catch {
         // Boot without settings if the backend is unreachable; the event
         // listeners below will fill in the real state when it emits.
@@ -276,6 +287,7 @@ function mergeSettings(
     translationMode: draft.translationMode ?? current.translationMode,
     fontSize: draft.fontSize ?? current.fontSize,
     isOverlayLocked: draft.isOverlayLocked ?? current.isOverlayLocked,
+    uiLanguage: draft.uiLanguage ?? current.uiLanguage,
     hasAPIKey:
       draft.apiKey !== undefined
         ? draft.apiKey.length > 0

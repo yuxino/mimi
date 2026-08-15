@@ -6,6 +6,8 @@ import {
   I18N,
   credentialLoadErrorMessage,
   sessionConnectingText,
+  setStoredUiLanguage,
+  type UiLanguage,
 } from "../../lib/i18n";
 import { useStore } from "../../lib/store";
 import {
@@ -306,6 +308,31 @@ export function SettingsView() {
         </Card>
 
         <Card>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <SettingsRow label={I18N.settings.appLanguage}>
+              <Select
+                value={settings.uiLanguage ?? "system"}
+                disabled={false}
+                aria-label={I18N.settings.appLanguage}
+                onChange={(value) => {
+                  const language = value as UiLanguage;
+                  setStoredUiLanguage(language);
+                  void saveSettings({ uiLanguage: language })
+                    .catch(() => {})
+                    .finally(() => window.location.reload());
+                }}
+                options={[
+                  { value: "system", label: I18N.settings.systemLanguage },
+                  { value: "zh", label: I18N.settings.chinese },
+                  { value: "en", label: I18N.settings.english },
+                ]}
+              />
+            </SettingsRow>
+            <CaptionText>{I18N.settings.languageHelp}</CaptionText>
+          </div>
+        </Card>
+
+        <Card>
           <button
             type="button"
             onClick={() => setShowsServiceSettings((value) => !value)}
@@ -479,16 +506,19 @@ function Select({
   disabled,
   onChange,
   options,
+  "aria-label": ariaLabel,
 }: {
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+  "aria-label"?: string;
 }) {
   return (
     <select
       value={value}
       disabled={disabled}
+      aria-label={ariaLabel}
       onChange={(event) => onChange(event.target.value)}
       style={{
         width: 168,

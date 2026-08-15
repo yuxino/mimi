@@ -63,7 +63,11 @@ export interface SettingsSnapshot {
   fontSize: number;
   isOverlayLocked: boolean;
   credentialLoadError: string | null;
+  /** UI language override; `null` means follow the system language. */
+  uiLanguage: UiLanguage | null;
 }
+
+export type UiLanguage = "system" | "zh" | "en";
 
 export interface SettingsDraft {
   /** Only transmitted on settings_save; never present elsewhere. */
@@ -73,6 +77,7 @@ export interface SettingsDraft {
   translationMode?: TranslationMode;
   fontSize?: number;
   isOverlayLocked?: boolean;
+  uiLanguage?: UiLanguage;
 }
 
 // ---------------------------------------------------------------------------
