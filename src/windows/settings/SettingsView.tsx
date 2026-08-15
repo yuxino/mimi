@@ -675,7 +675,7 @@ function translationBadgeText(settings: SettingsSnapshot): string {
   return settings.sourceLanguage === "zh" &&
     settings.targetLanguage === "original"
     ? I18N.settings.originalOnlyBadge
-    : `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}翻译`;
+    : `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}${I18N.overlay.translationSuffix}`;
 }
 
 function translationBadgeIcon(settings: SettingsSnapshot): IconName {
@@ -733,7 +733,7 @@ function listeningPreferencesDraft(
   const source = settings.sourceLanguage;
   let target = settings.targetLanguage;
   if (source === "zh") target = "original";
-  if (source !== settings.sourceLanguage || target !== settings.targetLanguage) {
+  if (target !== settings.targetLanguage) {
     return { sourceLanguage: source, targetLanguage: target };
   }
   return null;

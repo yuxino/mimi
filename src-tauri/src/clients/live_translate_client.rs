@@ -239,9 +239,9 @@ impl LiveTranslateClient {
     /// Sends `session.finish`, waits briefly for `session.finished`, then
     /// disconnects.
     pub async fn finish(&self, timeout: Duration) {
-        let Some(_sink) = self.inner.sink.lock().await.as_ref() else {
+        if self.inner.sink.lock().await.is_none() {
             return;
-        };
+        }
         if let Ok(message) = LiveTranslateRequestEncoder::finish(None) {
             let _ = self.send_text(message.to_string()).await;
         }

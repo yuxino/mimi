@@ -148,7 +148,7 @@ export function TrayPanel() {
             style={{ fontSize: 12 }}
           />
           {targetLanguageTranslatesAudio(settings.targetLanguage)
-            ? `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}翻译`
+            ? `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}${I18N.overlay.translationSuffix}`
             : I18N.tray.originalOnly}
         </div>
 
@@ -306,7 +306,7 @@ function prepareLanguagePreferences(
   const source = settings.sourceLanguage;
   let target = settings.targetLanguage;
   if (source === "zh") target = "original";
-  if (source !== settings.sourceLanguage || target !== settings.targetLanguage) {
+  if (target !== settings.targetLanguage) {
     void saveSettings({ sourceLanguage: source, targetLanguage: target }).catch(
       () => {},
     );

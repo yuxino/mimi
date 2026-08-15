@@ -6,7 +6,7 @@
  * (language enums, display names, status semantics).
  */
 
-import { isChineseSystem } from "./i18n";
+import { I18N, isChineseSystem } from "./i18n";
 
 // ---------------------------------------------------------------------------
 // Session state
@@ -210,12 +210,12 @@ export function sourceLanguageStatusDisplayName(
     return SOURCE_LANGUAGE_DISPLAY_NAMES[sourceLanguage];
   }
   if (detectedLanguage === null) {
-    return "自动识别中";
+    return I18N.overlay.autoDetecting;
   }
   if (targetLanguage === "zh" && detectedLanguage === "zh") {
-    return "自动识别中";
+    return I18N.overlay.autoDetecting;
   }
-  return `自动识别（${detectedLanguageDisplayName(detectedLanguage)}）`;
+  return `${I18N.overlay.autoDetectedPrefix}${detectedLanguageDisplayName(detectedLanguage)}${I18N.overlay.autoDetectedSuffix}`;
 }
 
 /**
@@ -272,35 +272,35 @@ export const OVERLAY_ACTIVITY_PHASES: Record<
   OverlayActivityPhaseInfo
 > = {
   connecting: {
-    accessibilityLabel: "正在连接",
+    accessibilityLabel: I18N.overlay.phaseConnecting,
     color: "#FFFFFF",
     baseOpacity: 0.5,
     animationSpeed: 2.6,
     amplitude: 3,
   },
   listening: {
-    accessibilityLabel: "正在聆听",
+    accessibilityLabel: I18N.overlay.phaseListening,
     color: "#7AA8FF",
     baseOpacity: 0.62,
     animationSpeed: 2.6,
     amplitude: 2,
   },
   recognizing: {
-    accessibilityLabel: "正在识别",
+    accessibilityLabel: I18N.overlay.phaseRecognizing,
     color: "#7AA8FF",
     baseOpacity: 1,
     animationSpeed: 2.6,
     amplitude: 6,
   },
   translating: {
-    accessibilityLabel: "正在翻译",
+    accessibilityLabel: I18N.overlay.phaseTranslating,
     color: "#B894FF",
     baseOpacity: 1,
     animationSpeed: 2.6,
     amplitude: 4,
   },
   paused: {
-    accessibilityLabel: "已暂停",
+    accessibilityLabel: I18N.overlay.phasePaused,
     color: "#FFB852",
     baseOpacity: 1,
     animationSpeed: 0,
