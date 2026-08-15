@@ -3,9 +3,8 @@
 
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use crate::core::protocols::qwen_mt::{
-    QwenMTClientError, QwenMTDomainHint, QwenMTEndpoint, QwenMTMemoryPair, QwenMTModel,
-    QwenMTProtocolError, QwenMTRequestEncoder, QwenMTResponseDecoder, QwenMTStreamDecoder,
-    QwenMTTerm,
+    QwenMTClientError, QwenMTEndpoint, QwenMTMemoryPair, QwenMTModel, QwenMTProtocolError,
+    QwenMTRequestEncoder, QwenMTResponseDecoder, QwenMTStreamDecoder, QwenMTTerm,
 };
 use futures_util::StreamExt;
 use std::time::Duration;
@@ -254,21 +253,6 @@ fn error_message(data: &[u8]) -> String {
         .and_then(|body| body.error)
         .and_then(|error| error.message)
         .unwrap_or_default()
-}
-
-/// Domain hint and filler terms for a (source, target) pair, matching the
-/// Swift `HighQualityTranslationClient` construction.
-pub fn spoken_dialogue_config(
-    source_language: SourceLanguage,
-    target_language: TargetLanguage,
-) -> (Option<String>, Vec<QwenMTTerm>) {
-    (
-        Some(QwenMTDomainHint::spoken_dialogue(
-            source_language,
-            target_language,
-        )),
-        QwenMTDomainHint::filler_terms(source_language, target_language),
-    )
 }
 
 #[cfg(test)]

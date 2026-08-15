@@ -35,15 +35,6 @@ impl<'de> Deserialize<'de> for SourceLanguage {
 }
 
 impl SourceLanguage {
-    /// Manual language choices, in the order shown in pickers (matches
-    /// `SourceLanguage.manualCases`).
-    pub const MANUAL_CASES: [SourceLanguage; 4] = [
-        SourceLanguage::Japanese,
-        SourceLanguage::English,
-        SourceLanguage::Korean,
-        SourceLanguage::Chinese,
-    ];
-
     /// Service wire code used in protocol payloads.
     pub fn raw_value(self) -> &'static str {
         match self {
@@ -218,15 +209,6 @@ impl TargetLanguage {
         }
     }
 
-    pub fn display_name(self) -> &'static str {
-        match self {
-            TargetLanguage::Original => "原文（不翻译）",
-            TargetLanguage::SimplifiedChinese => "简体中文",
-            TargetLanguage::English => "English",
-            TargetLanguage::Japanese => "日本語",
-        }
-    }
-
     /// Service-side language name used in Qwen-MT requests.
     pub fn qwen_mt_name(self) -> &'static str {
         match self {
@@ -273,15 +255,7 @@ impl<'de> Deserialize<'de> for TranslationMode {
     }
 }
 
-impl TranslationMode {
-    pub fn display_name(self) -> &'static str {
-        match self {
-            TranslationMode::LowLatency => "低延迟",
-            TranslationMode::HighQuality => "高质量",
-            TranslationMode::Turbo => "极速",
-        }
-    }
-}
+impl TranslationMode {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionStatus {
@@ -390,19 +364,6 @@ mod tests {
     }
 
     #[test]
-    fn manual_source_languages_match_picker_order() {
-        assert_eq!(
-            SourceLanguage::MANUAL_CASES.to_vec(),
-            vec![
-                SourceLanguage::Japanese,
-                SourceLanguage::English,
-                SourceLanguage::Korean,
-                SourceLanguage::Chinese,
-            ]
-        );
-    }
-
-    #[test]
     fn chinese_quick_switch_shows_original_subtitles() {
         assert_eq!(
             SourceLanguage::Chinese.target_language_after_quick_switch(
@@ -473,10 +434,8 @@ mod tests {
     #[test]
     fn target_languages_expose_service_codes_and_display_names() {
         assert!(!TargetLanguage::Original.translates_audio());
-        assert_eq!(TargetLanguage::Original.display_name(), "原文（不翻译）");
         assert_eq!(TargetLanguage::SimplifiedChinese.raw_value(), "zh");
         assert_eq!(TargetLanguage::English.qwen_mt_name(), "English");
-        assert_eq!(TargetLanguage::Japanese.display_name(), "日本語");
     }
 
     #[test]
@@ -499,13 +458,6 @@ mod tests {
                 .display_name(),
             "UNKNOWN"
         );
-    }
-
-    #[test]
-    fn translation_modes_expose_short_display_names() {
-        assert_eq!(TranslationMode::Turbo.display_name(), "极速");
-        assert_eq!(TranslationMode::LowLatency.display_name(), "低延迟");
-        assert_eq!(TranslationMode::HighQuality.display_name(), "高质量");
     }
 
     #[test]
