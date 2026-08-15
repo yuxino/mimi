@@ -57,7 +57,6 @@ pub struct LiveTranslateClient {
 
 impl LiveTranslateClient {
     pub fn new(
-        workspace_id: &str,
         api_key: &str,
         source_language: SourceLanguage,
         target_language: TargetLanguage,
@@ -75,7 +74,7 @@ impl LiveTranslateClient {
                 pong_notify: Notify::new(),
                 receive_task: Mutex::new(None),
             }),
-            endpoint: LiveTranslateEndpoint::new(workspace_id)
+            endpoint: LiveTranslateEndpoint::new()
                 .map_err(|_| LiveTranslateClientError::MissingAPIKey)?,
             api_key: trimmed_key.to_string(),
             source_language,

@@ -3,9 +3,7 @@
 //! strings and filler term tables are verbatim — they are the core of
 //! translation quality and must not be reworded.
 
-use crate::core::configuration::is_valid_workspace_id;
 use crate::core::models::{SourceLanguage, TargetLanguage};
-use crate::core::protocols::live_translate::WORKSPACE_HOST_SUFFIX;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -13,8 +11,6 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum QwenMTProtocolError {
-    #[error("The Workspace ID is not valid.")]
-    InvalidWorkspaceID,
     #[error("The Qwen-MT endpoint could not be created.")]
     InvalidEndpoint,
     #[error("Qwen-MT returned an invalid response.")]
@@ -104,15 +100,15 @@ pub struct QwenMTEndpoint {
 }
 
 impl QwenMTEndpoint {
-    pub fn new(workspace_id: &str) -> Result<Self, QwenMTProtocolError> {
-        if !is_valid_workspace_id(workspace_id) {
-            return Err(QwenMTProtocolError::InvalidWorkspaceID);
-        }
-        let raw = format!(
-            "https://{workspace_id}{WORKSPACE_HOST_SUFFIX}/compatible-mode/v1/chat/completions"
-        );
+    /// DashScope unified OpenAI-compatible chat-completions endpoint. The old
+    /// MaaS host embedded the workspace id; the unified host authenticates
+    /// with `Authorization: Bearer <key>` alone.
+    pub const URL: &'static str =
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+
+    pub fn new() -> Result<Self, QwenMTProtocolError> {
         Ok(Self {
-            url: url::Url::parse(&raw).map_err(|_| QwenMTProtocolError::InvalidEndpoint)?,
+            url: url::Url::parse(Self::URL).map_err(|_| QwenMTProtocolError::InvalidEndpoint)?,
         })
     }
 }
@@ -486,11 +482,11 @@ mod tests {
     }
 
     #[test]
-    fn endpoint_builds_the_workspace_chat_completions_url() {
-        let endpoint = QwenMTEndpoint::new("ws-abc123").unwrap();
+    fn endpoint_builds_the_unified_chat_completions_url() {
+        let endpoint = QwenMTEndpoint::new().unwrap();
         assert_eq!(
             endpoint.url.as_str(),
-            "https://ws-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         );
     }
 

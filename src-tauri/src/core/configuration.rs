@@ -1,27 +1,16 @@
 //! Live-translation configuration and validation, ported 1:1 from
-//! `Sources/MimiCore/LiveTranslationConfiguration.swift`.
+//! `Sources/MimiCore/LiveTranslationConfiguration.swift`. Since the clients
+//! moved to DashScope's unified endpoints (Bearer API key only), the
+//! workspace id is no longer required; it is kept as a deprecated optional
+//! field for settings migration.
 
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
-use regex::Regex;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LiveTranslationConfigurationError {
-    #[error("Add your Alibaba Cloud Model Studio Workspace ID in Settings.")]
-    MissingWorkspaceID,
-    #[error("The Workspace ID is not valid. Copy it from Alibaba Cloud Model Studio.")]
-    InvalidWorkspaceID,
     #[error("Add your Alibaba Cloud Model Studio API key in Settings.")]
     MissingAPIKey,
-}
-
-pub const WORKSPACE_ID_PATTERN: &str = "^[A-Za-z0-9][A-Za-z0-9-]{1,126}[A-Za-z0-9]$";
-
-/// Validates a workspace ID against the same pattern as the Swift protocols.
-pub fn is_valid_workspace_id(workspace_id: &str) -> bool {
-    Regex::new(WORKSPACE_ID_PATTERN)
-        .expect("workspace id pattern is valid")
-        .is_match(workspace_id)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,21 +53,14 @@ impl LiveTranslationConfiguration {
 
     /// Returns a trimmed, validated copy of the configuration.
     pub fn validated(&self) -> Result<Self, LiveTranslationConfigurationError> {
-        let workspace_id = self.workspace_id.trim().to_string();
         let api_key = self.api_key.trim().to_string();
 
-        if workspace_id.is_empty() {
-            return Err(LiveTranslationConfigurationError::MissingWorkspaceID);
-        }
-        if !is_valid_workspace_id(&workspace_id) {
-            return Err(LiveTranslationConfigurationError::InvalidWorkspaceID);
-        }
         if api_key.is_empty() {
             return Err(LiveTranslationConfigurationError::MissingAPIKey);
         }
 
         Ok(Self {
-            workspace_id,
+            workspace_id: self.workspace_id.trim().to_string(),
             api_key,
             source_language: self.source_language,
             target_language: self.target_language,
@@ -168,21 +150,13 @@ mod tests {
     }
 
     #[test]
-    fn configuration_validates_the_workspace_id() {
-        let configuration = config("bad.example.com", "sk-test", SourceLanguage::English);
-        assert!(matches!(
-            configuration.validated(),
-            Err(LiveTranslationConfigurationError::InvalidWorkspaceID)
-        ));
-    }
-
-    #[test]
-    fn configuration_rejects_an_empty_workspace_id() {
-        let configuration = config("   ", "sk-test", SourceLanguage::English);
-        assert!(matches!(
-            configuration.validated(),
-            Err(LiveTranslationConfigurationError::MissingWorkspaceID)
-        ));
+    fn configuration_works_without_a_workspace_id() {
+        // The unified DashScope endpoints authenticate with the API key only,
+        // so an empty workspace id must validate.
+        let configuration = config("", "sk-test", SourceLanguage::English);
+        let validated = configuration.validated().unwrap();
+        assert_eq!(validated.workspace_id, "");
+        assert_eq!(validated.api_key, "sk-test");
     }
 
     #[test]
@@ -192,15 +166,5 @@ mod tests {
         assert_eq!(validated.workspace_id, "ws-abc123");
         assert_eq!(validated.api_key, "sk-test");
         assert_eq!(validated.source_language, SourceLanguage::Korean);
-    }
-
-    #[test]
-    fn workspace_id_pattern_accepts_expected_shapes() {
-        assert!(is_valid_workspace_id("ws-abc123"));
-        assert!(is_valid_workspace_id("a-b"));
-        assert!(!is_valid_workspace_id("-leading-dash"));
-        assert!(!is_valid_workspace_id("trailing-dash-"));
-        assert!(!is_valid_workspace_id("under_score"));
-        assert!(!is_valid_workspace_id("a"));
     }
 }

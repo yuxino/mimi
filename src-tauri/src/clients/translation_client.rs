@@ -29,7 +29,6 @@ impl TranslationClient {
         match configuration.effective_translation_mode() {
             TranslationMode::LowLatency => {
                 let client = LiveTranslateClient::new(
-                    &configuration.workspace_id,
                     &configuration.api_key,
                     configuration.source_language,
                     configuration.target_language,
@@ -41,7 +40,6 @@ impl TranslationClient {
             }
             TranslationMode::HighQuality => {
                 let client = HighQualityTranslationClient::new(
-                    &configuration.workspace_id,
                     &configuration.api_key,
                     configuration.source_language,
                     configuration.target_language,
@@ -55,7 +53,6 @@ impl TranslationClient {
             }
             TranslationMode::Turbo => {
                 let client = HighQualityTranslationClient::new(
-                    &configuration.workspace_id,
                     &configuration.api_key,
                     configuration.source_language,
                     configuration.target_language,

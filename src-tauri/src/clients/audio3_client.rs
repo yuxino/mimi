@@ -58,7 +58,6 @@ pub struct Audio3ASRClient {
 
 impl Audio3ASRClient {
     pub fn new(
-        workspace_id: &str,
         api_key: &str,
         source_language: SourceLanguage,
     ) -> Result<Self, Audio3ASRClientError> {
@@ -75,8 +74,7 @@ impl Audio3ASRClient {
                 pong_notify: Notify::new(),
                 receive_task: Mutex::new(None),
             }),
-            endpoint: Audio3ASREndpoint::new(workspace_id)
-                .map_err(|_| Audio3ASRClientError::MissingAPIKey)?,
+            endpoint: Audio3ASREndpoint::new().map_err(|_| Audio3ASRClientError::MissingAPIKey)?,
             api_key: trimmed_key.to_string(),
             source_language,
             events: Arc::new(Mutex::new(None)),
