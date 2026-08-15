@@ -7,9 +7,37 @@
  * color/amplitude parameters.
  */
 
-/** True when the OS/webview language is Chinese (zh-*). Strings are chosen
- * once at startup; the app does not switch language at runtime. */
+export const UI_LANGUAGE_STORAGE_KEY = "mimi-ui-language";
+
+export type UiLanguage = "system" | "zh" | "en";
+
+/** Returns the user-selected UI language override, if any. */
+export function getStoredUiLanguage(): UiLanguage | null {
+  try {
+    const value = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
+    return value === "zh" || value === "en" || value === "system"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persists the UI language override before a reload applies it. */
+export function setStoredUiLanguage(language: UiLanguage): void {
+  try {
+    localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, language);
+  } catch {
+    // Storage may be unavailable; the backend preference still persists.
+  }
+}
+
+/** True when the effective UI language is Chinese (zh-*). A stored override
+ * takes precedence over the OS/webview language. */
 export function isChineseSystem(): boolean {
+  const stored = getStoredUiLanguage();
+  if (stored === "zh") return true;
+  if (stored === "en") return false;
   return (
     typeof navigator !== "undefined" &&
     (navigator.language ?? "").toLowerCase().startsWith("zh")
@@ -132,6 +160,11 @@ const OVERLAY_EN = {
 
 const SETTINGS_ZH = {
   sessionTitle: "实时字幕",
+  appLanguage: "界面语言",
+  systemLanguage: "跟随系统",
+  chinese: "中文",
+  english: "English",
+  languageHelp: "切换后立即生效。",
   start: "开始",
   stop: "停止",
   subtitleTitle: "字幕",
@@ -164,6 +197,11 @@ const SETTINGS_ZH = {
 
 const SETTINGS_EN = {
   sessionTitle: "Live Subtitles",
+  appLanguage: "Interface Language",
+  systemLanguage: "System",
+  chinese: "中文",
+  english: "English",
+  languageHelp: "Applies immediately after switching.",
   start: "Start",
   stop: "Stop",
   subtitleTitle: "Subtitles",

@@ -33,6 +33,8 @@ pub struct SettingsSnapshotPayload {
     pub is_overlay_locked: bool,
     #[serde(rename = "credentialLoadError")]
     pub credential_load_error: Option<String>,
+    #[serde(rename = "uiLanguage")]
+    pub ui_language: Option<String>,
 }
 
 #[cfg(test)]
@@ -52,6 +54,7 @@ mod tests {
             font_size: 18.0,
             is_overlay_locked: false,
             credential_load_error: None,
+            ui_language: None,
         };
         let json = serde_json::to_value(&payload).unwrap();
         assert_eq!(json["apiKey"], "sk-demo");
@@ -72,6 +75,7 @@ impl SettingsSnapshotPayload {
             font_size: prefs.font_size,
             is_overlay_locked: prefs.overlay_locked,
             credential_load_error: store.credential_load_error(),
+            ui_language: prefs.ui_language.clone(),
         }
     }
 }
@@ -85,6 +89,7 @@ pub struct SettingsDraft {
     pub translation_mode: Option<TranslationMode>,
     pub font_size: Option<f64>,
     pub is_overlay_locked: Option<bool>,
+    pub ui_language: Option<String>,
 }
 
 /// Reads the settings snapshot. Async: the keychain read (and the one-time
@@ -140,6 +145,10 @@ pub async fn settings_save(
             }
             if let Some(locked) = draft.is_overlay_locked {
                 prefs.overlay_locked = locked;
+                needs_save = true;
+            }
+            if let Some(language) = &draft.ui_language {
+                prefs.ui_language = Some(language.clone());
                 needs_save = true;
             }
         });

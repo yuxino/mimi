@@ -116,6 +116,26 @@ try {
     await page.close();
   }
 
+  // In-app UI language switch.
+  {
+    const page = await browser.newPage({ locale: "en-US" });
+    await page.goto(`${BASE}/?window=settings`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(120);
+    const languageSelect = page.locator(
+      'select[aria-label="Interface Language"], select[aria-label="界面语言"]',
+    );
+    if ((await languageSelect.count()) !== 1) {
+      throw new Error("UI language select not found");
+    }
+    await languageSelect.selectOption("zh");
+    await page.waitForTimeout(600);
+    const text = await page.locator("body").innerText();
+    if (!text.includes("实时字幕") || !text.includes("界面语言")) {
+      throw new Error("Switching UI language to Chinese did not apply");
+    }
+    await page.close();
+  }
+
   await browser.close();
   console.log("E2E smoke passed");
 } finally {
