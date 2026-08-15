@@ -8,17 +8,12 @@ import { useReducedMotion } from "./animation";
 
 interface WaveformIndicatorProps {
   phase: OverlayActivityPhaseKind;
-  /** Renders the same 9-bar wave at a smaller scale (the bottom status bar
-   * variant). Shape, cadence and per-bar offsets are identical to the large
-   * variant so switching between the empty-state wave and the status-bar
-   * wave never changes the motion signature. */
   compact?: boolean;
 }
 
-// Static (reduced-motion) bar heights, matching the Swift table. The
-// compact variant is the same shape scaled down.
+// Static (reduced-motion) bar heights, matching the Swift table.
 const REDUCED_HEIGHTS = [11, 18, 26, 33, 38, 33, 26, 18, 11];
-const REDUCED_HEIGHTS_COMPACT = REDUCED_HEIGHTS.map((h) => Math.round(h * 0.58));
+const REDUCED_HEIGHTS_COMPACT = [6, 11, 15, 11, 6];
 
 // The tallest a bar can reach for each variant, used as the fixed-height
 // container the bar scales inside. scaleY never triggers layout, so the
@@ -41,24 +36,23 @@ export const WaveformIndicator = memo(function WaveformIndicator({
   const reduceMotion = useReducedMotion();
   const active = !reduceMotion && phase !== "paused";
 
-  // Both variants share the same 9-bar shape; compact only scales the whole
-  // wave down (spacing/width/height), never the shape or cadence.
-  const barCount = 9;
-  const spacing = compact ? 2.6 : 4;
-  const barWidth = compact ? 2.2 : 4;
+  const barCount = compact ? 5 : 9;
+  const spacing = compact ? 3.25 : 4;
+  const barWidth = compact ? 2.75 : 4;
   const maxHeight = compact ? MAX_HEIGHT_COMPACT : MAX_HEIGHT;
   const staticHeights = compact ? REDUCED_HEIGHTS_COMPACT : REDUCED_HEIGHTS;
-  const scale = compact ? 0.58 : 1;
 
   // Ref arrays updated imperatively; the bars are rendered once and their
   // transforms are driven by the rAF loop below.
   const barRefs = useRef<Array<HTMLDivElement | null>>([]);
   const phaseRef = useRef(phase);
+  const compactRef = useRef(compact);
 
   // Keep the rAF loop reading the latest props without restarting it.
   useEffect(() => {
     phaseRef.current = phase;
-  }, [phase]);
+    compactRef.current = compact;
+  }, [phase, compact]);
 
   useEffect(() => {
     const elements = barRefs.current;
@@ -74,24 +68,18 @@ export const WaveformIndicator = memo(function WaveformIndicator({
     }
 
     let raf = 0;
-    // Phase accumulates by `dt * speed` each frame instead of deriving from
-    // absolute time: (a) `animationSpeed` is cycles-per-second, so the wave
-    // actually moves at the intended rate, and (b) when the phase changes
-    // (listening → translating → recognizing) the motion continues smoothly
-    // instead of jumping to an unrelated sin() phase.
-    let wavePhase = 0;
-    let lastNow = 0;
     const loop = (now: number) => {
-      if (lastNow !== 0) {
-        const dt = Math.min((now - lastNow) / 1000, 0.1);
-        wavePhase +=
-          dt * OVERLAY_ACTIVITY_PHASES[phaseRef.current].animationSpeed * 2 * Math.PI;
-      }
-      lastNow = now;
+      const time = now / 1000;
       const currentInfo = OVERLAY_ACTIVITY_PHASES[phaseRef.current];
+      const currentCompact = compactRef.current;
       elements.forEach((element, index) => {
         if (!element) return;
-        const height = barHeight(index, wavePhase, scale, currentInfo);
+        const height = barHeight(
+          index,
+          time,
+          currentCompact,
+          currentInfo,
+        );
         element.style.transform = `scaleY(${height / maxHeight})`;
       });
       raf = requestAnimationFrame(loop);
@@ -118,7 +106,7 @@ export const WaveformIndicator = memo(function WaveformIndicator({
             // software-composite N layers per frame (the macOS WKWebView
             // transparent-window path does not use GPU compositing), which is
             // the stutter source. One shared layer keeps a single composite.
-            background: overlayPhaseColor(phase, barOpacity(index)),
+            background: overlayPhaseColor(phase, barOpacity(index, compact)),
           }}
         />
       ))}
@@ -128,15 +116,21 @@ export const WaveformIndicator = memo(function WaveformIndicator({
 
 function barHeight(
   index: number,
-  wavePhase: number,
-  scale: number,
+  time: number,
+  compact: boolean,
   info: (typeof OVERLAY_ACTIVITY_PHASES)[OverlayActivityPhaseKind],
 ): number {
-  const wave = (Math.sin(wavePhase + index * 0.85) + 1) / 2;
-  const base = (10 + Math.abs(index - 4) * 2.2) * scale;
-  return base + wave * info.amplitude * 3.2 * scale;
+  const wave =
+    (Math.sin(time * info.animationSpeed + index * (compact ? 1.2 : 0.85)) +
+      1) /
+    2;
+  const base = compact
+    ? 5.5 + Math.abs(index - 2) * 1.9
+    : 10 + Math.abs(index - 4) * 2.2;
+  return base + wave * info.amplitude * (compact ? 2.1 : 3.2);
 }
 
-function barOpacity(index: number): number {
-  return 0.92 - Math.abs(index - 4) * 0.09;
+function barOpacity(index: number, compact: boolean): number {
+  const center = compact ? Math.abs(index - 2) : Math.abs(index - 4);
+  return 0.92 - center * 0.09;
 }

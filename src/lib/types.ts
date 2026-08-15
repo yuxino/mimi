@@ -266,12 +266,8 @@ export interface OverlayActivityPhaseInfo {
 
 /**
  * The `OverlayActivityPhase` table from `SubtitleOverlayView.swift`. Colors,
- * base opacity, and amplitude are copied verbatim; the animation speed is
- * unified at one cadence across all active phases (2.6 cycles/s) so the wave
- * never looks like it changes pace between connecting/listening/translating/
- * recognizing — only the amplitude and color differ per phase. `listening`
- * and `connecting` carry a pre-applied opacity just like their Swift
- * counterparts.
+ * animation speed and amplitude are copied verbatim; `listening` and
+ * `connecting` carry a pre-applied opacity just like their Swift counterparts.
  */
 export const OVERLAY_ACTIVITY_PHASES: Record<
   OverlayActivityPhaseKind,
