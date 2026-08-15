@@ -57,15 +57,6 @@ pub fn run() {
             windows::TrayPanelManager::ensure(&app_handle);
             windows::LanguagePopoverManager::ensure(&app_handle);
 
-            // Dev builds open the overlay's WebView inspector so the waveform
-            // DOM/animation can be inspected live (release builds ship with
-            // devtools compiled out unless the `devtools` feature is on).
-            if windows::is_dev_build() {
-                if let Some(window) = app.get_webview_window("overlay") {
-                    window.open_devtools();
-                }
-            }
-
             setup_tray(&app_handle)?;
             setup_global_shortcut(&app_handle, Arc::clone(&session))?;
 
@@ -241,7 +232,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     )
     .build()?;
 
-    let menu = MenuBuilder::new(app)
+    let mut menu_builder = MenuBuilder::new(app)
         .item(&live_subtitles)
         .item(&language_menu)
         .item(&lock_position)
@@ -267,7 +258,25 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             )
             .build(app)?,
         )
-        .separator()
+        .separator();
+
+    // Dev builds expose a manual "open inspector" action instead of opening
+    // the WebView devtools automatically, so the user decides when to look.
+    if windows::is_dev_build() {
+        menu_builder = menu_builder.item(
+            &MenuItemBuilder::with_id(
+                "toggle-devtools",
+                if zh {
+                    "打开调试工具"
+                } else {
+                    "Open DevTools"
+                },
+            )
+            .build(app)?,
+        );
+    }
+
+    let menu = menu_builder
         .item(
             &MenuItemBuilder::with_id("settings", if zh { "设置…" } else { "Settings…" })
                 .build(app)?,
@@ -277,7 +286,6 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 .build(app)?,
         )
         .build()?;
-
     // Menu-bar icon: a monochrome waveform template (like the original app's
     // `ear.badge.waveform` SF Symbol). Template icons are rendered by macOS at
     // the native menu-bar resolution — crisp at any size and adapting to the
@@ -333,6 +341,14 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 }
                 "show-subtitles" => windows::OverlayWindowManager::show(app),
                 "clear-subtitles" => state.session.clear_subtitles(),
+                "toggle-devtools" => {
+                    // Manual inspector toggle (dev builds only). Open the
+                    // overlay's WebView devtools so the user decides when to
+                    // inspect, instead of auto-opening at startup.
+                    if let Some(window) = app.get_webview_window("overlay") {
+                        window.open_devtools();
+                    }
+                }
                 "settings" => {
                     // The tray panel is always-on-top; hide it so the
                     // settings window is not obscured behind it.
