@@ -25,7 +25,7 @@ export interface SubtitleRow {
   createdAt: number | null;
 }
 
-export function isSameLanguageMode(
+function isSameLanguageMode(
   settings: Pick<SettingsSnapshot, "sourceLanguage" | "targetLanguage">,
   detectedLanguage: string | null,
 ): boolean {
