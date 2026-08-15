@@ -14,7 +14,7 @@ export function ControlButton({ icon, label, onClick }: ControlButtonProps) {
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="flex items-center justify-center"
+      className="ux-hover flex items-center justify-center"
       style={{
         width: 24,
         height: 24,

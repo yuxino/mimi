@@ -151,7 +151,7 @@ export function SettingsView() {
               type="button"
               disabled={sessionStatus.kind === "stopping"}
               onClick={() => (isActive ? void stop() : startListening())}
-              className="flex items-center"
+              className="ux-hover flex items-center"
               style={{
                 gap: 6,
                 minWidth: 62,
@@ -182,7 +182,7 @@ export function SettingsView() {
               </span>
               <span style={{ flex: 1 }} />
               <span
-                className="flex items-center"
+                className="ux-hover flex items-center"
                 style={{
                   gap: 5,
                   fontSize: 11,
@@ -309,7 +309,7 @@ export function SettingsView() {
           <button
             type="button"
             onClick={() => setShowsServiceSettings((value) => !value)}
-            className="flex w-full items-center"
+            className="ux-hover flex w-full items-center"
             style={{
               gap: 10,
               background: "none",
@@ -365,6 +365,7 @@ export function SettingsView() {
                 <button
                   type="button"
                   onClick={() => void saveCredentials()}
+                  className="ux-hover"
                   style={{
                     height: 28,
                     padding: "0 14px",
@@ -519,7 +520,7 @@ function SourceLanguageButton({
       type="button"
       disabled={disabled}
       onClick={onSelect}
-      className="flex flex-1 items-center justify-center"
+      className="ux-hover flex flex-1 items-center justify-center"
       title={sourceLanguageButtonHelp(language)}
       style={{
         gap: 6,
@@ -553,7 +554,7 @@ function CredentialFeedback({
 }) {
   return (
     <div
-      className="flex items-center"
+      className="ux-hover flex items-center"
       style={{ gap: 6, fontSize: 12, color: isError ? RED : GREEN }}
     >
       <Icon
