@@ -54,13 +54,28 @@ export const RecognitionActivityIndicator = memo(function RecognitionActivityInd
     }
 
     let raf = 0;
+    // Phase accumulates by `dt * speed` per frame (cycles-per-second × 2π)
+    // instead of deriving from absolute time, so the bars and the translating
+    // pulse move at the intended cadence and continue smoothly across phase
+    // changes instead of jumping to an unrelated sin() phase.
+    let wavePhase = 0;
+    let pulsePhase = 0;
+    let lastNow = 0;
     const loop = (now: number) => {
-      const time = now / 1000;
+      if (lastNow !== 0) {
+        const dt = Math.min((now - lastNow) / 1000, 0.1);
+        const currentInfo = OVERLAY_ACTIVITY_PHASES[phaseRef.current];
+        wavePhase += dt * currentInfo.animationSpeed * 2 * Math.PI;
+        // The pulse is its own gentle cadence (~1 Hz), independent of the
+        // phase table.
+        pulsePhase += dt * 1.0 * 2 * Math.PI;
+      }
+      lastNow = now;
       const currentInfo = OVERLAY_ACTIVITY_PHASES[phaseRef.current];
-      const pulse = pulseProgress(time);
+      const pulse = pulseProgress(pulsePhase);
       barRefs.current.forEach((element, index) => {
         if (!element) return;
-        const height = barHeight(index, time, currentInfo);
+        const height = barHeight(index, wavePhase, currentInfo);
         element.style.transform = `scaleY(${height / BAR_MAX_HEIGHT})`;
       });
       if (glowRef.current) {
@@ -140,15 +155,15 @@ export const RecognitionActivityIndicator = memo(function RecognitionActivityInd
 
 function barHeight(
   index: number,
-  time: number,
+  wavePhase: number,
   info: (typeof OVERLAY_ACTIVITY_PHASES)[OverlayActivityPhaseKind],
 ): number {
-  const wave = (Math.sin(time * info.animationSpeed + index * 1.7) + 1) / 2;
+  const wave = (Math.sin(wavePhase + index * 1.7) + 1) / 2;
   return 2.5 + wave * info.amplitude * 1.3;
 }
 
-function pulseProgress(time: number): number {
-  return (Math.sin(time * 3.2) + 1) / 2;
+function pulseProgress(pulsePhase: number): number {
+  return (Math.sin(pulsePhase) + 1) / 2;
 }
 
 function innerGlowSize(pulse: number): number {

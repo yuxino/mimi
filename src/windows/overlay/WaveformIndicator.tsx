@@ -68,18 +68,25 @@ export const WaveformIndicator = memo(function WaveformIndicator({
     }
 
     let raf = 0;
+    // Phase accumulates by `dt * speed` each frame instead of deriving from
+    // absolute time: (a) `animationSpeed` is cycles-per-second, so the wave
+    // actually moves at the intended rate, and (b) when the phase changes
+    // (listening → translating → recognizing) the motion continues smoothly
+    // instead of jumping to an unrelated sin() phase.
+    let wavePhase = 0;
+    let lastNow = 0;
     const loop = (now: number) => {
-      const time = now / 1000;
+      if (lastNow !== 0) {
+        const dt = Math.min((now - lastNow) / 1000, 0.1);
+        wavePhase +=
+          dt * OVERLAY_ACTIVITY_PHASES[phaseRef.current].animationSpeed * 2 * Math.PI;
+      }
+      lastNow = now;
       const currentInfo = OVERLAY_ACTIVITY_PHASES[phaseRef.current];
       const currentCompact = compactRef.current;
       elements.forEach((element, index) => {
         if (!element) return;
-        const height = barHeight(
-          index,
-          time,
-          currentCompact,
-          currentInfo,
-        );
+        const height = barHeight(index, wavePhase, currentCompact, currentInfo);
         element.style.transform = `scaleY(${height / maxHeight})`;
       });
       raf = requestAnimationFrame(loop);
@@ -116,14 +123,12 @@ export const WaveformIndicator = memo(function WaveformIndicator({
 
 function barHeight(
   index: number,
-  time: number,
+  wavePhase: number,
   compact: boolean,
   info: (typeof OVERLAY_ACTIVITY_PHASES)[OverlayActivityPhaseKind],
 ): number {
   const wave =
-    (Math.sin(time * info.animationSpeed + index * (compact ? 1.2 : 0.85)) +
-      1) /
-    2;
+    (Math.sin(wavePhase + index * (compact ? 1.2 : 0.85)) + 1) / 2;
   const base = compact
     ? 5.5 + Math.abs(index - 2) * 1.9
     : 10 + Math.abs(index - 4) * 2.2;
