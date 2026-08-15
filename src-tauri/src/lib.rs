@@ -62,7 +62,7 @@ pub fn run() {
             // devtools compiled out unless the `devtools` feature is on).
             if windows::is_dev_build() {
                 if let Some(window) = app.get_webview_window("overlay") {
-                    let _ = window.open_devtools();
+                    window.open_devtools();
                 }
             }
 
