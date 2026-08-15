@@ -325,6 +325,7 @@ export function SettingsView() {
                   { value: "system", label: I18N.settings.systemLanguage },
                   { value: "zh", label: I18N.settings.chinese },
                   { value: "en", label: I18N.settings.english },
+                  { value: "ja", label: I18N.settings.japanese },
                 ]}
               />
             </SettingsRow>
