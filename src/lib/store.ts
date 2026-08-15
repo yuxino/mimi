@@ -54,7 +54,6 @@ const INITIAL_SESSION: SessionStateEvent = {
 };
 
 const INITIAL_SETTINGS: SettingsSnapshot = {
-  workspaceID: "",
   apiKey: "",
   hasAPIKey: false,
   sourceLanguage: "auto",
@@ -270,7 +269,6 @@ function mergeSettings(
 ): SettingsSnapshot {
   return {
     ...current,
-    workspaceID: draft.workspaceID ?? current.workspaceID,
     sourceLanguage: draft.sourceLanguage ?? current.sourceLanguage,
     targetLanguage: draft.targetLanguage ?? current.targetLanguage,
     translationMode: draft.translationMode ?? current.translationMode,

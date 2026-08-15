@@ -81,9 +81,3 @@ export function Icon({ name, className, style }: IconProps) {
     />
   );
 }
-
-/** The underlying lucide icon for a name (used where an icon needs to be
- * passed as a component). */
-export function iconFor(name: IconName): LucideIcon {
-  return ICONS[name];
-}

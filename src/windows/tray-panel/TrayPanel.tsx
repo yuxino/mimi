@@ -262,7 +262,7 @@ function statusText(
 
   switch (status.kind) {
     case "idle":
-      return settings.workspaceID.trim() === "" || !settings.hasAPIKey
+      return !settings.hasAPIKey
         ? I18N.tray.setupRequired
         : I18N.tray.ready;
     case "connecting":
