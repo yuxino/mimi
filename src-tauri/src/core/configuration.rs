@@ -1,8 +1,6 @@
 //! Live-translation configuration and validation, ported 1:1 from
 //! `Sources/MimiCore/LiveTranslationConfiguration.swift`. Since the clients
-//! moved to DashScope's unified endpoints (Bearer API key only), the
-//! workspace id is no longer required; it is kept as a deprecated optional
-//! field for settings migration.
+//! moved to DashScope's unified endpoints, only the API key is required.
 
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
 use thiserror::Error;
@@ -15,7 +13,6 @@ pub enum LiveTranslationConfigurationError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiveTranslationConfiguration {
-    pub workspace_id: String,
     pub api_key: String,
     pub source_language: SourceLanguage,
     pub target_language: TargetLanguage,
@@ -24,14 +21,12 @@ pub struct LiveTranslationConfiguration {
 
 impl LiveTranslationConfiguration {
     pub fn new(
-        workspace_id: impl Into<String>,
         api_key: impl Into<String>,
         source_language: SourceLanguage,
         target_language: TargetLanguage,
         translation_mode: TranslationMode,
     ) -> Self {
         Self {
-            workspace_id: workspace_id.into(),
             api_key: api_key.into(),
             source_language,
             target_language,
@@ -60,7 +55,6 @@ impl LiveTranslationConfiguration {
         }
 
         Ok(Self {
-            workspace_id: self.workspace_id.trim().to_string(),
             api_key,
             source_language: self.source_language,
             target_language: self.target_language,
@@ -73,13 +67,8 @@ impl LiveTranslationConfiguration {
 mod tests {
     use super::*;
 
-    fn config(
-        workspace_id: &str,
-        api_key: &str,
-        source_language: SourceLanguage,
-    ) -> LiveTranslationConfiguration {
+    fn config(api_key: &str, source_language: SourceLanguage) -> LiveTranslationConfiguration {
         LiveTranslationConfiguration::new(
-            workspace_id,
             api_key,
             source_language,
             TargetLanguage::SimplifiedChinese,
@@ -89,7 +78,7 @@ mod tests {
 
     #[test]
     fn automatic_language_resolves_high_quality_to_low_latency() {
-        let configuration = config("ws-abc123", "sk-test", SourceLanguage::Automatic);
+        let configuration = config("sk-test", SourceLanguage::Automatic);
         assert_eq!(
             configuration.effective_translation_mode(),
             TranslationMode::LowLatency
@@ -99,7 +88,6 @@ mod tests {
     #[test]
     fn turbo_mode_stays_turbo_even_with_automatic_source() {
         let configuration = LiveTranslationConfiguration::new(
-            "ws-abc123",
             "sk-test",
             SourceLanguage::Automatic,
             TargetLanguage::SimplifiedChinese,
@@ -114,7 +102,6 @@ mod tests {
     #[test]
     fn original_subtitles_preserve_the_strongest_recognition_backend() {
         let configuration = LiveTranslationConfiguration::new(
-            "workspace",
             "secret",
             SourceLanguage::Japanese,
             TargetLanguage::Original,
@@ -129,7 +116,6 @@ mod tests {
     #[test]
     fn configuration_preserves_an_explicit_translation_mode() {
         let configuration = LiveTranslationConfiguration::new(
-            "ws-abc123",
             "sk-test",
             SourceLanguage::Japanese,
             TargetLanguage::English,
@@ -142,7 +128,7 @@ mod tests {
 
     #[test]
     fn configuration_requires_an_api_key() {
-        let configuration = config("ws-abc123", "   ", SourceLanguage::English);
+        let configuration = config("   ", SourceLanguage::English);
         assert!(matches!(
             configuration.validated(),
             Err(LiveTranslationConfigurationError::MissingAPIKey)
@@ -150,20 +136,17 @@ mod tests {
     }
 
     #[test]
-    fn configuration_works_without_a_workspace_id() {
-        // The unified DashScope endpoints authenticate with the API key only,
-        // so an empty workspace id must validate.
-        let configuration = config("", "sk-test", SourceLanguage::English);
+    fn configuration_requires_only_the_api_key() {
+        // The unified DashScope endpoints authenticate with the API key only.
+        let configuration = config("sk-test", SourceLanguage::English);
         let validated = configuration.validated().unwrap();
-        assert_eq!(validated.workspace_id, "");
         assert_eq!(validated.api_key, "sk-test");
     }
 
     #[test]
     fn configuration_trims_valid_credentials() {
-        let configuration = config("  ws-abc123  ", "  sk-test  ", SourceLanguage::Korean);
+        let configuration = config("  sk-test  ", SourceLanguage::Korean);
         let validated = configuration.validated().unwrap();
-        assert_eq!(validated.workspace_id, "ws-abc123");
         assert_eq!(validated.api_key, "sk-test");
         assert_eq!(validated.source_language, SourceLanguage::Korean);
     }

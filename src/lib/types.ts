@@ -53,7 +53,6 @@ export interface SessionStateEvent {
 // ---------------------------------------------------------------------------
 
 export interface SettingsSnapshot {
-  workspaceID: string;
   /** Loaded from the OS keychain so the settings field can be prefilled. */
   apiKey: string;
   hasAPIKey: boolean;
@@ -67,7 +66,6 @@ export interface SettingsSnapshot {
 }
 
 export interface SettingsDraft {
-  workspaceID?: string;
   /** Only transmitted on settings_save; never present elsewhere. */
   apiKey?: string;
   sourceLanguage?: SourceLanguage;

@@ -19,8 +19,6 @@ pub struct AppState {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsSnapshotPayload {
-    #[serde(rename = "workspaceID")]
-    pub workspace_id: String,
     /// Loaded from the OS keychain so the settings field can be prefilled,
     /// mirroring the original app's in-memory binding. Never persisted.
     #[serde(rename = "apiKey")]
@@ -41,12 +39,11 @@ pub struct SettingsSnapshotPayload {
 mod tests {
     use super::*;
 
-    /// The `workspaceID` key must survive camelCase renaming (serde would
-    /// otherwise emit `workspaceId`, which the frontend does not read).
+    /// The `apiKey` key must survive camelCase renaming (serde would
+    /// otherwise emit `api_key`, which the frontend does not read).
     #[test]
-    fn settings_payload_uses_workspace_id_key() {
+    fn settings_payload_uses_camel_case_keys() {
         let payload = SettingsSnapshotPayload {
-            workspace_id: "ws-abc123".into(),
             api_key: "sk-demo".into(),
             has_api_key: true,
             source_language: SourceLanguage::Japanese,
@@ -57,16 +54,8 @@ mod tests {
             credential_load_error: None,
         };
         let json = serde_json::to_value(&payload).unwrap();
-        assert_eq!(json["workspaceID"], "ws-abc123");
-        assert!(json.get("workspaceId").is_none());
         assert_eq!(json["apiKey"], "sk-demo");
         assert_eq!(json["hasAPIKey"], true);
-    }
-
-    #[test]
-    fn settings_draft_reads_workspace_id_key() {
-        let draft: SettingsDraft = serde_json::from_str(r#"{"workspaceID":"ws-abc123"}"#).unwrap();
-        assert_eq!(draft.workspace_id.as_deref(), Some("ws-abc123"));
     }
 }
 
@@ -75,7 +64,6 @@ impl SettingsSnapshotPayload {
         let prefs = store.preferences();
         let api_key = store.load_api_key().ok().flatten().unwrap_or_default();
         Self {
-            workspace_id: prefs.workspace_id,
             has_api_key: !api_key.is_empty(),
             api_key,
             source_language: prefs.source_language,
@@ -91,8 +79,6 @@ impl SettingsSnapshotPayload {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SettingsDraft {
-    #[serde(rename = "workspaceID")]
-    pub workspace_id: Option<String>,
     pub api_key: Option<String>,
     pub source_language: Option<SourceLanguage>,
     pub target_language: Option<TargetLanguage>,
@@ -133,11 +119,6 @@ pub async fn settings_save(
     {
         let mut needs_save = false;
         state.settings.update_preferences(|prefs| {
-            if let Some(workspace_id) = draft.workspace_id.clone() {
-                prefs.workspace_id = workspace_id;
-                needs_save = true;
-                credential_changed = true;
-            }
             if let Some(source_language) = draft.source_language {
                 prefs.source_language = source_language;
                 needs_save = true;
@@ -172,7 +153,6 @@ pub async fn settings_save(
     }
 
     if credential_changed {
-        let prefs = state.settings.preferences();
         let api_key = draft.api_key.unwrap_or_else(|| {
             state
                 .settings
@@ -181,9 +161,7 @@ pub async fn settings_save(
                 .flatten()
                 .unwrap_or_default()
         });
-        state
-            .settings
-            .save_credentials(&prefs.workspace_id, &api_key)?;
+        state.settings.save_credentials(&api_key)?;
     } else {
         state.settings.persist();
     }

@@ -1,4 +1,4 @@
-//! Preferences (workspace ID, languages, mode, font size, overlay state)
+//! Preferences (languages, mode, font size, overlay state)
 //! stored in `app_config_dir()/preferences.json`, and the DashScope API key
 //! stored in the OS keychain (macOS Keychain / Windows Credential Manager)
 //! via `keyring`. Ported from `AppSettings.swift` + `KeychainStore.swift`.
@@ -40,7 +40,6 @@ pub struct OverlayFrame {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
-    pub workspace_id: String,
     pub source_language: SourceLanguage,
     pub target_language: TargetLanguage,
     pub translation_mode: TranslationMode,
@@ -57,7 +56,6 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
-            workspace_id: String::new(),
             source_language: SourceLanguage::Automatic,
             target_language: TargetLanguage::SimplifiedChinese,
             translation_mode: TranslationMode::LowLatency,
@@ -134,13 +132,10 @@ impl SettingsStore {
     /// Loads preferences from `app_config_dir()/preferences.json`.
     pub fn load(app_config_dir: PathBuf, is_ui_test: bool) -> Self {
         let prefs_path = app_config_dir.join("preferences.json");
-        let mut prefs = std::fs::read_to_string(&prefs_path)
+        let prefs = std::fs::read_to_string(&prefs_path)
             .ok()
             .and_then(|text| serde_json::from_str::<Preferences>(&text).ok())
             .unwrap_or_default();
-        if is_ui_test {
-            prefs.workspace_id = "your-workspace-id".into();
-        }
         let font_size = prefs
             .font_size
             .clamp(*FONT_SIZE_RANGE.start(), *FONT_SIZE_RANGE.end());
@@ -242,12 +237,11 @@ impl SettingsStore {
             .is_some_and(|key| !key.is_empty())
     }
 
-    /// Validates and saves the workspace ID + API key (key → OS keychain),
-    /// then persists preferences. Mirrors `AppSettings.save()`.
-    pub fn save_credentials(&self, workspace_id: &str, api_key: &str) -> Result<(), String> {
+    /// Validates and saves the API key (key → OS keychain), then persists
+    /// preferences. Mirrors `AppSettings.save()`.
+    pub fn save_credentials(&self, api_key: &str) -> Result<(), String> {
         let prefs = self.prefs.lock().unwrap().clone();
         let configuration = LiveTranslationConfiguration::new(
-            workspace_id,
             api_key,
             prefs.source_language,
             prefs.target_language,
@@ -259,7 +253,6 @@ impl SettingsStore {
 
         let effective_mode = validated.effective_translation_mode();
         let mut prefs = self.prefs.lock().unwrap();
-        prefs.workspace_id = validated.workspace_id.clone();
         prefs.target_language = validated.target_language;
         prefs.translation_mode = effective_mode;
         drop(prefs);
@@ -278,7 +271,6 @@ impl SettingsStore {
         let prefs = self.prefs.lock().unwrap().clone();
         let api_key = self.load_api_key()?.unwrap_or_default();
         LiveTranslationConfiguration::new(
-            prefs.workspace_id,
             api_key,
             prefs.source_language,
             prefs.target_language,
@@ -396,9 +388,7 @@ mod tests {
         };
         let settings = SettingsStore::in_memory(Box::new(secret), false);
         assert_eq!(settings.load_api_key().unwrap(), None);
-        settings
-            .save_credentials("llm-workspace", "sk-new-key")
-            .unwrap();
+        settings.save_credentials("sk-new-key").unwrap();
         // The saved key is served from the refreshed cache without a reload.
         assert_eq!(
             settings.load_api_key().unwrap().as_deref(),

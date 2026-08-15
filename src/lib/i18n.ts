@@ -97,8 +97,6 @@ export const I18N = {
     lockHelp: "关闭锁定后，可拖动字幕顶部来移动位置，也可从边缘或四角调整大小。",
     serviceSettings: "服务设置",
     configured: "已配置",
-    workspaceID: "工作空间 ID",
-    workspaceIDPlaceholder: "输入 Workspace ID",
     apiKey: "DashScope API Key",
     apiKeyPlaceholder: "输入 API Key",
     credentialNote: "凭证仅保存在这台设备上，API Key 会存入钥匙串。",
