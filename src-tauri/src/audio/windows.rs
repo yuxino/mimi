@@ -187,12 +187,9 @@ fn process_frames_f32(
         .collect();
 
     let mut resampler = resampler.lock().unwrap();
-    let input_frames_available = frames;
     let mut consumed = 0usize;
-    // SincFixedIn needs exactly `CHUNK_SIZE_IN` frames per call; feed all
-    // available complete chunks and drop the trailing partial chunk (it is
-    // consumed by the ring buffer across callbacks instead).
-    let _ = input_frames_available;
+    // Feed all available complete chunks; the trailing partial chunk stays in
+    // the resampler's internal ring buffer across callbacks.
     while consumed + CHUNK_SIZE_IN <= frames {
         let chunk: Vec<Vec<f32>> = channels
             .iter()

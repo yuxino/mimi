@@ -410,9 +410,9 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 }
 
 fn state_settings_prepare(session: &SessionManager) {
-    // Mirrors `prepareForListening`: automatic source becomes Japanese and
-    // Chinese source switches to original subtitles. Applied through the
-    // settings store before starting.
+    // Mirrors `prepareForListening`: Chinese source switches to original
+    // subtitles. Automatic source stays persistent and is resolved when the
+    // session clients are built.
     session.prepare_for_listening();
 }
 
@@ -429,7 +429,7 @@ fn switch_language(
 }
 
 /// Registers the global start/stop shortcut — ⌘⇧Space on macOS (matching the
-/// original app), Ctrl+Shift+Space on Windows. A 2s debounce mirrors the
+/// original app), Ctrl+Shift+Space on Windows. A 500ms debounce mirrors the
 /// original `GlobalHotKeyController`.
 fn setup_global_shortcut(
     app: &tauri::AppHandle,

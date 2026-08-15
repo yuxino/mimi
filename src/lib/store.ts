@@ -93,6 +93,9 @@ export const useStore = create<StoreState>()((set, get) => ({
 
   init: async () => {
     if (get().initialized) return;
+    // Set the guard synchronously: React StrictMode double-invokes effects
+    // in development, and both calls would otherwise register listeners.
+    set({ initialized: true });
     if (isTauri) {
       try {
         const [snapshot, session] = await Promise.all([
@@ -114,7 +117,6 @@ export const useStore = create<StoreState>()((set, get) => ({
         // snapshot.
       }
     }
-    set({ initialized: true });
   },
 
   start: async () => {

@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex as TokioMutex};
 use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,9 +88,12 @@ pub struct SessionManager {
     is_paused: Arc<AtomicBool>,
     is_recovering: Arc<AtomicBool>,
     is_overlay_collapsed: Arc<AtomicBool>,
-    /// Set while a coalesced session-state broadcast is scheduled; chunks
-    /// arriving in between just flip it instead of emitting per chunk.
-    state_publish_pending: Arc<AtomicBool>,
+    /// Set whenever a session-state broadcast is requested; the single
+    /// scheduled publisher clears it after each publish and keeps looping
+    /// until no newer request has arrived.
+    publish_dirty: Arc<AtomicBool>,
+    /// Serializes publisher scheduling: exactly one task owns this lock.
+    publish_lock: Arc<TokioMutex<()>>,
     health_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     recovery_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     pump_task: Arc<Mutex<Option<JoinHandle<()>>>>,
@@ -115,7 +118,8 @@ impl SessionManager {
             is_paused: Arc::new(AtomicBool::new(false)),
             is_recovering: Arc::new(AtomicBool::new(false)),
             is_overlay_collapsed: Arc::new(AtomicBool::new(false)),
-            state_publish_pending: Arc::new(AtomicBool::new(false)),
+            publish_dirty: Arc::new(AtomicBool::new(false)),
+            publish_lock: Arc::new(TokioMutex::new(())),
             health_task: Arc::new(Mutex::new(None)),
             recovery_task: Arc::new(Mutex::new(None)),
             pump_task: Arc::new(Mutex::new(None)),
@@ -376,8 +380,6 @@ impl SessionManager {
         if let Some(client) = taken {
             client.disconnect().await;
         }
-        self.controller.lock().unwrap().did_pause();
-        self.publish_state();
         pipeline_log!("session paused");
     }
 
@@ -480,8 +482,10 @@ impl SessionManager {
         let _ = self.establish_session(false).await;
     }
 
-    /// Applies the listening-time language adjustments before a session
-    /// starts (automatic → Japanese; Chinese → original subtitles).
+    /// Applies the listening-time language adjustment before a session starts
+    /// (Chinese source → original subtitles). Automatic source remains the
+    /// persistent user choice; the concrete recognition language is resolved
+    /// when the session clients are built.
     pub fn prepare_for_listening(&self) {
         self.settings.prepare_for_listening();
         *self.active_settings.lock().unwrap() = self.settings.configuration().ok();
@@ -750,17 +754,34 @@ impl SessionManager {
     /// emitting per chunk is the main UI-lag cost during live listening. The
     /// first call schedules a single trailing broadcast ~60ms later that
     /// always carries the latest snapshot; intermediate calls only set the
-    /// pending flag. Status-only changes therefore reach the UI within 60ms
+    /// dirty flag. Status-only changes therefore reach the UI within 60ms
     /// and bursty chunks are folded into one emit.
     pub fn publish_state(self: &Arc<Self>) {
-        if self.state_publish_pending.swap(true, Ordering::SeqCst) {
+        self.publish_dirty.store(true, Ordering::SeqCst);
+        let Ok(guard) = Arc::clone(&self.publish_lock).try_lock_owned() else {
             return;
-        }
+        };
         let this = Arc::clone(self);
         tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(60)).await;
-            this.publish_state_now();
-            this.state_publish_pending.store(false, Ordering::SeqCst);
+            let guard = guard;
+            // The first caller's dirty bit is represented by this task itself;
+            // clear it before waiting so the first publish below is not
+            // followed by a duplicate one.
+            this.publish_dirty.store(false, Ordering::SeqCst);
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+                this.publish_state_now();
+                if !this.publish_dirty.swap(false, Ordering::SeqCst) {
+                    // Release the scheduling lock first, then check for a
+                    // caller that set the dirty bit while the lock was still
+                    // held (that caller could not schedule its own task).
+                    drop(guard);
+                    if this.publish_dirty.load(Ordering::SeqCst) {
+                        this.publish_state_now();
+                    }
+                    return;
+                }
+            }
         });
     }
 

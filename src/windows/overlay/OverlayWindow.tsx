@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { I18N } from "../../lib/i18n";
-import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
-import { isTauri, overlaySetSize } from "../../lib/ipc";
+import { isTauri } from "../../lib/ipc";
 import { useStore } from "../../lib/store";
 import { OVERLAY_ACTIVITY_PHASES, hexToRgba } from "../../lib/types";
 import { ControlButton } from "./ControlButton";
@@ -64,9 +63,9 @@ export function OverlayWindow() {
   // history (that was the main cost during live listening). Rows depend on
   // the history array reference, not the whole subtitles object.
   const rows = useMemo(
-    () => computeVisibleRows(session.subtitles, segmentLength),
-    // computeVisibleRows reads only subtitles.history; keying on the array
-    // reference (plus segmentLength) makes draft churn a no-op here.
+    () => computeVisibleRows(session.subtitles.history, segmentLength),
+    // Keying on the history array reference (plus segmentLength) makes
+    // draft churn a no-op here.
     [session.subtitles.history, segmentLength],
   );
   // The live preview line is the timeline's LAST row (dimmed with a trailing
@@ -75,7 +74,8 @@ export function OverlayWindow() {
   // ~400ms after the last update instead of flickering on every recognition
   // block. A final-but-not-yet-committed line is shown as-is.
   const draft = useMemo(
-    () => visibleDraft(session.subtitles),
+    () =>
+      visibleDraft(session.subtitles.translation, session.subtitles.history),
     [session.subtitles.translation, session.subtitles.history],
   );
   const draftText = useStableText(
@@ -110,13 +110,8 @@ export function OverlayWindow() {
     void setOverlayCollapsed(!collapsed);
   };
 
-  const handleResize = (width: number, height: number, x?: number, y?: number) => {
+  const handleResize = (width: number, height: number) => {
     setOverlaySize({ width, height });
-    if (!isTauri) return;
-    if (x !== undefined && y !== undefined) {
-      void getCurrentWindow().setPosition(new LogicalPosition(x, y)).catch(() => {});
-    }
-    void overlaySetSize(width, height);
   };
 
   const content = (
@@ -308,7 +303,7 @@ export function OverlayWindow() {
       <div
         className="relative h-full w-full"
         role="group"
-        aria-label={`字幕已收起，${phaseLabel}`}
+        aria-label={`${I18N.overlay.collapsedAccessibilityPrefix}${phaseLabel}`}
         style={{
           borderRadius: 14,
           background: "rgba(0,0,0,0.68)",

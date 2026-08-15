@@ -958,7 +958,8 @@ pub fn ensure_settings_window(app: &AppHandle) {
             WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html".into()))
                 .title(dev_title("mimi 设置"))
                 .inner_size(560.0, 570.0)
-                .resizable(false)
+                .min_inner_size(560.0, 570.0)
+                .resizable(true)
                 .center()
                 .visible(true);
         if let Err(error) = builder.build() {
