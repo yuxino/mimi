@@ -151,7 +151,7 @@ function PickerRow({
       type="button"
       onClick={onSelect}
       disabled={disabled}
-      className="flex w-full items-center"
+      className="ux-hover flex w-full items-center"
       style={{
         gap: 8,
         height: 26,

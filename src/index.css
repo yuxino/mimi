@@ -79,3 +79,18 @@ body.settings-body {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+
+/* Subtle brightness feedback for interactive controls. */
+button.ux-hover {
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+button.ux-hover:hover {
+  filter: brightness(1.12);
+}
+
+button.ux-hover:active {
+  filter: brightness(0.94);
+  transform: scale(0.98);
+}
