@@ -57,6 +57,15 @@ pub fn run() {
             windows::TrayPanelManager::ensure(&app_handle);
             windows::LanguagePopoverManager::ensure(&app_handle);
 
+            // Dev builds open the overlay's WebView inspector so the waveform
+            // DOM/animation can be inspected live (release builds ship with
+            // devtools compiled out unless the `devtools` feature is on).
+            if windows::is_dev_build() {
+                if let Some(window) = app.get_webview_window("overlay") {
+                    let _ = window.open_devtools();
+                }
+            }
+
             setup_tray(&app_handle)?;
             setup_global_shortcut(&app_handle, Arc::clone(&session))?;
 
