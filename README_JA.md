@@ -38,12 +38,12 @@ mimiは、日本語の「耳（みみ）」に由来する名前です。デバ�
 ## はじめ方
 
 1. [Releases](https://github.com/yuxino/mimi/releases/latest) からお使いのプラットフォーム版をダウンロードします。
-2. アリババクラウド Model Studio の Workspace ID と API キーを設定します。
+2. アリババクラウド Model Studio（DashScope）の API キーを設定します。
 3. 動画などを再生し、「開始」をクリックします。
 
-API キーは OS のキーチェーン（macOS キーチェーン / Windows 資格情報マネージャー）に保存されます。Workspace ID と API キーは同じ華北2（北京）リージョンのワークスペースのものを使用してください。モデル利用には料金がかかる場合があります。
+API キーは OS のキーチェーン（macOS キーチェーン / Windows 資格情報マネージャー）に保存されます。mimi は DashScope の統合エンドポイントを利用するため、API キーのみで動作し、Workspace ID は不要です。モデル利用には料金がかかる場合があります。
 
-[API キーの作成](https://help.aliyun.com/zh/model-studio/get-api-key) · [Workspace ID の確認](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)
+[API キーの作成](https://help.aliyun.com/zh/model-studio/get-api-key)
 
 ### プラットフォームについて
 
