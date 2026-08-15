@@ -7,10 +7,9 @@ import { OVERLAY_ACTIVITY_PHASES, hexToRgba } from "../../lib/types";
 import { ControlButton } from "./ControlButton";
 import { DragHandle } from "./DragHandle";
 import { LanguagePickerPopover } from "./LanguagePickerPopover";
-import { RecognitionActivityIndicator } from "./RecognitionActivityIndicator";
+import { PulseRing } from "./PulseRing";
 import { ResizeHandles } from "./ResizeHandles";
 import { Timeline } from "./Timeline";
-import { WaveformIndicator } from "./WaveformIndicator";
 import { useStableText } from "./animation";
 import { visibleDraftSegments } from "./segmenter";
 import {
@@ -223,7 +222,7 @@ export function OverlayWindow() {
             >
               {session.isActive && (
                 <div className="flex items-center" style={{ height: 56 }}>
-                  <WaveformIndicator phase={phase} />
+                  <PulseRing phase={phase} />
                 </div>
               )}
               <div
@@ -255,7 +254,7 @@ export function OverlayWindow() {
             >
               <span className="flex-1" />
               <div style={{ opacity: 0.65 }}>
-                <WaveformIndicator phase={phase} compact />
+                <PulseRing phase={phase} compact />
               </div>
               <span
                 style={{
@@ -356,7 +355,7 @@ export function OverlayWindow() {
           style={{ gap: 8, padding: "0 10px" }}
         >
           <DragHandle onToggleCollapsed={toggleCollapsed} compact />
-          <RecognitionActivityIndicator phase={phase} />
+          <PulseRing phase={phase} compact />
           <span
             className="truncate"
             style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.76)" }}
