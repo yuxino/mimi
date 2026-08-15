@@ -184,13 +184,13 @@ export function OverlayWindow() {
         />
 
         <div className="relative flex h-full flex-col" style={{ padding: 5 }}>
-          {/* Top band: the drag handle is centered horizontally in the
-              window and aligned to the bottom of the band (matching the
-              original layout); the language capsule and the control buttons
-              float at the band's corners so the handle never shifts with
-              their widths. */}
+          {/* Top band: the drag handle is absolutely positioned — centered
+              horizontally on the window (left 50% + translateX) and pinned
+              to the band's bottom — so no flex layout or the capsule/button
+              widths can shift it. The band itself only carries the opacity
+              fade and lets pointer events through except on the handle. */}
           <div
-            className="absolute inset-x-0 top-0 flex items-end justify-center"
+            className="absolute inset-x-0 top-0"
             style={{
               height: topBandHeight,
               pointerEvents: "none",
@@ -201,7 +201,15 @@ export function OverlayWindow() {
               transition: "opacity 160ms ease-out",
             }}
           >
-            <div style={{ pointerEvents: "auto" }}>
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: 0,
+                transform: "translateX(-50%)",
+                pointerEvents: "auto",
+              }}
+            >
               <DragHandle
                 onToggleCollapsed={toggleCollapsed}
                 width={dragHandleWidth}
