@@ -38,12 +38,12 @@
 ## 开始使用
 
 1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载对应平台版本。
-2. 填入阿里云百炼 Workspace ID 和 API Key。
+2. 填入阿里云百炼（DashScope）API Key。
 3. 播放内容，点击 **开始**。
 
-API Key 保存在系统钥匙串中（macOS 钥匙串 / Windows 凭据管理器）。Workspace ID 和 API Key 需要来自华北 2（北京）的同一个业务空间，模型调用可能产生费用。
+API Key 保存在系统钥匙串中（macOS 钥匙串 / Windows 凭据管理器）。mimi 使用 DashScope 统一端点，只需 API Key 即可，无需 Workspace ID。模型调用可能产生费用。
 
-[创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key) · [查找 Workspace ID](https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id)
+[创建 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)
 
 ### 平台说明
 

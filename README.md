@@ -38,12 +38,12 @@ Turn Chinese, Japanese, English, or Korean audio playing on your device into liv
 ## Get started
 
 1. Download the latest version for your platform from [Releases](https://github.com/yuxino/mimi/releases/latest).
-2. Add your Alibaba Cloud Model Studio Workspace ID and API key.
+2. Add your Alibaba Cloud Model Studio (DashScope) API key.
 3. Play something and select **Start**.
 
-Your API key is stored in the OS keychain (macOS Keychain / Windows Credential Manager). The Workspace ID and API key must belong to the same China (Beijing) workspace. Model usage may incur charges.
+Your API key is stored in the OS keychain (macOS Keychain / Windows Credential Manager). mimi talks to DashScope's unified endpoints with the API key alone — no Workspace ID needed. Model usage may incur charges.
 
-[Create an API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Find your Workspace ID](https://help.aliyun.com/en/model-studio/obtain-the-app-id-and-workspace-id)
+[Create an API key](https://help.aliyun.com/en/model-studio/get-api-key)
 
 ### Platform notes
 
