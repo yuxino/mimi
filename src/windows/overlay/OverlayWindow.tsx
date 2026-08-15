@@ -186,7 +186,7 @@ export function OverlayWindow() {
               // Always-visible drag affordance: dimmed while idle, full on
               // hover. A fully transparent handle leaves no cue that the
               // overlay can be moved.
-              opacity: isHovering ? 1 : 0.45,
+              opacity: isHovering ? 1 : session.isActive ? 0.45 : 0.6,
               transition: "opacity 160ms ease-out",
             }}
           >
@@ -265,7 +265,9 @@ export function OverlayWindow() {
           </div>
         )}
 
-        {session.isActive && !settings.isOverlayLocked && (
+        {session.isActive &&
+          !settings.isOverlayLocked &&
+          (isHovering || session.isPaused) && (
           <div
             className="absolute flex"
             style={{ top: 10, right: 10, gap: 4 }}

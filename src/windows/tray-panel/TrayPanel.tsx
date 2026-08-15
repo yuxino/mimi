@@ -231,7 +231,7 @@ function TrayButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="ux-hover flex w-full items-center"
+      className="ux-hover ux-hover-bg flex w-full items-center"
       style={{
         gap: 8,
         height: 26,

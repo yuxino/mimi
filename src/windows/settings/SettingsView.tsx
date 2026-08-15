@@ -336,6 +336,7 @@ export function SettingsView() {
 
           {showsServiceSettings && (
             <div
+              className="settings-panel"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -354,6 +355,12 @@ export function SettingsView() {
                   onChange={(event) => {
                     setApiKey(event.target.value);
                     setCredentialMessage(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void saveCredentials();
+                    }
                   }}
                   style={textFieldStyle}
                 />
