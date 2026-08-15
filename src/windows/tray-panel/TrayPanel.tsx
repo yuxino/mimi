@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { Icon } from "../../components/Icon";
 import { Switch } from "../../components/Switch";
-import { I18N } from "../../lib/i18n";
+import { I18N, setStoredUiLanguage, type UiLanguage } from "../../lib/i18n";
 import { isTauri } from "../../lib/ipc";
 import { useStore } from "../../lib/store";
 import {
   SOURCE_LANGUAGE_QUICK_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
+  detectedLanguageDisplayName,
   targetLanguageTranslatesAudio,
   type SessionStateEvent,
   type SettingsDraft,
@@ -25,11 +26,9 @@ export function TrayPanel() {
   // Narrow selectors: this window never shows subtitle text, so subscribing
   // to the whole session object would re-render it on every streaming event.
   const sessionStatus = useStore((state) => state.session.status);
-  const isActive = useStore((state) => state.session.isActive);
   const isPaused = useStore((state) => state.session.isPaused);
+  const detectedLanguage = useStore((state) => state.session.detectedLanguage);
   const settings = useStore((state) => state.settings);
-  const start = useStore((state) => state.start);
-  const stop = useStore((state) => state.stop);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
   const setOverlayLocked = useStore((state) => state.setOverlayLocked);
   const saveSettings = useStore((state) => state.saveSettings);
@@ -47,18 +46,16 @@ export function TrayPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLiveSubtitles = (checked: boolean) => {
-    if (checked) {
-      prepareLanguagePreferences(settings, saveSettings);
-      void start();
-    } else {
-      void stop();
-    }
-  };
-
   const handleLock = (checked: boolean) => {
     void setOverlayLocked(checked);
     void saveSettings({ isOverlayLocked: checked }).catch(() => {});
+  };
+
+  const handleUiLanguage = (language: UiLanguage) => {
+    setStoredUiLanguage(language);
+    void saveSettings({ uiLanguage: language })
+      .catch(() => {})
+      .finally(() => window.location.reload());
   };
 
   const pickerValue = settings.sourceLanguage;
@@ -92,14 +89,6 @@ export function TrayPanel() {
 
         <Divider />
 
-        <ToggleRow
-          icon={isActive ? "waveform" : "waveform-slash"}
-          label={I18N.tray.liveSubtitles}
-          hint={shortcutHint()}
-          checked={isActive}
-          onChange={handleLiveSubtitles}
-        />
-
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
             {I18N.tray.sourceLanguage}
@@ -130,6 +119,33 @@ export function TrayPanel() {
           </select>
         </div>
 
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
+            {I18N.settings.appLanguage}
+          </span>
+          <select
+            value={settings.uiLanguage ?? "system"}
+            aria-label={I18N.settings.appLanguage}
+            onChange={(event) =>
+              handleUiLanguage(event.target.value as UiLanguage)
+            }
+            style={{
+              height: 28,
+              padding: "0 8px",
+              borderRadius: 6,
+              background: "rgba(255,255,255,0.06)",
+              color: "rgba(255,255,255,0.9)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              fontSize: 13,
+            }}
+          >
+            <option value="system">{I18N.settings.systemLanguage}</option>
+            <option value="zh">{I18N.settings.chinese}</option>
+            <option value="en">{I18N.settings.english}</option>
+            <option value="ja">{I18N.settings.japanese}</option>
+          </select>
+        </div>
+
         <div
           style={{
             display: "flex",
@@ -147,9 +163,15 @@ export function TrayPanel() {
             }
             style={{ fontSize: 12 }}
           />
-          {targetLanguageTranslatesAudio(settings.targetLanguage)
-            ? `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}翻译`
-            : I18N.tray.originalOnly}
+          {(() => {
+            const detected =
+              settings.sourceLanguage === "auto" && detectedLanguage
+                ? `${detectedLanguageDisplayName(detectedLanguage)} · `
+                : "";
+            return targetLanguageTranslatesAudio(settings.targetLanguage)
+              ? `${detected}${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}${I18N.overlay.translationSuffix}`
+              : `${detected}${I18N.tray.originalOnly}`;
+          })()}
         </div>
 
         <ToggleRow
@@ -191,25 +213,19 @@ export function TrayPanel() {
 }
 
 function ToggleRow({
-  icon,
   label,
-  hint,
   checked,
   onChange,
 }: {
-  icon?: "waveform" | "waveform-slash";
   label: string;
-  hint?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-      {icon && <Icon name={icon} style={{ fontSize: 14 }} />}
       <span style={{ flex: 1, fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
         {label}
       </span>
-      {hint && <span style={{ fontSize: 11, color: SECONDARY }}>{hint}</span>}
       <Switch checked={checked} onChange={onChange} aria-label={label} />
     </div>
   );
@@ -231,7 +247,7 @@ function TrayButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="flex w-full items-center"
+      className="ux-hover ux-hover-bg flex w-full items-center"
       style={{
         gap: 8,
         height: 26,
@@ -291,11 +307,6 @@ function statusColor(
   }
 }
 
-function shortcutHint(): string {
-  const isMac = navigator.platform.toLowerCase().includes("mac");
-  return isMac ? "⌘⇧ Space" : "Ctrl+Shift+Space";
-}
-
 function prepareLanguagePreferences(
   settings: SettingsSnapshot,
   saveSettings: (draft: SettingsDraft) => Promise<void>,
@@ -306,7 +317,7 @@ function prepareLanguagePreferences(
   const source = settings.sourceLanguage;
   let target = settings.targetLanguage;
   if (source === "zh") target = "original";
-  if (source !== settings.sourceLanguage || target !== settings.targetLanguage) {
+  if (target !== settings.targetLanguage) {
     void saveSettings({ sourceLanguage: source, targetLanguage: target }).catch(
       () => {},
     );

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

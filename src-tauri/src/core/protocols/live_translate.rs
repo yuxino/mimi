@@ -48,22 +48,6 @@ impl LiveTranslateEndpoint {
     }
 }
 
-/// `qwen3-asr-flash-realtime` endpoint: dedicated realtime ASR without
-/// translation.
-pub struct RealtimeASREndpoint {
-    pub url: url::Url,
-}
-
-impl RealtimeASREndpoint {
-    pub const MODEL: &'static str = "qwen3-asr-flash-realtime";
-
-    pub fn new() -> Result<Self, LiveTranslateProtocolError> {
-        Ok(Self {
-            url: realtime_url(Self::MODEL)?,
-        })
-    }
-}
-
 fn next_event_id() -> String {
     format!("event_{}", Uuid::new_v4().simple())
 }
@@ -121,46 +105,6 @@ impl LiveTranslateRequestEncoder {
             "event_id": event_id.unwrap_or(&next_event_id()),
             "type": "session.finish"
         }))
-    }
-}
-
-/// Encoder for the dedicated realtime-ASR (`qwen3-asr-flash-realtime`) session.
-pub enum RealtimeASRRequestEncoder {}
-
-impl RealtimeASRRequestEncoder {
-    pub fn session_update(
-        source_language: SourceLanguage,
-        event_id: Option<&str>,
-    ) -> Result<Value, LiveTranslateProtocolError> {
-        let mut transcription = json!({});
-        if source_language != SourceLanguage::Automatic {
-            transcription["language"] = json!(source_language.raw_value());
-        }
-        Ok(json!({
-            "event_id": event_id.unwrap_or(&next_event_id()),
-            "type": "session.update",
-            "session": {
-                "input_audio_format": "pcm",
-                "sample_rate": 16_000,
-                "input_audio_transcription": transcription,
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": 0.2,
-                    "silence_duration_ms": 400
-                }
-            }
-        }))
-    }
-
-    pub fn audio_append(
-        pcm_data: &[u8],
-        event_id: Option<&str>,
-    ) -> Result<Value, LiveTranslateProtocolError> {
-        LiveTranslateRequestEncoder::audio_append(pcm_data, event_id)
-    }
-
-    pub fn finish(event_id: Option<&str>) -> Result<Value, LiveTranslateProtocolError> {
-        LiveTranslateRequestEncoder::finish(event_id)
     }
 }
 
@@ -298,15 +242,6 @@ mod tests {
     }
 
     #[test]
-    fn asr_endpoint_builds_the_dedicated_realtime_url() {
-        let endpoint = RealtimeASREndpoint::new().unwrap();
-        assert_eq!(
-            endpoint.url.as_str(),
-            "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime"
-        );
-    }
-
-    #[test]
     fn session_update_requests_text_only_chinese_translation_and_source_transcript() {
         let data = LiveTranslateRequestEncoder::session_update(
             SourceLanguage::Japanese,
@@ -369,49 +304,6 @@ mod tests {
     fn finish_event_uses_the_documented_type() {
         let json = LiveTranslateRequestEncoder::finish(Some("event-finish")).unwrap();
         assert_eq!(json["type"], "session.finish");
-    }
-
-    #[test]
-    fn asr_session_uses_a_balanced_noise_threshold_with_low_latency_silence() {
-        let data = RealtimeASRRequestEncoder::session_update(
-            SourceLanguage::Japanese,
-            Some("event-session"),
-        )
-        .unwrap();
-        let session = &data["session"];
-        let transcription = &session["input_audio_transcription"];
-        let turn_detection = &session["turn_detection"];
-
-        assert_eq!(data["type"], "session.update");
-        assert_eq!(session["sample_rate"], 16_000);
-        assert_eq!(session["input_audio_format"], "pcm");
-        assert_eq!(transcription["language"], "ja");
-        assert_eq!(turn_detection["type"], "server_vad");
-        assert_eq!(turn_detection["threshold"], 0.2);
-        assert_eq!(turn_detection["silence_duration_ms"], 400);
-    }
-
-    #[test]
-    fn automatic_asr_omits_the_language_hint() {
-        let data = RealtimeASRRequestEncoder::session_update(
-            SourceLanguage::Automatic,
-            Some("event-auto"),
-        )
-        .unwrap();
-        let transcription = &data["session"]["input_audio_transcription"];
-        assert!(transcription.get("language").is_none());
-    }
-
-    #[test]
-    fn asr_audio_and_finish_requests_use_realtime_event_types() {
-        let audio =
-            RealtimeASRRequestEncoder::audio_append(&[0x00, 0x7F, 0xFF], Some("event-audio"))
-                .unwrap();
-        let finish = RealtimeASRRequestEncoder::finish(Some("event-finish")).unwrap();
-
-        assert_eq!(audio["type"], "input_audio_buffer.append");
-        assert_eq!(audio["audio"], "AH//");
-        assert_eq!(finish["type"], "session.finish");
     }
 
     #[test]

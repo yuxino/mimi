@@ -47,6 +47,10 @@ pub struct Preferences {
     pub overlay_locked: bool,
     pub overlay_frame: Option<OverlayFrame>,
     pub frame_layout_version: u64,
+    /// UI language override: `None` follows the system language, `"zh"` forces
+    /// Chinese, `"en"` forces English. Kept in preferences so the choice
+    /// survives app restarts.
+    pub ui_language: Option<String>,
     /// The app identity (bundle id) the keychain item's access-control list
     /// was last rebound to (see `SettingsStore::rebind_keychain_acl`).
     /// `None` means it has never been rebound for this identity.
@@ -63,6 +67,7 @@ impl Default for Preferences {
             overlay_locked: false,
             overlay_frame: None,
             frame_layout_version: 0,
+            ui_language: None,
             keychain_rebound_identity: None,
         }
     }
@@ -280,13 +285,10 @@ impl SettingsStore {
         .map_err(|error| error.to_string())
     }
 
-    /// Applies the listening-time language adjustments: automatic source
-    /// becomes Japanese, Chinese source switches to original subtitles.
-    /// Applies the listening-time language adjustments: Chinese source forces
+    /// Applies the listening-time language adjustment: Chinese source forces
     /// original subtitles. Automatic source stays in the preferences as the
-    /// user's choice; the recognition engine's concrete language (Japanese,
-    /// matching the original app's auto→ja preparation) is resolved when the
-    /// session clients are built.
+    /// user's choice; the recognition engine's concrete language is resolved
+    /// when the session clients are built.
     pub fn prepare_for_listening(&self) {
         let mut prefs = self.prefs.lock().unwrap();
         if prefs.source_language == SourceLanguage::Chinese {

@@ -7,6 +7,5 @@ pub mod diagnostics;
 pub mod models;
 pub mod pcm16;
 pub mod protocols;
-pub mod segmenter;
 pub mod session;
 pub mod subtitle_reducer;

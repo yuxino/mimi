@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { I18N } from "../../lib/i18n";
-import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
-import { isTauri, overlaySetSize } from "../../lib/ipc";
+import { isTauri } from "../../lib/ipc";
 import { useStore } from "../../lib/store";
 import { OVERLAY_ACTIVITY_PHASES, hexToRgba } from "../../lib/types";
 import { ControlButton } from "./ControlButton";
@@ -41,11 +40,6 @@ export function OverlayWindow() {
 
   const [isHovering, setIsHovering] = useState(false);
   const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
-  // Keep the drag handle clear of the language capsule (~122px) and the
-  // control buttons (~140px) when the window is narrow.
-  const windowWidth =
-    typeof window !== "undefined" ? window.innerWidth : overlaySize.width;
-  const dragHandleWidth = Math.max(48, Math.min(120, windowWidth - 290));
 
   const collapsed = session.isOverlayCollapsed;
   const phase = computeActivityPhase(session, settings);
@@ -64,9 +58,9 @@ export function OverlayWindow() {
   // history (that was the main cost during live listening). Rows depend on
   // the history array reference, not the whole subtitles object.
   const rows = useMemo(
-    () => computeVisibleRows(session.subtitles, segmentLength),
-    // computeVisibleRows reads only subtitles.history; keying on the array
-    // reference (plus segmentLength) makes draft churn a no-op here.
+    () => computeVisibleRows(session.subtitles.history, segmentLength),
+    // Keying on the history array reference (plus segmentLength) makes
+    // draft churn a no-op here.
     [session.subtitles.history, segmentLength],
   );
   // The live preview line is the timeline's LAST row (dimmed with a trailing
@@ -75,7 +69,8 @@ export function OverlayWindow() {
   // ~400ms after the last update instead of flickering on every recognition
   // block. A final-but-not-yet-committed line is shown as-is.
   const draft = useMemo(
-    () => visibleDraft(session.subtitles),
+    () =>
+      visibleDraft(session.subtitles.translation, session.subtitles.history),
     [session.subtitles.translation, session.subtitles.history],
   );
   const draftText = useStableText(
@@ -110,13 +105,8 @@ export function OverlayWindow() {
     void setOverlayCollapsed(!collapsed);
   };
 
-  const handleResize = (width: number, height: number, x?: number, y?: number) => {
+  const handleResize = (width: number, height: number) => {
     setOverlaySize({ width, height });
-    if (!isTauri) return;
-    if (x !== undefined && y !== undefined) {
-      void getCurrentWindow().setPosition(new LogicalPosition(x, y)).catch(() => {});
-    }
-    void overlaySetSize(width, height);
   };
 
   const content = (
@@ -160,6 +150,7 @@ export function OverlayWindow() {
       ? hexToRgba(ACCENT, 0.34)
       : "rgba(255,255,255,0.12)";
     const borderWidth = hoverHighlight ? 1 : 0.75;
+    const topBandHeight = (session.isActive ? 38 : 24) + 13;
 
     return (
       <div
@@ -184,21 +175,89 @@ export function OverlayWindow() {
         />
 
         <div className="relative flex h-full flex-col" style={{ padding: 5 }}>
+          {/* Top band: language capsule, drag handle, and control buttons in
+              one flex row. The handle sits in the flexible middle slot, so it
+              stays centered between the capsule and the buttons regardless of
+              the capsule's width (which varies a lot by language) or the
+              window width — no fixed reservations needed. */}
           <div
-            className="absolute inset-x-0 top-0 flex items-end justify-center"
+            className="absolute inset-x-0 top-0 flex items-center"
             style={{
-              height: (session.isActive ? 38 : 24) + 13,
+              height: topBandHeight,
+              padding: "0 10px",
+              gap: 8,
               // Always-visible drag affordance: dimmed while idle, full on
               // hover. A fully transparent handle leaves no cue that the
               // overlay can be moved.
-              opacity: isHovering ? 1 : 0.45,
+              opacity: isHovering ? 1 : session.isActive ? 0.45 : 0.6,
               transition: "opacity 160ms ease-out",
             }}
           >
-            <DragHandle
-              onToggleCollapsed={toggleCollapsed}
-              width={dragHandleWidth}
-            />
+            {status !== null && (
+              <LanguagePickerPopover
+                phase={phase}
+                isHovering={isHovering}
+                isPaused={session.isPaused}
+                isWaitingForFinalTranslation={isWaiting}
+                settings={settings}
+                detectedLanguage={detectedLanguage}
+                onSwitchSourceLanguage={(language) =>
+                  void switchSourceLanguage(language)
+                }
+                onSwitchTranslationMode={(mode) =>
+                  void switchTranslationMode(mode)
+                }
+              />
+            )}
+
+            <div
+              className="flex h-full min-w-0 flex-1 items-center justify-center"
+              style={{ pointerEvents: "none" }}
+            >
+              <div style={{ pointerEvents: "auto" }}>
+                <DragHandle
+                  onToggleCollapsed={toggleCollapsed}
+                  width={120}
+                />
+              </div>
+            </div>
+
+            {session.isActive && !settings.isOverlayLocked && (
+              <div
+                className="flex"
+                style={{
+                  gap: 4,
+                  opacity: isHovering || session.isPaused ? 1 : 0,
+                  pointerEvents:
+                    isHovering || session.isPaused ? "auto" : "none",
+                  transition: "opacity 120ms ease",
+                }}
+              >
+                <ControlButton
+                  icon={session.isPaused ? "play" : "pause"}
+                  label={pauseLabel}
+                  onClick={() => void togglePaused()}
+                />
+                <ControlButton
+                  icon="chevron-up"
+                  label={I18N.overlay.collapseSubtitle}
+                  onClick={() => void setOverlayCollapsed(true)}
+                  data-testid="collapse-subtitles"
+                />
+                {hasContent && (
+                  <ControlButton
+                    icon="eraser"
+                    label={I18N.overlay.clearSubtitles}
+                    onClick={() => void clearSubtitles()}
+                  />
+                )}
+                <ControlButton
+                  icon="gear"
+                  label={I18N.overlay.openSettings}
+                  onClick={() => void showSettings()}
+                />
+              </div>
+            )}
           </div>
 
           <div
@@ -210,7 +269,7 @@ export function OverlayWindow() {
               // frame — otherwise subtitle rows slide underneath the
               // controls and overlap them. (+13 matches the handle's lowered
               // position so the pill never overlaps the first row.)
-              paddingTop: (session.isActive ? 38 : 24) + 13,
+              paddingTop: topBandHeight,
               height: "100%",
             }}
           >
@@ -247,58 +306,6 @@ export function OverlayWindow() {
           )}
           </div>
         </div>
-
-        {/* Quick language / translation-mode switcher. Always visible so the
-            user can switch before starting to listen, not only while active
-            (the Swift original only showed it while listening). */}
-        {status !== null && (
-          <div className="absolute" style={{ top: 10, left: 12 }}>
-            <LanguagePickerPopover
-              phase={phase}
-              isHovering={isHovering}
-              isPaused={session.isPaused}
-              isWaitingForFinalTranslation={isWaiting}
-              settings={settings}
-              detectedLanguage={detectedLanguage}
-              onSwitchSourceLanguage={(language) =>
-                void switchSourceLanguage(language)
-              }
-              onSwitchTranslationMode={(mode) =>
-                void switchTranslationMode(mode)
-              }
-            />
-          </div>
-        )}
-
-        {session.isActive && !settings.isOverlayLocked && (
-          <div
-            className="absolute flex"
-            style={{ top: 10, right: 10, gap: 4 }}
-          >
-            <ControlButton
-              icon={session.isPaused ? "play" : "pause"}
-              label={pauseLabel}
-              onClick={() => void togglePaused()}
-            />
-            <ControlButton
-              icon="chevron-up"
-              label={I18N.overlay.collapseSubtitle}
-              onClick={() => void setOverlayCollapsed(true)}
-            />
-            {hasContent && (
-              <ControlButton
-                icon="eraser"
-                label={I18N.overlay.clearSubtitles}
-                onClick={() => void clearSubtitles()}
-              />
-            )}
-            <ControlButton
-              icon="gear"
-              label={I18N.overlay.openSettings}
-              onClick={() => void showSettings()}
-            />
-          </div>
-        )}
       </div>
     );
   }
@@ -308,7 +315,7 @@ export function OverlayWindow() {
       <div
         className="relative h-full w-full"
         role="group"
-        aria-label={`字幕已收起，${phaseLabel}`}
+        aria-label={`${I18N.overlay.collapsedAccessibilityPrefix}${phaseLabel}`}
         style={{
           borderRadius: 14,
           background: "rgba(0,0,0,0.68)",
@@ -316,6 +323,12 @@ export function OverlayWindow() {
         }}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
+        onWheel={(event) => {
+          if (event.deltaY !== 0) {
+            event.preventDefault();
+            void setOverlayCollapsed(false);
+          }
+        }}
       >
         <div
           style={{
@@ -349,6 +362,7 @@ export function OverlayWindow() {
             icon="chevron-down"
             label={I18N.overlay.expandSubtitle}
             onClick={() => void setOverlayCollapsed(false)}
+            data-testid="expand-subtitles"
           />
         </div>
       </div>

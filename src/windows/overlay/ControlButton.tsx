@@ -4,17 +4,24 @@ interface ControlButtonProps {
   icon: IconName;
   label: string;
   onClick: () => void;
+  "data-testid"?: string;
 }
 
 /** 24×24 rounded control with a 10pt icon (matches `OverlayControlButton`). */
-export function ControlButton({ icon, label, onClick }: ControlButtonProps) {
+export function ControlButton({
+  icon,
+  label,
+  onClick,
+  "data-testid": dataTestId,
+}: ControlButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="flex items-center justify-center"
+      data-testid={dataTestId}
+      className="ux-hover flex items-center justify-center"
       style={{
         width: 24,
         height: 24,

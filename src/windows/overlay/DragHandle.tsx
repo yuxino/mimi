@@ -28,20 +28,22 @@ export function DragHandle({
   const height = compact ? 30 : 18;
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || !isTauri) return;
+    if (event.button !== 0) return;
     if (event.detail === 2) {
       // Second press of a double-click: toggle instead of dragging, exactly
-      // like the Swift `mouseDown` `clickCount == 2` branch.
+      // like the Swift `mouseDown` `clickCount == 2` branch. This also
+      // covers the plain-vite preview, where `startDragging` is a no-op.
       onToggleCollapsed();
       return;
     }
+    if (!isTauri) return;
     void getCurrentWindow().startDragging();
   };
 
   return (
     <div
+      data-testid="drag-handle"
       onMouseDown={handleMouseDown}
-      onDoubleClick={onToggleCollapsed}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={I18N.overlay.dragTooltip}

@@ -6,6 +6,8 @@ import {
   I18N,
   credentialLoadErrorMessage,
   sessionConnectingText,
+  setStoredUiLanguage,
+  type UiLanguage,
 } from "../../lib/i18n";
 import { useStore } from "../../lib/store";
 import {
@@ -151,7 +153,7 @@ export function SettingsView() {
               type="button"
               disabled={sessionStatus.kind === "stopping"}
               onClick={() => (isActive ? void stop() : startListening())}
-              className="flex items-center"
+              className="ux-hover flex items-center"
               style={{
                 gap: 6,
                 minWidth: 62,
@@ -182,7 +184,7 @@ export function SettingsView() {
               </span>
               <span style={{ flex: 1 }} />
               <span
-                className="flex items-center"
+                className="ux-hover flex items-center"
                 style={{
                   gap: 5,
                   fontSize: 11,
@@ -204,7 +206,7 @@ export function SettingsView() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               <SectionLabel>{I18N.settings.sourceLanguage}</SectionLabel>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
                   <SourceLanguageButton
                     key={language}
@@ -306,10 +308,36 @@ export function SettingsView() {
         </Card>
 
         <Card>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <SettingsRow label={I18N.settings.appLanguage}>
+              <Select
+                value={settings.uiLanguage ?? "system"}
+                disabled={false}
+                aria-label={I18N.settings.appLanguage}
+                onChange={(value) => {
+                  const language = value as UiLanguage;
+                  setStoredUiLanguage(language);
+                  void saveSettings({ uiLanguage: language })
+                    .catch(() => {})
+                    .finally(() => window.location.reload());
+                }}
+                options={[
+                  { value: "system", label: I18N.settings.systemLanguage },
+                  { value: "zh", label: I18N.settings.chinese },
+                  { value: "en", label: I18N.settings.english },
+                  { value: "ja", label: I18N.settings.japanese },
+                ]}
+              />
+            </SettingsRow>
+            <CaptionText>{I18N.settings.languageHelp}</CaptionText>
+          </div>
+        </Card>
+
+        <Card>
           <button
             type="button"
             onClick={() => setShowsServiceSettings((value) => !value)}
-            className="flex w-full items-center"
+            className="ux-hover flex w-full items-center"
             style={{
               gap: 10,
               background: "none",
@@ -336,6 +364,7 @@ export function SettingsView() {
 
           {showsServiceSettings && (
             <div
+              className="settings-panel"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -355,6 +384,12 @@ export function SettingsView() {
                     setApiKey(event.target.value);
                     setCredentialMessage(null);
                   }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void saveCredentials();
+                    }
+                  }}
                   style={textFieldStyle}
                 />
               </div>
@@ -365,6 +400,7 @@ export function SettingsView() {
                 <button
                   type="button"
                   onClick={() => void saveCredentials()}
+                  className="ux-hover"
                   style={{
                     height: 28,
                     padding: "0 14px",
@@ -471,16 +507,19 @@ function Select({
   disabled,
   onChange,
   options,
+  "aria-label": ariaLabel,
 }: {
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+  "aria-label"?: string;
 }) {
   return (
     <select
       value={value}
       disabled={disabled}
+      aria-label={ariaLabel}
       onChange={(event) => onChange(event.target.value)}
       style={{
         width: 168,
@@ -519,11 +558,13 @@ function SourceLanguageButton({
       type="button"
       disabled={disabled}
       onClick={onSelect}
-      className="flex flex-1 items-center justify-center"
+      className="ux-hover flex flex-1 items-center justify-center"
       title={sourceLanguageButtonHelp(language)}
       style={{
         gap: 6,
         height: 34,
+        minWidth: 88,
+        flex: "1 1 88px",
         borderRadius: 9,
         border: `0.75px solid ${
           selected ? "rgba(52,120,240,0.34)" : "rgba(255,255,255,0.07)"
@@ -553,7 +594,7 @@ function CredentialFeedback({
 }) {
   return (
     <div
-      className="flex items-center"
+      className="ux-hover flex items-center"
       style={{ gap: 6, fontSize: 12, color: isError ? RED : GREEN }}
     >
       <Icon
@@ -675,7 +716,7 @@ function translationBadgeText(settings: SettingsSnapshot): string {
   return settings.sourceLanguage === "zh" &&
     settings.targetLanguage === "original"
     ? I18N.settings.originalOnlyBadge
-    : `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}翻译`;
+    : `${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}${I18N.overlay.translationSuffix}`;
 }
 
 function translationBadgeIcon(settings: SettingsSnapshot): IconName {
@@ -733,7 +774,7 @@ function listeningPreferencesDraft(
   const source = settings.sourceLanguage;
   let target = settings.targetLanguage;
   if (source === "zh") target = "original";
-  if (source !== settings.sourceLanguage || target !== settings.targetLanguage) {
+  if (target !== settings.targetLanguage) {
     return { sourceLanguage: source, targetLanguage: target };
   }
   return null;

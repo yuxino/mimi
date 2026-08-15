@@ -247,9 +247,9 @@ impl Audio3ASRClient {
     /// Sends `finish-task`, waits briefly for `task-finished`, then
     /// disconnects.
     pub async fn finish(&self, timeout: Duration) {
-        let Some(_sink) = self.inner.sink.lock().await.as_ref() else {
+        if self.inner.sink.lock().await.is_none() {
             return;
-        };
+        }
         let task_id = self.task_id.lock().await.clone().unwrap_or_default();
         if let Ok(command) = Audio3ASRRequestEncoder::finish_task(&task_id) {
             let _ = self.send_text(command.to_string()).await;

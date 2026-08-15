@@ -75,10 +75,6 @@ export function overlayShow(): Promise<void> {
   return invoke("overlay_show");
 }
 
-export function overlaySetSize(width: number, height: number): Promise<void> {
-  return invoke("overlay_set_size", { width, height });
-}
-
 /** Toggles the language/mode popover window, anchored under the overlay's
  * language capsule (the anchor is derived from the overlay window's own
  * position backend-side). The overlay window itself is never resized for the

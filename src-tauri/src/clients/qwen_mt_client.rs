@@ -3,9 +3,8 @@
 
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use crate::core::protocols::qwen_mt::{
-    QwenMTClientError, QwenMTDomainHint, QwenMTEndpoint, QwenMTMemoryPair, QwenMTModel,
-    QwenMTProtocolError, QwenMTRequestEncoder, QwenMTResponseDecoder, QwenMTStreamDecoder,
-    QwenMTTerm,
+    QwenMTClientError, QwenMTEndpoint, QwenMTMemoryPair, QwenMTModel, QwenMTProtocolError,
+    QwenMTRequestEncoder, QwenMTResponseDecoder, QwenMTStreamDecoder, QwenMTTerm,
 };
 use futures_util::StreamExt;
 use std::time::Duration;
@@ -145,32 +144,32 @@ impl QwenMTClient {
 
         let mut stream = response.bytes_stream();
         let mut translation = String::new();
-        let mut buffer = String::new();
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut done = false;
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|_| QwenMTClientError::InvalidHTTPResponse)?;
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
-            while let Some(newline) = buffer.find('\n') {
-                let line: String = buffer.drain(..=newline).collect();
+            buffer.extend_from_slice(&chunk);
+            while let Some(newline) = buffer.iter().position(|&byte| byte == b'\n') {
+                let line_bytes: Vec<u8> = buffer.drain(..=newline).collect();
+                let line = String::from_utf8(line_bytes)
+                    .map_err(|_| QwenMTClientError::InvalidHTTPResponse)?;
                 let line = line.trim_end();
-                let Some(payload) = line.strip_prefix("data:") else {
-                    continue;
-                };
-                let payload = payload.trim();
-                if payload.is_empty() {
-                    continue;
-                }
-                if payload == "[DONE]" {
+                if handle_sse_line(line, &mut translation, &on_partial)? {
+                    done = true;
                     break;
                 }
-                let content = QwenMTStreamDecoder::decode_chunk(payload)
-                    .map_err(|_| QwenMTClientError::InvalidHTTPResponse)?;
-                if let Some(content) = content {
-                    if !content.is_empty() {
-                        translation.push_str(&content);
-                        on_partial(translation.clone());
-                    }
-                }
             }
+            if done {
+                break;
+            }
+        }
+        // Tolerate a missing trailing newline by processing the final partial
+        // line as well (only if we have not already seen [DONE]).
+        if !done && !buffer.is_empty() {
+            let line = String::from_utf8(std::mem::take(&mut buffer))
+                .map_err(|_| QwenMTClientError::InvalidHTTPResponse)?;
+            let line = line.trim_end();
+            handle_sse_line(line, &mut translation, &on_partial)?;
         }
 
         let trimmed = translation.trim().to_string();
@@ -212,6 +211,34 @@ impl QwenMTClient {
     }
 }
 
+/// Handles one SSE `data:` line, appending decoded content to `translation`.
+/// Returns `true` when the stream has reached `[DONE]`.
+fn handle_sse_line(
+    line: &str,
+    translation: &mut String,
+    on_partial: &(impl Fn(String) + Send + Sync),
+) -> Result<bool, QwenMTClientError> {
+    let Some(payload) = line.strip_prefix("data:") else {
+        return Ok(false);
+    };
+    let payload = payload.trim();
+    if payload.is_empty() {
+        return Ok(false);
+    }
+    if payload == "[DONE]" {
+        return Ok(true);
+    }
+    let content = QwenMTStreamDecoder::decode_chunk(payload)
+        .map_err(|_| QwenMTClientError::InvalidHTTPResponse)?;
+    if let Some(content) = content {
+        if !content.is_empty() {
+            translation.push_str(&content);
+            on_partial(translation.clone());
+        }
+    }
+    Ok(false)
+}
+
 fn error_message(data: &[u8]) -> String {
     #[derive(serde::Deserialize)]
     struct ErrorBody {
@@ -228,17 +255,35 @@ fn error_message(data: &[u8]) -> String {
         .unwrap_or_default()
 }
 
-/// Domain hint and filler terms for a (source, target) pair, matching the
-/// Swift `HighQualityTranslationClient` construction.
-pub fn spoken_dialogue_config(
-    source_language: SourceLanguage,
-    target_language: TargetLanguage,
-) -> (Option<String>, Vec<QwenMTTerm>) {
-    (
-        Some(QwenMTDomainHint::spoken_dialogue(
-            source_language,
-            target_language,
-        )),
-        QwenMTDomainHint::filler_terms(source_language, target_language),
-    )
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sse_line_appends_content_and_reports_done() {
+        let mut translation = String::new();
+        let partials = std::sync::Mutex::new(Vec::new());
+
+        let handled = handle_sse_line(
+            r#"data:{"choices":[{"delta":{"content":"今天"}}]}"#,
+            &mut translation,
+            &|text| partials.lock().unwrap().push(text),
+        )
+        .unwrap();
+        assert!(!handled);
+        assert_eq!(translation, "今天");
+        assert_eq!(*partials.lock().unwrap(), vec!["今天".to_string()]);
+
+        let done = handle_sse_line("data: [DONE]", &mut translation, &|_| {}).unwrap();
+        assert!(done);
+        assert_eq!(translation, "今天");
+    }
+
+    #[test]
+    fn non_data_lines_are_ignored() {
+        let mut translation = String::new();
+        let handled = handle_sse_line("event: message", &mut translation, &|_| {}).unwrap();
+        assert!(!handled);
+        assert!(translation.is_empty());
+    }
 }

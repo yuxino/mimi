@@ -79,3 +79,57 @@ body.settings-body {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+
+/* Subtle brightness feedback for interactive controls. */
+button.ux-hover {
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+button.ux-hover:hover {
+  filter: brightness(1.12);
+}
+
+button.ux-hover:active {
+  filter: brightness(0.94);
+  transform: scale(0.98);
+}
+
+/* Accessible focus ring for keyboard navigation. */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[role="switch"]:focus-visible {
+  outline: 2px solid rgba(122, 168, 255, 0.85);
+  outline-offset: 2px;
+}
+
+/* Settings service panel reveal. */
+@keyframes settings-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-panel {
+  animation: settings-panel-enter 160ms ease-out;
+}
+
+/* Background hover for list-style buttons (tray rows, picker rows). */
+button.ux-hover-bg {
+  transition: background-color 120ms ease, filter 120ms ease;
+  border-radius: 6px;
+}
+
+button.ux-hover-bg:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+button.ux-hover-bg:active {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
