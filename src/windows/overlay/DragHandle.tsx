@@ -42,6 +42,7 @@ export function DragHandle({
 
   return (
     <div
+      data-testid="drag-handle"
       onMouseDown={handleMouseDown}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
