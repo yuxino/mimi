@@ -47,29 +47,18 @@ export function SettingsView() {
   const setOverlayLocked = useStore((state) => state.setOverlayLocked);
 
   const [showsServiceSettings, setShowsServiceSettings] = useState(
-    () =>
-      settings.workspaceID.trim() === "" ||
-      !settings.hasAPIKey ||
-      settings.credentialLoadError !== null,
+    () => !settings.hasAPIKey || settings.credentialLoadError !== null,
   );
   const [credentialMessage, setCredentialMessage] = useState<string | null>(
     null,
   );
   const [credentialMessageIsError, setCredentialMessageIsError] =
     useState(false);
-  const [workspaceID, setWorkspaceID] = useState(settings.workspaceID);
-  const [previousWorkspaceID, setPreviousWorkspaceID] = useState(
-    settings.workspaceID,
-  );
   const [previousAPIKey, setPreviousAPIKey] = useState(settings.apiKey);
   const [apiKey, setApiKey] = useState(settings.apiKey);
 
-  // Keep the editable fields in sync with settings loaded asynchronously
+  // Keep the editable field in sync with settings loaded asynchronously
   // after mount (React's "adjust state during render" pattern).
-  if (settings.workspaceID !== previousWorkspaceID) {
-    setPreviousWorkspaceID(settings.workspaceID);
-    setWorkspaceID(settings.workspaceID);
-  }
   if (settings.apiKey !== previousAPIKey) {
     setPreviousAPIKey(settings.apiKey);
     setApiKey(settings.apiKey);
@@ -95,7 +84,7 @@ export function SettingsView() {
 
   const saveCredentials = async () => {
     try {
-      await saveSettings({ workspaceID, apiKey });
+      await saveSettings({ apiKey });
       setCredentialMessage(I18N.settings.credentialsSaved);
       setCredentialMessageIsError(false);
     } catch (error) {
@@ -104,8 +93,7 @@ export function SettingsView() {
     }
   };
 
-  const credentialsAreConfigured =
-    settings.workspaceID.trim() !== "" && settings.hasAPIKey;
+  const credentialsAreConfigured = settings.hasAPIKey;
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -356,20 +344,6 @@ export function SettingsView() {
               }}
             >
               <Divider />
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <SectionLabel>{I18N.settings.workspaceID}</SectionLabel>
-                <input
-                  type="text"
-                  value={workspaceID}
-                  placeholder={I18N.settings.workspaceIDPlaceholder}
-                  onChange={(event) => {
-                    setWorkspaceID(event.target.value);
-                    setCredentialMessage(null);
-                  }}
-                  style={textFieldStyle}
-                />
-              </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <SectionLabel>{I18N.settings.apiKey}</SectionLabel>

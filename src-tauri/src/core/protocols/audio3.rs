@@ -1,13 +1,18 @@
 //! Audio 3.0 high-quality ASR protocol (`qwen-audio-3.0-asr-flash-streaming`
-//! over `/api-ws/v1/inference`), ported 1:1 from
-//! `Sources/MimiCore/Audio3ASRProtocol.swift`.
+//! over DashScope's unified `/api-ws/v1/inference` endpoint), ported 1:1 from
+//! `Sources/MimiCore/Audio3ASRProtocol.swift`. The unified endpoint is
+//! authenticated with a Bearer API key only — no workspace id.
 
-use crate::core::configuration::is_valid_workspace_id;
 use crate::core::models::SourceLanguage;
 use crate::core::protocols::live_translate::{
-    LiveTranslateProtocolError, LiveTranslateServerEvent, WORKSPACE_HOST_SUFFIX,
+    LiveTranslateProtocolError, LiveTranslateServerEvent,
 };
 use serde_json::{json, Value};
+
+/// DashScope unified WebSocket endpoint for streaming inference (same
+/// protocol as the old MaaS `{workspace}.cn-beijing.maas.aliyuncs.com` host,
+/// but no workspace-id in the URL — auth is `Authorization: Bearer <key>`).
+pub const DASHSCOPE_INFERENCE_WS: &str = "wss://dashscope.aliyuncs.com/api-ws/v1/inference";
 
 #[derive(Clone)]
 pub struct Audio3ASREndpoint {
@@ -17,13 +22,10 @@ pub struct Audio3ASREndpoint {
 impl Audio3ASREndpoint {
     pub const MODEL: &'static str = "qwen-audio-3.0-asr-flash-streaming";
 
-    pub fn new(workspace_id: &str) -> Result<Self, LiveTranslateProtocolError> {
-        if !is_valid_workspace_id(workspace_id) {
-            return Err(LiveTranslateProtocolError::InvalidWorkspaceID);
-        }
-        let raw = format!("wss://{workspace_id}{WORKSPACE_HOST_SUFFIX}/api-ws/v1/inference");
+    pub fn new() -> Result<Self, LiveTranslateProtocolError> {
         Ok(Self {
-            url: url::Url::parse(&raw).map_err(|_| LiveTranslateProtocolError::InvalidEndpoint)?,
+            url: url::Url::parse(DASHSCOPE_INFERENCE_WS)
+                .map_err(|_| LiveTranslateProtocolError::InvalidEndpoint)?,
         })
     }
 }
@@ -219,11 +221,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn audio3_endpoint_uses_the_binary_inference_websocket() {
-        let endpoint = Audio3ASREndpoint::new("ws-abc123").unwrap();
+    fn audio3_endpoint_uses_the_unified_inference_websocket() {
+        let endpoint = Audio3ASREndpoint::new().unwrap();
         assert_eq!(
             endpoint.url.as_str(),
-            "wss://ws-abc123.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference"
+            "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
         );
     }
 

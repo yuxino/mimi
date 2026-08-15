@@ -25,7 +25,6 @@ pub struct QwenMTClient {
 impl QwenMTClient {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        workspace_id: &str,
         api_key: &str,
         source_language: SourceLanguage,
         target_language: TargetLanguage,
@@ -39,8 +38,7 @@ impl QwenMTClient {
             return Err(QwenMTClientError::MissingAPIKey);
         }
         Ok(Self {
-            endpoint: QwenMTEndpoint::new(workspace_id)
-                .map_err(|_| QwenMTClientError::InvalidHTTPResponse)?,
+            endpoint: QwenMTEndpoint::new().map_err(|_| QwenMTClientError::InvalidHTTPResponse)?,
             api_key: trimmed_key.to_string(),
             source_language,
             target_language,

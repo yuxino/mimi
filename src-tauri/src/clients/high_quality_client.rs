@@ -61,7 +61,6 @@ pub struct HighQualityTranslationClient {
 impl HighQualityTranslationClient {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        workspace_id: &str,
         api_key: &str,
         source_language: SourceLanguage,
         target_language: TargetLanguage,
@@ -71,7 +70,7 @@ impl HighQualityTranslationClient {
         long_incomplete_commit_threshold: usize,
         events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
     ) -> Result<Self, QwenMTClientError> {
-        let asr_client = Audio3ASRClient::new(workspace_id, api_key, source_language)
+        let asr_client = Audio3ASRClient::new(api_key, source_language)
             .map_err(|_| QwenMTClientError::MissingAPIKey)?;
         let streams_finals = final_model != QwenMTModel::Plus;
         let domain_hint = Some(
@@ -85,7 +84,6 @@ impl HighQualityTranslationClient {
             target_language,
         );
         let mt = QwenMTClient::new(
-            workspace_id,
             api_key,
             source_language,
             target_language,

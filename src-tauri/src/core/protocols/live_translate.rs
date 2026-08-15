@@ -1,8 +1,9 @@
 //! Live-translate and realtime-ASR WebSocket protocols, ported 1:1 from
 //! `Sources/MimiCore/LiveTranslateProtocol.swift` and
-//! `Sources/MimiCore/RealtimeASRProtocol.swift`.
+//! `Sources/MimiCore/RealtimeASRProtocol.swift`. Both speak to DashScope's
+//! unified realtime endpoint, authenticated with a Bearer API key only — no
+//! workspace id in the URL.
 
-use crate::core::configuration::is_valid_workspace_id;
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use base64::Engine;
 use serde_json::{json, Value};
@@ -12,8 +13,6 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LiveTranslateProtocolError {
-    #[error("The Workspace ID is not valid.")]
-    InvalidWorkspaceID,
     #[error("The live translation endpoint could not be created.")]
     InvalidEndpoint,
     #[error("The live translation service returned invalid JSON.")]
@@ -22,14 +21,13 @@ pub enum LiveTranslateProtocolError {
     MissingEventType,
 }
 
-pub const WORKSPACE_HOST_SUFFIX: &str = ".cn-beijing.maas.aliyuncs.com";
+/// DashScope unified realtime WebSocket endpoint. The old MaaS host put the
+/// workspace id in the URL (`{workspace}.cn-beijing.maas.aliyuncs.com`);
+/// the unified host authenticates with `Authorization: Bearer <key>` alone.
+pub const DASHSCOPE_REALTIME_WS: &str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime";
 
-fn realtime_url(workspace_id: &str, model: &str) -> Result<url::Url, LiveTranslateProtocolError> {
-    if !is_valid_workspace_id(workspace_id) {
-        return Err(LiveTranslateProtocolError::InvalidWorkspaceID);
-    }
-    let raw =
-        format!("wss://{workspace_id}{WORKSPACE_HOST_SUFFIX}/api-ws/v1/realtime?model={model}");
+fn realtime_url(model: &str) -> Result<url::Url, LiveTranslateProtocolError> {
+    let raw = format!("{DASHSCOPE_REALTIME_WS}?model={model}");
     url::Url::parse(&raw).map_err(|_| LiveTranslateProtocolError::InvalidEndpoint)
 }
 
@@ -43,9 +41,9 @@ pub struct LiveTranslateEndpoint {
 impl LiveTranslateEndpoint {
     pub const MODEL: &'static str = "qwen3.5-livetranslate-flash-realtime";
 
-    pub fn new(workspace_id: &str) -> Result<Self, LiveTranslateProtocolError> {
+    pub fn new() -> Result<Self, LiveTranslateProtocolError> {
         Ok(Self {
-            url: realtime_url(workspace_id, Self::MODEL)?,
+            url: realtime_url(Self::MODEL)?,
         })
     }
 }
@@ -59,9 +57,9 @@ pub struct RealtimeASREndpoint {
 impl RealtimeASREndpoint {
     pub const MODEL: &'static str = "qwen3-asr-flash-realtime";
 
-    pub fn new(workspace_id: &str) -> Result<Self, LiveTranslateProtocolError> {
+    pub fn new() -> Result<Self, LiveTranslateProtocolError> {
         Ok(Self {
-            url: realtime_url(workspace_id, Self::MODEL)?,
+            url: realtime_url(Self::MODEL)?,
         })
     }
 }
@@ -291,33 +289,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn endpoint_builds_the_beijing_realtime_url() {
-        let endpoint = LiveTranslateEndpoint::new("ws-abc123").unwrap();
+    fn endpoint_builds_the_unified_realtime_url() {
+        let endpoint = LiveTranslateEndpoint::new().unwrap();
         assert_eq!(
             endpoint.url.as_str(),
-            "wss://ws-abc123.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=qwen3.5-livetranslate-flash-realtime"
+            "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3.5-livetranslate-flash-realtime"
         );
     }
 
     #[test]
     fn asr_endpoint_builds_the_dedicated_realtime_url() {
-        let endpoint = RealtimeASREndpoint::new("ws-abc123").unwrap();
+        let endpoint = RealtimeASREndpoint::new().unwrap();
         assert_eq!(
             endpoint.url.as_str(),
-            "wss://ws-abc123.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime"
+            "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime"
         );
-    }
-
-    #[test]
-    fn endpoint_rejects_host_injection() {
-        assert!(matches!(
-            LiveTranslateEndpoint::new("bad.example.com"),
-            Err(LiveTranslateProtocolError::InvalidWorkspaceID)
-        ));
-        assert!(matches!(
-            RealtimeASREndpoint::new("bad.example.com"),
-            Err(LiveTranslateProtocolError::InvalidWorkspaceID)
-        ));
     }
 
     #[test]
