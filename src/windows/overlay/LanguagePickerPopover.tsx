@@ -15,7 +15,7 @@ import {
   type SourceLanguage,
   type TranslationMode,
 } from "../../lib/types";
-import { RecognitionActivityIndicator } from "./RecognitionActivityIndicator";
+import { PulseRing } from "./PulseRing";
 import {
   languageStatus,
   sourceLanguageButtonTitle,
@@ -104,7 +104,7 @@ export function LanguagePickerPopover({
           cursor: canInteract ? "pointer" : "default",
         }}
       >
-        <RecognitionActivityIndicator phase={phase} />
+        <PulseRing phase={phase} compact />
         {(isPaused || isWaitingForFinalTranslation) && (
           <>
             <span style={{ color: overlayPhaseColor(phase, 0.96) }}>
