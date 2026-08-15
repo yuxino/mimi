@@ -100,7 +100,6 @@ export function OverlayWindow() {
   }, [rows, draftText, segmentLength]);
   const status = languageStatus(settings, detectedLanguage);
   const hasContent = hasSubtitleContent(session.subtitles);
-  const hasAnyRows = allRows.length > 0;
 
   const phaseLabel = OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel;
   const pauseLabel = session.isPaused
@@ -245,28 +244,6 @@ export function OverlayWindow() {
               fontSize={settings.fontSize}
               draft={draftText !== ""}
             />
-          )}
-
-          {hasAnyRows && session.isActive && (
-            <div
-              className="flex items-center"
-              style={{ gap: 7, height: 24, padding: "5px 18px 7px" }}
-            >
-              <span className="flex-1" />
-              <div style={{ opacity: 0.65 }}>
-                <PulseRing phase={phase} compact />
-              </div>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  color: "rgba(255,255,255,0.6)",
-                }}
-              >
-                {phaseLabel}
-              </span>
-              <span className="flex-1" />
-            </div>
           )}
           </div>
         </div>
