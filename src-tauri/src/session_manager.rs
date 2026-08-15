@@ -94,6 +94,11 @@ pub struct SessionManager {
     health_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     recovery_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     pump_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+    /// Fires when a translation stays pending too long (e.g. the server never
+    /// returns the final for an incomplete sentence after the audio stops).
+    /// Clears `is_translation_pending` so the UI does not sit on
+    /// "正在翻译" forever; the shown draft/history is untouched.
+    translation_timeout_task: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 impl SessionManager {
@@ -114,6 +119,7 @@ impl SessionManager {
             health_task: Arc::new(Mutex::new(None)),
             recovery_task: Arc::new(Mutex::new(None)),
             pump_task: Arc::new(Mutex::new(None)),
+            translation_timeout_task: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -312,6 +318,7 @@ impl SessionManager {
 
         self.stop_health_checks().await;
         self.cancel_recovery().await;
+        self.cancel_translation_timeout();
         *self.active_settings.lock().unwrap() = None;
         self.is_recovering.store(false, Ordering::SeqCst);
         self.is_paused.store(false, Ordering::SeqCst);
@@ -358,6 +365,7 @@ impl SessionManager {
         self.is_paused.store(true, Ordering::SeqCst);
         self.stop_health_checks().await;
         self.cancel_recovery().await;
+        self.cancel_translation_timeout();
         self.is_recovering.store(false, Ordering::SeqCst);
         self.controller.lock().unwrap().did_pause();
         self.publish_state();
@@ -509,11 +517,24 @@ impl SessionManager {
         if let LiveTranslateServerEvent::Error { code, message } = &event {
             if code == "transport_error" {
                 pipeline_log!("session transport error code={}", code);
+                self.cancel_translation_timeout();
                 self.controller.lock().unwrap().begin_connecting();
                 self.publish_state();
                 self.queue_recovery(message.clone()).await;
                 return;
             }
+        }
+
+        // A final translation resolves any pending timeout; a fresh
+        // TranslationStarted arms a new one.
+        if matches!(
+            event,
+            LiveTranslateServerEvent::TranslationFinal(_) | LiveTranslateServerEvent::Error { .. }
+        ) {
+            self.cancel_translation_timeout();
+        }
+        if matches!(event, LiveTranslateServerEvent::TranslationStarted) {
+            self.arm_translation_timeout();
         }
 
         self.controller.lock().unwrap().handle(event.clone());
@@ -537,6 +558,29 @@ impl SessionManager {
                 client.disconnect().await;
             }
             *self.active_settings.lock().unwrap() = None;
+        }
+    }
+
+    /// Arms a timer that clears a stuck "正在翻译" state. The low-latency
+    /// stream protocol synthesizes TranslationStarted at the source final,
+    /// then waits for the server's `response.text.done`; if the audio stops
+    /// mid-sentence the server may never finalize, so without this the UI
+    /// would stay pending forever. The shown subtitle is left untouched.
+    fn arm_translation_timeout(self: &Arc<Self>) {
+        self.cancel_translation_timeout();
+        let this = Arc::clone(self);
+        let task = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+            pipeline_log!("translation pending timed out; clearing");
+            this.controller.lock().unwrap().clear_translation_pending();
+            this.publish_state();
+        });
+        *self.translation_timeout_task.lock().unwrap() = Some(task);
+    }
+
+    fn cancel_translation_timeout(self: &Arc<Self>) {
+        if let Some(task) = self.translation_timeout_task.lock().unwrap().take() {
+            task.abort();
         }
     }
 

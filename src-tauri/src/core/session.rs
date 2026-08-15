@@ -46,6 +46,14 @@ impl TranslationSessionController {
         self.state.is_translation_pending = false;
     }
 
+    /// Clears only the waiting-for-final flag (the "正在翻译" indicator)
+    /// without touching status or subtitles. Used by the translation-timeout
+    /// guard when the server never returns a final (e.g. audio stopped
+    /// mid-sentence); the draft/history already shown stays on screen.
+    pub fn clear_translation_pending(&mut self) {
+        self.state.is_translation_pending = false;
+    }
+
     pub fn begin_stopping(&mut self) {
         self.state.status = SessionStatus::Stopping;
         self.state.is_translation_pending = false;
@@ -249,6 +257,26 @@ mod tests {
         assert_eq!(controller.state.status, SessionStatus::Listening);
         assert!(!controller.state.is_translation_pending);
         assert_eq!(controller.state.subtitles, subtitles_before_pause);
+    }
+
+    #[test]
+    fn clearing_translation_pending_keeps_status_and_subtitles() {
+        let mut controller = TranslationSessionController::default();
+        controller.did_connect();
+        controller.handle(LiveTranslateServerEvent::SourceFinal {
+            text: "Hello.".into(),
+            language: Some("en".into()),
+        });
+        controller.handle(LiveTranslateServerEvent::TranslationStarted);
+        assert!(controller.state.is_translation_pending);
+        let subtitles_before = controller.state.subtitles.clone();
+
+        // The timeout guard clears only the waiting-for-final flag.
+        controller.clear_translation_pending();
+
+        assert_eq!(controller.state.status, SessionStatus::Listening);
+        assert!(!controller.state.is_translation_pending);
+        assert_eq!(controller.state.subtitles, subtitles_before);
     }
 
     #[test]
