@@ -1,13 +1,11 @@
 import type { CSSProperties } from "react";
 import {
   AlertTriangle,
-  AudioLines,
   Captions,
   CircleCheck,
   Check,
   ChevronDown,
   ChevronUp,
-  CircleSlash,
   Eraser,
   Key,
   Pause,
@@ -39,8 +37,6 @@ export type IconName =
   | "checkmark-circle"
   | "captions-bubble"
   | "text-quote"
-  | "waveform"
-  | "waveform-slash"
   | "key"
   | "exclamation-triangle";
 
@@ -57,8 +53,6 @@ const ICONS: Record<IconName, LucideIcon> = {
   "checkmark-circle": CircleCheck,
   "captions-bubble": Captions,
   "text-quote": Quote,
-  waveform: AudioLines,
-  "waveform-slash": CircleSlash,
   key: Key,
   "exclamation-triangle": AlertTriangle,
 };
