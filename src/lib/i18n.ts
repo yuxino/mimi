@@ -1,21 +1,21 @@
 /**
  * UI copy, copied verbatim from the Swift views. Strings are grouped by
  * window. Tray strings, language/mode display names, and the overlay copy
- * follow the system language (Chinese UI on zh-* systems, English otherwise).
- * The overlay activity-phase labels live in `types.ts` (the
- * `OverlayActivityPhase` table) so they stay adjacent to their
- * color/amplitude parameters.
+ * follow the system language (Chinese UI on zh-* systems, Japanese on ja-*
+ * systems, English otherwise). The overlay activity-phase labels live in
+ * `types.ts` (the `OverlayActivityPhase` table) so they stay adjacent to
+ * their color/amplitude parameters.
  */
 
 export const UI_LANGUAGE_STORAGE_KEY = "mimi-ui-language";
 
-export type UiLanguage = "system" | "zh" | "en";
+export type UiLanguage = "system" | "zh" | "en" | "ja";
 
 /** Returns the user-selected UI language override, if any. */
 export function getStoredUiLanguage(): UiLanguage | null {
   try {
     const value = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
-    return value === "zh" || value === "en" || value === "system"
+    return value === "zh" || value === "en" || value === "ja" || value === "system"
       ? value
       : null;
   } catch {
@@ -32,21 +32,25 @@ export function setStoredUiLanguage(language: UiLanguage): void {
   }
 }
 
-/** True when the effective UI language is Chinese (zh-*). A stored override
- * takes precedence over the OS/webview language. */
-export function isChineseSystem(): boolean {
+/** The effective UI language, honoring a stored override over the OS/webview
+ * language. */
+export function effectiveUiLanguage(): "zh" | "en" | "ja" {
   const stored = getStoredUiLanguage();
-  if (stored === "zh") return true;
-  if (stored === "en") return false;
-  return (
-    typeof navigator !== "undefined" &&
-    (navigator.language ?? "").toLowerCase().startsWith("zh")
-  );
+  if (stored === "zh" || stored === "en" || stored === "ja") return stored;
+  const system =
+    typeof navigator !== "undefined" ? (navigator.language ?? "") : "";
+  if (system.toLowerCase().startsWith("zh")) return "zh";
+  if (system.toLowerCase().startsWith("ja")) return "ja";
+  return "en";
+}
+
+/** True when the effective UI language is Chinese (zh-*). */
+export function isChineseSystem(): boolean {
+  return effectiveUiLanguage() === "zh";
 }
 
 const TRAY_ZH = {
   appName: "mimi",
-  liveSubtitles: "实时字幕",
   sourceLanguage: "识别语言",
   chineseSource: "中文原文",
   originalOnly: "只显示中文原文",
@@ -65,7 +69,6 @@ const TRAY_ZH = {
 
 const TRAY_EN = {
   appName: "mimi",
-  liveSubtitles: "Live Subtitles",
   sourceLanguage: "Recognition Language",
   chineseSource: "Chinese (Original)",
   originalOnly: "Original Chinese only",
@@ -80,6 +83,24 @@ const TRAY_EN = {
   listening: "Listening and translating",
   stopping: "Stopping…",
   paused: "Paused",
+};
+
+const TRAY_JA = {
+  appName: "mimi",
+  sourceLanguage: "認識言語",
+  chineseSource: "中国語（原文）",
+  originalOnly: "中国語原文のみ表示",
+  lockPosition: "字幕の位置を固定",
+  showSubtitleWindow: "字幕ウィンドウを表示",
+  clearSubtitles: "字幕をクリア",
+  settings: "設定…",
+  quit: "mimi を終了",
+  setupRequired: "先に設定が必要です",
+  ready: "準備完了",
+  connecting: "接続中…",
+  listening: "聞き取り・翻訳中",
+  stopping: "停止中…",
+  paused: "一時停止中",
 };
 
 const OVERLAY_ZH = {
@@ -158,12 +179,51 @@ const OVERLAY_EN = {
   translationSuffix: " translation",
 };
 
+const OVERLAY_JA = {
+  expandSubtitle: "字幕を展開",
+  collapseSubtitle: "字幕を折りたたむ",
+  collapsedAccessibilityPrefix: "字幕は折りたたまれています、",
+  dragTooltip: "ドラッグで移動。ダブルクリックで折りたたみ・展開",
+  paused: "一時停止中",
+  translating: "翻訳中",
+  dotSeparator: "·",
+  clearSubtitles: "Clear subtitles",
+  openSettings: "Open mimi Settings",
+  listeningEmpty: "聞き取り中 — 翻訳はここに表示されます",
+  connecting: "接続中",
+  translatingEmpty: "翻訳中",
+  stopping: "終了中",
+  idle: "mimi",
+  original: "原文",
+  separator: "→",
+  sourceLanguage: "認識言語",
+  translationMode: "翻訳モード",
+  chineseSource: "中国語（原文）",
+  resume: "翻訳を再開",
+  pause: "翻訳を一時停止",
+  pickerHelpTranslating: "認識言語と翻訳モードを切り替え",
+  pickerHelpOriginal: "認識言語を切り替え",
+  originalOnly: "原文のみ表示",
+  autoDetecting: "自動認識中",
+  autoDetectedPrefix: "自動認識（",
+  autoDetectedSuffix: "）",
+  phaseConnecting: "接続中",
+  phaseListening: "聞き取り中",
+  phaseRecognizing: "認識中",
+  phaseTranslating: "翻訳中",
+  phasePaused: "一時停止中",
+  accessibilityCurrentLanguagePrefix: "、現在の言語：",
+  accessibilityOpenToSwitch: "。開いて認識言語を切り替え。",
+  translationSuffix: "翻訳",
+};
+
 const SETTINGS_ZH = {
   sessionTitle: "实时字幕",
   appLanguage: "界面语言",
   systemLanguage: "跟随系统",
   chinese: "中文",
   english: "English",
+  japanese: "日本語",
   languageHelp: "切换后立即生效。",
   start: "开始",
   stop: "停止",
@@ -201,6 +261,7 @@ const SETTINGS_EN = {
   systemLanguage: "System",
   chinese: "中文",
   english: "English",
+  japanese: "日本語",
   languageHelp: "Applies immediately after switching.",
   start: "Start",
   stop: "Stop",
@@ -232,6 +293,44 @@ const SETTINGS_EN = {
     `Switch to ${language} recognition and keep the current translation mode`,
 };
 
+const SETTINGS_JA = {
+  sessionTitle: "リアルタイム字幕",
+  appLanguage: "表示言語",
+  systemLanguage: "システムに従う",
+  chinese: "中文",
+  english: "English",
+  japanese: "日本語",
+  languageHelp: "切り替えるとすぐに反映されます。",
+  start: "開始",
+  stop: "停止",
+  subtitleTitle: "字幕",
+  sourceLanguage: "認識言語",
+  translateTo: "翻訳先",
+  translationMode: "翻訳モード",
+  fontSize: "字幕サイズ",
+  lockPosition: "字幕の位置を固定",
+  lockHelp: "固定を解除すると、字幕の上部をドラッグして移動したり、端や角からサイズを変更できます。",
+  serviceSettings: "サービス設定",
+  configured: "設定済み",
+  apiKey: "DashScope API Key",
+  apiKeyPlaceholder: "API Key を入力",
+  credentialNote: "認証情報はこの端末にのみ保存されます。API Key はキーチェーンに保存されます。",
+  saveCredentials: "認証情報を保存",
+  credentialsSaved: "認証情報が安全に保存されました。",
+  sessionReady: "準備完了",
+  sessionListening: "認識・翻訳中",
+  sessionStopping: "停止中…",
+  sessionError: "翻訳は一時的に利用できません。もう一度お試しください。",
+  originalOnlyBadge: "原文のみ",
+  recognizingChineseListening: "中国語を認識中。原文のみ表示し、翻訳リクエストは送信しません。",
+  recognizingChineseIdle: "中国語のみ認識して原文を表示します。翻訳リクエストは送信されません。",
+  sourceHelpReconnecting: "切り替えると自動的に再接続し、現在の翻訳モードを維持します。",
+  sourceHelpIdle: "主要言語を選ぶと、文単位の翻訳がより正確になります。",
+  switchToChineseHelp: "中国語認識に切り替え、原文のみ表示",
+  switchToLanguageHelp: (language: string): string =>
+    `「${language}」認識に切り替え、現在の翻訳モードを維持`,
+};
+
 const MODES_ZH = {
   turboHelp: "极速：边识别边用快模型翻译，速度优先，一句话说完即定稿。",
   highQualityHelp: "高质量：整句翻译完成后再显示，最准确，稍有延迟。",
@@ -244,24 +343,31 @@ const MODES_EN = {
   lowLatencyHelp: "Low latency: quick preview + high-quality final, balancing speed and accuracy.",
 };
 
+const MODES_JA = {
+  turboHelp: "最速：認識しながら高速モデルで翻訳し、速度を優先。一文が終わるとすぐに確定します。",
+  highQualityHelp: "高品質：文全体の翻訳が完了してから表示。最も正確で、少し遅延があります。",
+  lowLatencyHelp: "低遅延：高速プレビュー＋高品質な確定版。速度と精度のバランス。",
+};
+
 export const I18N = {
+  overlay: effectiveUiLanguage() === "ja" ? OVERLAY_JA : isChineseSystem() ? OVERLAY_ZH : OVERLAY_EN,
 
-  overlay: isChineseSystem() ? OVERLAY_ZH : OVERLAY_EN,
+  tray: effectiveUiLanguage() === "ja" ? TRAY_JA : isChineseSystem() ? TRAY_ZH : TRAY_EN,
 
-  tray: isChineseSystem() ? TRAY_ZH : TRAY_EN,
+  settings: effectiveUiLanguage() === "ja" ? SETTINGS_JA : isChineseSystem() ? SETTINGS_ZH : SETTINGS_EN,
 
-  settings: isChineseSystem() ? SETTINGS_ZH : SETTINGS_EN,
-
-  modes: isChineseSystem() ? MODES_ZH : MODES_EN,
+  modes: effectiveUiLanguage() === "ja" ? MODES_JA : isChineseSystem() ? MODES_ZH : MODES_EN,
 } as const;
 
 export function sessionConnectingText(modeName: string): string {
+  if (effectiveUiLanguage() === "ja") return `「${modeName}」翻訳に接続中…`;
   return isChineseSystem()
     ? `正在连接${modeName}翻译…`
     : `Connecting to ${modeName} translation…`;
 }
 
 export function credentialLoadErrorMessage(error: string): string {
+  if (effectiveUiLanguage() === "ja") return `保存済みの API Key を読み込めません：${error}`;
   return isChineseSystem()
     ? `无法读取已保存的 API Key：${error}`
     : `Couldn't read the saved API Key: ${error}`;

@@ -40,17 +40,6 @@ export function OverlayWindow() {
 
   const [isHovering, setIsHovering] = useState(false);
   const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
-  // Keep the drag handle clear of the language capsule (which can be ~310px
-  // wide in English) and the control buttons (~150px) when the window is
-  // narrow.
-  const windowWidth =
-    typeof window !== "undefined" ? window.innerWidth : overlaySize.width;
-  const dragReservedLeft = 336;
-  const dragReservedRight = session.isActive ? 156 : 0;
-  const dragHandleWidth = Math.max(
-    48,
-    Math.min(120, windowWidth - dragReservedLeft - dragReservedRight),
-  );
 
   const collapsed = session.isOverlayCollapsed;
   const phase = computeActivityPhase(session, settings);
@@ -161,6 +150,7 @@ export function OverlayWindow() {
       ? hexToRgba(ACCENT, 0.34)
       : "rgba(255,255,255,0.12)";
     const borderWidth = hoverHighlight ? 1 : 0.75;
+    const topBandHeight = (session.isActive ? 38 : 24) + 13;
 
     return (
       <div
@@ -185,12 +175,17 @@ export function OverlayWindow() {
         />
 
         <div className="relative flex h-full flex-col" style={{ padding: 5 }}>
+          {/* Top band: language capsule, drag handle, and control buttons in
+              one flex row. The handle sits in the flexible middle slot, so it
+              stays centered between the capsule and the buttons regardless of
+              the capsule's width (which varies a lot by language) or the
+              window width — no fixed reservations needed. */}
           <div
-            className="absolute inset-x-0 top-0 flex items-end justify-center"
+            className="absolute inset-x-0 top-0 flex items-center"
             style={{
-              height: (session.isActive ? 38 : 24) + 13,
-              paddingLeft: dragReservedLeft,
-              paddingRight: dragReservedRight,
+              height: topBandHeight,
+              padding: "0 10px",
+              gap: 8,
               // Always-visible drag affordance: dimmed while idle, full on
               // hover. A fully transparent handle leaves no cue that the
               // overlay can be moved.
@@ -198,10 +193,71 @@ export function OverlayWindow() {
               transition: "opacity 160ms ease-out",
             }}
           >
-            <DragHandle
-              onToggleCollapsed={toggleCollapsed}
-              width={dragHandleWidth}
-            />
+            {status !== null && (
+              <LanguagePickerPopover
+                phase={phase}
+                isHovering={isHovering}
+                isPaused={session.isPaused}
+                isWaitingForFinalTranslation={isWaiting}
+                settings={settings}
+                detectedLanguage={detectedLanguage}
+                onSwitchSourceLanguage={(language) =>
+                  void switchSourceLanguage(language)
+                }
+                onSwitchTranslationMode={(mode) =>
+                  void switchTranslationMode(mode)
+                }
+              />
+            )}
+
+            <div
+              className="flex h-full min-w-0 flex-1 items-center justify-center"
+              style={{ pointerEvents: "none" }}
+            >
+              <div style={{ pointerEvents: "auto" }}>
+                <DragHandle
+                  onToggleCollapsed={toggleCollapsed}
+                  width={120}
+                />
+              </div>
+            </div>
+
+            {session.isActive && !settings.isOverlayLocked && (
+              <div
+                className="flex"
+                style={{
+                  gap: 4,
+                  opacity: isHovering || session.isPaused ? 1 : 0,
+                  pointerEvents:
+                    isHovering || session.isPaused ? "auto" : "none",
+                  transition: "opacity 120ms ease",
+                }}
+              >
+                <ControlButton
+                  icon={session.isPaused ? "play" : "pause"}
+                  label={pauseLabel}
+                  onClick={() => void togglePaused()}
+                />
+                <ControlButton
+                  icon="chevron-up"
+                  label={I18N.overlay.collapseSubtitle}
+                  onClick={() => void setOverlayCollapsed(true)}
+                  data-testid="collapse-subtitles"
+                />
+                {hasContent && (
+                  <ControlButton
+                    icon="eraser"
+                    label={I18N.overlay.clearSubtitles}
+                    onClick={() => void clearSubtitles()}
+                  />
+                )}
+                <ControlButton
+                  icon="gear"
+                  label={I18N.overlay.openSettings}
+                  onClick={() => void showSettings()}
+                />
+              </div>
+            )}
           </div>
 
           <div
@@ -213,7 +269,7 @@ export function OverlayWindow() {
               // frame — otherwise subtitle rows slide underneath the
               // controls and overlap them. (+13 matches the handle's lowered
               // position so the pill never overlaps the first row.)
-              paddingTop: (session.isActive ? 38 : 24) + 13,
+              paddingTop: topBandHeight,
               height: "100%",
             }}
           >
@@ -250,66 +306,6 @@ export function OverlayWindow() {
           )}
           </div>
         </div>
-
-        {/* Quick language / translation-mode switcher. Always visible so the
-            user can switch before starting to listen, not only while active
-            (the Swift original only showed it while listening). */}
-        {status !== null && (
-          <div className="absolute" style={{ top: 10, left: 12 }}>
-            <LanguagePickerPopover
-              phase={phase}
-              isHovering={isHovering}
-              isPaused={session.isPaused}
-              isWaitingForFinalTranslation={isWaiting}
-              settings={settings}
-              detectedLanguage={detectedLanguage}
-              onSwitchSourceLanguage={(language) =>
-                void switchSourceLanguage(language)
-              }
-              onSwitchTranslationMode={(mode) =>
-                void switchTranslationMode(mode)
-              }
-            />
-          </div>
-        )}
-
-        {session.isActive && !settings.isOverlayLocked && (
-          <div
-            className="absolute flex"
-            style={{
-              top: 10,
-              right: 10,
-              gap: 4,
-              opacity: isHovering || session.isPaused ? 1 : 0,
-              pointerEvents: isHovering || session.isPaused ? "auto" : "none",
-              transition: "opacity 120ms ease",
-            }}
-          >
-            <ControlButton
-              icon={session.isPaused ? "play" : "pause"}
-              label={pauseLabel}
-              onClick={() => void togglePaused()}
-            />
-            <ControlButton
-              icon="chevron-up"
-              label={I18N.overlay.collapseSubtitle}
-              onClick={() => void setOverlayCollapsed(true)}
-              data-testid="collapse-subtitles"
-            />
-            {hasContent && (
-              <ControlButton
-                icon="eraser"
-                label={I18N.overlay.clearSubtitles}
-                onClick={() => void clearSubtitles()}
-              />
-            )}
-            <ControlButton
-              icon="gear"
-              label={I18N.overlay.openSettings}
-              onClick={() => void showSettings()}
-            />
-          </div>
-        )}
       </div>
     );
   }

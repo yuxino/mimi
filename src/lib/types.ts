@@ -6,7 +6,7 @@
  * (language enums, display names, status semantics).
  */
 
-import { I18N, isChineseSystem } from "./i18n";
+import { I18N, effectiveUiLanguage, isChineseSystem } from "./i18n";
 
 // ---------------------------------------------------------------------------
 // Session state
@@ -67,7 +67,7 @@ export interface SettingsSnapshot {
   uiLanguage: UiLanguage | null;
 }
 
-export type UiLanguage = "system" | "zh" | "en";
+export type UiLanguage = "system" | "zh" | "en" | "ja";
 
 export interface SettingsDraft {
   /** Only transmitted on settings_save; never present elsewhere. */
@@ -112,49 +112,73 @@ export const TRANSLATION_MODE_CASES: readonly TranslationMode[] = [
 ];
 
 /** `SourceLanguage.displayName` (Models.swift), following the system language. */
-export const SOURCE_LANGUAGE_DISPLAY_NAMES: Record<SourceLanguage, string> = isChineseSystem()
-  ? {
-      auto: "自动识别",
-      zh: "中文",
-      en: "英语",
-      ja: "日语",
-      ko: "韩语",
-    }
-  : {
-      auto: "Auto Detect",
-      zh: "Chinese",
-      en: "English",
-      ja: "Japanese",
-      ko: "Korean",
-    };
+export const SOURCE_LANGUAGE_DISPLAY_NAMES: Record<SourceLanguage, string> =
+  effectiveUiLanguage() === "ja"
+    ? {
+        auto: "自動認識",
+        zh: "中国語",
+        en: "英語",
+        ja: "日本語",
+        ko: "韓国語",
+      }
+    : isChineseSystem()
+      ? {
+          auto: "自动识别",
+          zh: "中文",
+          en: "英语",
+          ja: "日语",
+          ko: "韩语",
+        }
+      : {
+          auto: "Auto Detect",
+          zh: "Chinese",
+          en: "English",
+          ja: "Japanese",
+          ko: "Korean",
+        };
 
 /** `TargetLanguage.displayName` (Models.swift), following the system language. */
-export const TARGET_LANGUAGE_DISPLAY_NAMES: Record<TargetLanguage, string> = isChineseSystem()
-  ? {
-      original: "原文（不翻译）",
-      zh: "简体中文",
-      en: "英语",
-      ja: "日语",
-    }
-  : {
-      original: "Original (no translation)",
-      zh: "Simplified Chinese",
-      en: "English",
-      ja: "Japanese",
-    };
+export const TARGET_LANGUAGE_DISPLAY_NAMES: Record<TargetLanguage, string> =
+  effectiveUiLanguage() === "ja"
+    ? {
+        original: "原文（翻訳しない）",
+        zh: "簡体中国語",
+        en: "英語",
+        ja: "日本語",
+      }
+    : isChineseSystem()
+      ? {
+          original: "原文（不翻译）",
+          zh: "简体中文",
+          en: "英语",
+          ja: "日语",
+        }
+      : {
+          original: "Original (no translation)",
+          zh: "Simplified Chinese",
+          en: "English",
+          ja: "Japanese",
+        };
 
 /** `TranslationMode.displayName` (Models.swift), following the system language. */
-export const TRANSLATION_MODE_DISPLAY_NAMES: Record<TranslationMode, string> = isChineseSystem()
-  ? {
-      lowLatency: "低延迟",
-      highQuality: "高质量",
-      turbo: "极速",
-    }
-  : {
-      lowLatency: "Low latency",
-      highQuality: "High quality",
-      turbo: "Turbo",
-    };
+export const TRANSLATION_MODE_DISPLAY_NAMES: Record<TranslationMode, string> =
+  effectiveUiLanguage() === "ja"
+    ? {
+        lowLatency: "低遅延",
+        highQuality: "高品質",
+        turbo: "最速",
+      }
+    : isChineseSystem()
+      ? {
+          lowLatency: "低延迟",
+          highQuality: "高质量",
+          turbo: "极速",
+        }
+      : {
+          lowLatency: "Low latency",
+          highQuality: "High quality",
+          turbo: "Turbo",
+        };
 
 /**
  * `DetectedLanguage.displayName` (Models.swift). The incoming code is already
