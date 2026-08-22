@@ -4,9 +4,9 @@
 
 mimi 需要 ScreenCaptureKit 的屏幕与系统音频录制权限。临时签名会随二进制内容变化而改变代码身份，导致 macOS TCC 无法把新的开发构建与已授权版本稳定关联。解决方案是在用户登录钥匙串中保存一个仅用于本机开发的自签名代码签名身份 `mimi Local Development`，私钥不导出、不提交，也不上传到任何服务。
 
-打包脚本按以下顺序选择身份：显式提供的 `MIMI_CODESIGN_IDENTITY`、登录钥匙串中的 `mimi Local Development`、最后才是临时签名 `-`。这保留了其他开发机器的可构建性，同时让当前 Mac 的连续构建拥有相同的指定要求。证书只被用户信任用于代码签名，应用仍使用原有 bundle identifier `app.yuxino.mimi`。
+打包脚本按以下顺序选择身份：显式提供的 `MIMI_CODESIGN_IDENTITY`、登录钥匙串中的 `mimi Local Development`、最后才是临时签名 `-`。发布打包仍允许最后一种回退并给出警告；开发启动则 fail closed，缺少稳定身份时不启动。证书只被用户信任用于代码签名。
 
-验证分为三层：钥匙串必须把本机证书列为有效代码签名身份；连续两次打包得到的 `codesign -d -r-` 指定要求必须一致；最终应用通过 `codesign --verify --deep --strict`。重新签名后的版本需要用户最后授权一次 Screen & System Audio Recording，之后只要继续使用相同证书、bundle identifier 和路径，后续开发构建就能沿用该权限。
+开发版在编译配置与 bundle 中都使用独立 identifier `app.yuxino.mimi.dev`，固定安装到 `/Applications/mimi-dev.app`（可显式覆盖为另一个长期不变的绝对路径），不会覆盖正式版。Tauri 配置目录和系统钥匙串 service 也按该 identifier 隔离，开发调试不会读取或修改正式版档案与凭证。验证分为三层：钥匙串必须把本机证书列为有效代码签名身份；连续两次构建得到的 `codesign -d -r-` 指定要求必须一致；最终应用与实际启动进程都必须通过路径、bundle identifier 和 `codesign --verify --deep --strict` 校验。首次切换到该稳定开发身份仍需授权一次，之后连续构建沿用同一身份。
 
 ## 实现状态（2026-08-14）
 
@@ -14,5 +14,8 @@ mimi 需要 ScreenCaptureKit 的屏幕与系统音频录制权限。临时签名
 
 - `scripts/codesign-identity.sh`：按 `MIMI_CODESIGN_IDENTITY` → `mimi Local Development` → ad-hoc `-` 的顺序选择身份。
 - `scripts/package-app.sh`：`tauri build` 后用所选身份重签 `.app` 并通过 `codesign --verify --deep --strict`（`.dmg` 不重签，正式分发需要 Developer ID + 公证，超出本机开发范围）。
-- `scripts/dev-app.sh`：dev 包裹 `.app` 用同一身份签名。
-- 已对当前安装的 `/Applications/mimi.app` 与 dev 包裹应用重新签名；此后同一台机器上每次构建的指定要求（designated requirement）一致，屏幕录制与钥匙串授权只需各授予一次。
+- `src-tauri/tauri.dev.conf.json`：为开发构建提供独立 product name 与 identifier；设置目录和开发钥匙串 service 不与正式版共享。
+- `scripts/dev-app.sh`：只接受稳定身份；把 dev 配置注入带 `tauri/custom-protocol` 的真实 `.app`，严格验签后通过同卷 staging + 回滚安装到固定路径，并用实际 executable path 验证唯一启动进程。安装期间用 `lockf` 阻止并发替换，恢复失败时保留备份。
+- 开发启动前会拒绝仍在运行的其他 mimi 正式版或开发版，避免旧副本继续占用全局快捷键并以另一身份触发权限请求。
+- `--ui-only` 仍使用同一个稳定 bundle，但应用层保证不访问凭证、网络或系统音频，因此可用于无授权 UI 检查。
+- 不再建议在 macOS 上运行任何 `tauri dev` 命令或裸 `target/*/mimi`；这些 ad-hoc 二进制的指定要求随构建变化。Windows 使用 `npm run tauri:dev` 取得同样的数据隔离。

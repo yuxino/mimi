@@ -229,6 +229,9 @@ impl Audio3ASRClient {
     }
 
     pub async fn ping(&self, timeout: Duration) -> Result<(), Audio3ASRClientError> {
+        let pong = self.inner.pong_notify.notified();
+        tokio::pin!(pong);
+        pong.as_mut().enable();
         {
             let mut sink = self.inner.sink.lock().await;
             let Some(sink) = sink.as_mut() else {
@@ -238,7 +241,7 @@ impl Audio3ASRClient {
                 .await
                 .map_err(|_| Audio3ASRClientError::NotConnected)?;
         }
-        tokio::time::timeout(timeout, self.inner.pong_notify.notified())
+        tokio::time::timeout(timeout, pong)
             .await
             .map_err(|_| Audio3ASRClientError::HealthCheckTimedOut)?;
         Ok(())

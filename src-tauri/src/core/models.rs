@@ -255,8 +255,6 @@ impl<'de> Deserialize<'de> for TranslationMode {
     }
 }
 
-impl TranslationMode {}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionStatus {
     Idle,
@@ -348,6 +346,13 @@ pub enum SubtitleEvent {
     SourceFinal(String),
     TranslationDraft(String),
     TranslationFinal(String),
+    /// Commits a source/translation pair as one reducer operation. Providers
+    /// whose two append-only streams are aligned client-side use this event so
+    /// finals from different connection generations can never be cross-paired.
+    FinalPair {
+        source: String,
+        translation: String,
+    },
     /// Removes the last confirmed history pair so a provisional local commit
     /// can be replaced by the authoritative server final for the same sentence.
     RevokeLastConfirmed,

@@ -17,7 +17,7 @@ body,
 
 /* Settings window gets an opaque background instead. */
 body.settings-body {
-  background: #1e1e1e;
+  background: #101314;
 }
 
 /* Overlay collapse/expand cross-fade (180ms easeInOut, matches Swift). */

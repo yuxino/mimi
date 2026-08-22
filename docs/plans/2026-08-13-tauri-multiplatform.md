@@ -1,5 +1,8 @@
 # mimi Tauri 多平台迁移实施计划
 
+> **状态：历史迁移计划。** 下方 IPC 章节记录的是最初单一阿里云配置的 v1 契约；当前多服务档案与 write-only 凭证契约以
+> `2026-08-22-multi-provider-professional-settings-design.md` 和代码中的类型定义为准。
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 把 Swift/macOS 版 mimi 完全迁移为 Tauri v2 桌面应用（Rust + React/TS），1:1 保留功能与 UI，支持 macOS 与 Windows，验证通过后删除 Swift 源码。
@@ -10,7 +13,7 @@
 
 **关键约定：**
 - 开发期间保留 Swift 源码作为对照参考（git 历史亦有存档）；最终任务在所有验证通过后删除。
-- 所有命令、事件、载荷结构以本文档「IPC 契约」一节为准，前后端并行开发不得偏离。
+- 迁移阶段的命令、事件与载荷曾以本文档「IPC 契约」一节为准；现行契约见上方状态说明。
 - 遵守 AGENTS.md 约束：只采系统音频；不落盘音频/字幕；凭证只进系统钥匙串（keyring），无明文/环境变量回退；诊断日志只含计时、计数、语言码、状态码、错误标签。
 - 每个 Rust 纯逻辑模块 = 先移植原测试（TDD）→ 再移植实现 → 跑测试 → 提交。
 

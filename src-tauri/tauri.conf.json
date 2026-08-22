@@ -14,13 +14,13 @@
       {
         "label": "settings",
         "title": "mimi 设置",
-        "width": 560,
-        "height": 570,
+        "width": 900,
+        "height": 760,
         "resizable": true,
         "center": true,
         "visible": true,
         "minWidth": 560,
-        "minHeight": 570
+        "minHeight": 620
       }
     ],
     "security": {

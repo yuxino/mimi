@@ -2,7 +2,7 @@
 
 ## Project
 
-Mimi is a Tauri v2 desktop app (Rust backend + React/TypeScript frontend) that listens to system audio playing on macOS or Windows and shows live translated subtitles in a floating always-on-top overlay. It streams speech recognition and translation from Alibaba Cloud Model Studio and never records audio.
+Mimi is a Tauri v2 desktop app (Rust backend + React/TypeScript frontend) that listens to system audio playing on macOS or Windows and shows live translated subtitles in a floating always-on-top overlay. It supports built-in Alibaba Cloud and OpenAI Realtime service profiles and never records audio.
 
 Preserve these product constraints:
 
@@ -14,12 +14,12 @@ Preserve these product constraints:
 ## Repository map
 
 - `src-tauri/src/core/`: UI-independent models, configuration, wire protocols, subtitle assembly, text segmentation, and pipeline diagnostics. Pure Rust, fully unit-tested.
-- `src-tauri/src/clients/`: tokio network clients (low-latency live translate WebSocket, Audio 3.0 ASR WebSocket, Qwen-MT HTTP/SSE, and the high-quality pipeline).
+- `src-tauri/src/clients/`: tokio network clients (Alibaba live translate/Audio 3.0/Qwen-MT pipelines and OpenAI Realtime translation).
 - `src-tauri/src/audio/`: system-audio capture (macOS ScreenCaptureKit via `screen-capture-kit`, Windows WASAPI loopback via `cpal` + `rubato`) and the bounded PCM send pipeline.
 - `src-tauri/src/session_manager.rs`: session lifecycle — start/stop/pause/resume, language/mode switching, health checks, automatic reconnection, state events.
-- `src-tauri/src/settings_store.rs`: preferences JSON in the app config directory + keychain credential storage.
+- `src-tauri/src/settings_store.rs`: preferences/profile JSON in the app config directory + provider/profile-scoped keychain credential storage.
 - `src-tauri/src/{commands,windows,lib}.rs`: IPC commands, overlay/tray-panel window management, tray/shortcut wiring.
-- `src/`: React frontend — `src/windows/{overlay,tray-panel,settings}/` replicate the original SwiftUI windows; `src/lib/{ipc,store,types,i18n}.ts` define the IPC contract.
+- `src/`: React frontend — `src/windows/{overlay,tray-panel,settings}/` contain the three product surfaces; `src/lib/{ipc,store,types,i18n}.ts` define the IPC contract.
 - `mimi-web/`: the product website (marketing site, not the app).
 - `docs/plans/`: accepted design notes and implementation plans.
 - `scripts/check.sh`: canonical automated test and strict-build entry point.
@@ -50,8 +50,8 @@ It runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, and the f
 
 Additional checks by change type:
 
-- UI changes: run `npm run tauri dev` and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. `MIMI_UI_TEST=1` seeds demo credentials; `MIMI_AUTO_START=1` additionally starts a session on launch so the failure path (fake credentials) can be exercised without interaction. For the icon-correct macOS dev run (a real .app bundle with the masked Dock icon, window titles/tooltip marked "(dev)"), use `./scripts/dev-app.sh` instead: it builds a release binary with `--features tauri/custom-protocol` (exactly what `tauri build` does — Tauri's `cfg(dev)` is `!custom-protocol`, so without that feature even a release build replaces the Dock icon at runtime with an unmasked square; see `docs/plans/2026-08-14-tauri-dev-dock-icon-design.md`), wraps it in `target/release/mimi-dev.app`, and launches it. The bare `npm run tauri dev` binary always triggers that runtime override, so its Dock icon cannot be masked.
-- Latency or streaming changes: measure against a real Alibaba Cloud session (user-supplied credentials) and report timing diagnostics as well as correctness tests.
+- UI changes: on macOS run `./scripts/dev-app.sh` and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. This launches a signed bundle from one canonical path so macOS does not treat every rebuild as a new app and repeat privacy prompts. Use `./scripts/dev-app.sh --ui-only` for credential-free UI smoke tests; UI-test mode must not access provider networks or start system-audio capture. On Windows, use `npm run tauri:dev`.
+- Latency or streaming changes: measure against a real session for the affected provider (user-supplied OS-keychain credentials) and report timing diagnostics as well as correctness tests.
 - Packaging or signing changes: run `./scripts/package-app.sh` and verify the resulting app opens. Windows packaging is verified on a Windows machine (or CI). Never commit `dist/`, `src-tauri/target/`, or signing identities.
 
 Before committing, inspect the diff for credentials, recordings, subtitle content, personal paths, and build artifacts.

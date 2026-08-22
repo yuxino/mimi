@@ -1,19 +1,27 @@
 import type { CSSProperties } from "react";
 import {
   AlertTriangle,
+  AppWindow,
   Captions,
   CircleCheck,
   Check,
   ChevronDown,
   ChevronUp,
+  Cloud,
   Eraser,
   Key,
+  Languages,
+  LockKeyhole,
   Pause,
   Play,
+  Plus,
   Quote,
   Settings,
+  ShieldCheck,
   Sparkles,
   Square,
+  Trash2,
+  Waves,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,7 +46,15 @@ export type IconName =
   | "captions-bubble"
   | "text-quote"
   | "key"
-  | "exclamation-triangle";
+  | "exclamation-triangle"
+  | "app-window"
+  | "cloud"
+  | "languages"
+  | "lock"
+  | "plus"
+  | "shield-check"
+  | "trash"
+  | "waves";
 
 const ICONS: Record<IconName, LucideIcon> = {
   pause: Pause,
@@ -55,6 +71,14 @@ const ICONS: Record<IconName, LucideIcon> = {
   "text-quote": Quote,
   key: Key,
   "exclamation-triangle": AlertTriangle,
+  "app-window": AppWindow,
+  cloud: Cloud,
+  languages: Languages,
+  lock: LockKeyhole,
+  plus: Plus,
+  "shield-check": ShieldCheck,
+  trash: Trash2,
+  waves: Waves,
 };
 
 interface IconProps {

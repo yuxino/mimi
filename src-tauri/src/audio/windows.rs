@@ -1,19 +1,15 @@
 //! Windows system-audio capture via WASAPI loopback (cpal): opening an input
 //! stream on the default output device transparently enables loopback mode,
 //! capturing the mix of everything playing. The mix format (typically 48 kHz
-//! stereo f32) is resampled to 16 kHz mono and quantized to PCM16.
+//! stereo f32) is resampled to the provider rate, mixed to mono, and
+//! quantized to PCM16.
 
-use crate::audio::SystemAudioCaptureError;
-use crate::core::pcm16::PCM16Encoder;
+use crate::audio::streaming_resampler::StreamingPcm16Resampler;
+use crate::audio::{AudioCaptureFormat, SystemAudioCaptureError};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
-use rubato::{FixedSync, Resampler};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-
-const TARGET_SAMPLE_RATE: f64 = 16_000.0;
-const CHUNK_SIZE_IN: usize = 1024;
 
 #[derive(Clone)]
 pub struct WindowsSystemAudioCapture {
@@ -37,6 +33,7 @@ impl WindowsSystemAudioCapture {
         &self,
         audio_tx: mpsc::UnboundedSender<Vec<u8>>,
         error_tx: mpsc::UnboundedSender<String>,
+        format: AudioCaptureFormat,
     ) -> Result<(), SystemAudioCaptureError> {
         if self.stream.lock().unwrap().is_some() {
             return Err(SystemAudioCaptureError::AlreadyRunning);
@@ -56,9 +53,10 @@ impl WindowsSystemAudioCapture {
         let sample_format = input_config.sample_format();
         let channel_count = input_config.channels() as usize;
         // cpal 0.18: `SampleRate` is a `u32` type alias (not a tuple struct).
-        let sample_rate = input_config.sample_rate() as f64;
+        let sample_rate = input_config.sample_rate();
 
-        let resampler = build_resampler(sample_rate, channel_count)?;
+        let resampler =
+            StreamingPcm16Resampler::new(sample_rate, format.sample_rate_hz, channel_count)?;
         let resampler = Arc::new(Mutex::new(resampler));
         let active = self.active.clone();
         active.store(true, Ordering::SeqCst);
@@ -76,12 +74,7 @@ impl WindowsSystemAudioCapture {
                             if !active_for_cb.load(Ordering::SeqCst) {
                                 return;
                             }
-                            process_frames_f32(
-                                data,
-                                channel_count,
-                                &resampler_for_cb,
-                                &audio_tx_for_cb,
-                            );
+                            process_frames_f32(data, &resampler_for_cb, &audio_tx_for_cb);
                         },
                         move |error| {
                             let _ = error_tx_for_cb
@@ -107,12 +100,7 @@ impl WindowsSystemAudioCapture {
                                 .iter()
                                 .map(|sample| *sample as f32 / 32_768.0)
                                 .collect();
-                            process_frames_f32(
-                                &frames,
-                                channel_count,
-                                &resampler_for_cb,
-                                &audio_tx_for_cb,
-                            );
+                            process_frames_f32(&frames, &resampler_for_cb, &audio_tx_for_cb);
                         },
                         move |error| {
                             let _ = error_tx_for_cb
@@ -154,69 +142,18 @@ impl Default for WindowsSystemAudioCapture {
     }
 }
 
-fn build_resampler(
-    sample_rate: f64,
-    channel_count: usize,
-) -> Result<rubato::Fft<f32>, SystemAudioCaptureError> {
-    rubato::Fft::<f32>::new(
-        sample_rate as usize,
-        TARGET_SAMPLE_RATE as usize,
-        CHUNK_SIZE_IN,
-        channel_count,
-        FixedSync::Input,
-    )
-    .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))
-}
-
-/// Buffers interleaved frames, resamples in `CHUNK_SIZE_IN`-frame windows, and
-/// emits mono PCM16.
+/// Buffers interleaved frames across callbacks, resamples complete windows,
+/// and emits mono PCM16.
 fn process_frames_f32(
     data: &[f32],
-    channel_count: usize,
-    resampler: &Arc<Mutex<rubato::Fft<f32>>>,
+    resampler: &Arc<Mutex<StreamingPcm16Resampler>>,
     audio_tx: &mpsc::UnboundedSender<Vec<u8>>,
 ) {
-    // Accumulate frames in the resampler's expected interleaved layout.
-    let frames = data.len() / channel_count;
-    let channels: Vec<Vec<f32>> = (0..channel_count)
-        .map(|channel| {
-            (0..frames)
-                .map(|frame| data[frame * channel_count + channel])
-                .collect()
-        })
-        .collect();
-
     let mut resampler = resampler.lock().unwrap();
-    let mut consumed = 0usize;
-    // Feed all available complete chunks; the trailing partial chunk stays in
-    // the resampler's internal ring buffer across callbacks.
-    while consumed + CHUNK_SIZE_IN <= frames {
-        let chunk: Vec<Vec<f32>> = channels
-            .iter()
-            .map(|channel| channel[consumed..consumed + CHUNK_SIZE_IN].to_vec())
-            .collect();
-        let input = match SequentialSliceOfVecs::new(&chunk, channel_count, CHUNK_SIZE_IN) {
-            Ok(input) => input,
-            Err(_) => break,
-        };
-        match resampler.process(&input, None) {
-            Ok(output) => {
-                let data = output.take_data();
-                let out_frames = data.len() / channel_count;
-                let per_channel: Vec<Vec<f32>> = (0..channel_count)
-                    .map(|channel| {
-                        (0..out_frames)
-                            .map(|frame| data[frame * channel_count + channel])
-                            .collect()
-                    })
-                    .collect();
-                let pcm = PCM16Encoder::encode(&per_channel);
-                if !pcm.is_empty() {
-                    let _ = audio_tx.send(pcm);
-                }
-            }
-            Err(_) => break,
-        }
-        consumed += CHUNK_SIZE_IN;
+    let Ok(buffers) = resampler.push_interleaved(data) else {
+        return;
+    };
+    for pcm in buffers {
+        let _ = audio_tx.send(pcm);
     }
 }
