@@ -30,24 +30,30 @@ mimiは、日本語の「耳（みみ）」に由来する名前です。デバ�
 
 - **リアルタイム字幕** — ブラウザ・プレイヤー・ゲーム・会議・デスクトップアプリに対応。
 - **リアルタイム翻訳** — 超高速 / 低遅延 / 高品質の3モード。
+- **複数のサービス設定** — プロファイルを複数保存し、キーを再入力せずに切り替えられます。
 - **柔軟な字幕ウィンドウ** — 移動・リサイズ・折りたたみ・クリック透過ロック。
 - **多言語** — 中国語・日本語・英語・韓国語の認識。
-- **プライバシー** — マイク不使用、アカウント不要、音声や字幕履歴の保存なし。
+- **プライバシー** — マイク不使用、mimi アカウント不要、音声や字幕履歴の保存なし。
 - **グローバルショートカット** — macOS は **⌘ ⇧ Space**、Windows は **Ctrl+Shift+Space** で開始/停止。
 
 ## はじめ方
 
 1. [Releases](https://github.com/yuxino/mimi/releases/latest) からお使いのプラットフォーム版をダウンロードします。
-2. アリババクラウド Model Studio（DashScope）の API キーを設定します。
+2. 「サービスプロファイル」を開いて API キーを保存します。既定はアリババクラウドで、OpenAI Realtime も利用できます。
 3. 動画などを再生し、「開始」をクリックします。
 
-API キーは OS のキーチェーン（macOS キーチェーン / Windows 資格情報マネージャー）に保存されます。mimi は DashScope の統合エンドポイントを利用するため、API キーのみで動作し、Workspace ID は不要です。モデル利用には料金がかかる場合があります。
+各プロファイルの API キーは OS のキーチェーン（macOS キーチェーン / Windows 資格情報マネージャー）へ個別に保存され、設定画面へ読み戻されることはありません。既存のアリババクラウド設定は既定プロファイルへ自動移行されます。各サービスの利用には料金がかかる場合があります。
 
-[API キーの作成](https://help.aliyun.com/zh/model-studio/get-api-key)
+[アリババクラウド API キーを作成](https://help.aliyun.com/zh/model-studio/get-api-key) · [OpenAI API キーを作成](https://platform.openai.com/api-keys)
+
+| プロバイダー | 入力音声 | 字幕の出力先 | モード |
+| --- | --- | --- | --- |
+| アリババクラウド Model Studio | 自動、中国語、英語、日本語、韓国語 | 原文、簡体中国語、英語、日本語 | 超高速、低遅延、高品質 |
+| OpenAI Realtime | 自動 | 簡体中国語、英語、日本語 | 超高速 |
 
 ### プラットフォームについて
 
-- **macOS**：初回のリスニング時に「画面収録」の許可が求められます（システム音声の取得のみに使用し、画面は記録しません。mimi 自身の音声も除外されます）。
+- **macOS**：初回のリスニング時に「画面とシステムオーディオの収録」へのアクセスが求められます（mimi はシステム音声のみを取得し、画面は記録せず、自身の音声も除外します）。
 - **Windows**：WASAPI ループバックで既定の再生デバイスのミックス全体を取得します。許可は不要です。mimi は音を再生しないためエコーもありません。
 
 ## ソースからビルド
@@ -57,8 +63,9 @@ Rust 1.85+ と Node.js 20+ が必要です（macOS は Xcode Command Line Tools 
 ```bash
 git clone https://github.com/yuxino/mimi.git
 cd mimi
-npm install
-npm run tauri dev        # 開発実行
+npm ci
+./scripts/dev-app.sh     # macOS：安定したアプリ ID で開発実行
+npm run tauri:dev        # Windows：分離された開発設定で実行
 ./scripts/check.sh       # 全チェック（fmt/clippy/テスト/フロントエンドビルド）
 ./scripts/package-app.sh # パッケージ化（macOS: .dmg / Windows: .msi/.nsis）
 ```
@@ -67,17 +74,18 @@ Windows 向けパッケージは Windows マシンでビルドしてください
 
 ### macOS の開発メモ
 
-- `npm run tauri dev` は裸のバイナリとして実行されるため `.app` バンドルがなく、macOS はバンドルからしかアイコンを読み込まないので Dock に汎用アイコンが表示されます。正しいアイコンで実行するには `./scripts/dev-app.sh` を使ってください。これは `tauri build` と同じ方法（`--features tauri/custom-protocol` 付き。この機能がないと Tauri はビルドを dev 扱いし、実行時に Dock アイコンをマスクなしの四角形へ置き換えます）で release バイナリをビルドし、本物の `.app`（オリジナルアイコン、ウィンドウタイトル/ツールチップに「(dev)」マーク付き）に包んで起動します。Dock アイコンは正式版と完全に一致します。
-- ローカルビルドは `mimi Local Development` の安定した署名アイデンティティが存在する場合にそれで署名されます（`scripts/codesign-identity.sh`）。これにより画面収録とキーチェーンの許可が再ビルド後も維持されます（アプリのアイデンティティごとに一度だけ許可が必要です）。
+- macOS での開発実行は必ず `./scripts/dev-app.sh` を使用してください。本物の `.app` を生成・検証して固定パスへインストールし、不安定な一時署名を拒否するため、「画面とシステムオーディオの収録」とキーチェーンの許可が再ビルド後も同じアプリに紐づきます。
+- ランチャーは `scripts/codesign-identity.sh` を通じて安定した `mimi Local Development` ID を選択します。macOS では `tauri dev` コマンドや裸のバイナリを直接実行しないでください。一時署名はビルドごとに別アプリと判断され、許可を繰り返し求められる場合があります。
+- 開発版はアプリ ID、設定ディレクトリ、認証情報の名前空間を分離し、インストール済み正式版のプロファイルや API Key を読み書きしません。
 
 ## テスト
 
 ```bash
-cd src-tauri && cargo test   # Rust ユニットテスト（プロトコル、字幕組み立て、設定、PCM など）
-npm run test                 # フロントエンド vitest
+cargo test --manifest-path src-tauri/Cargo.toml   # Rust ユニットテスト（プロトコル、字幕組み立て、設定、PCM など）
+npm run test                                      # フロントエンド vitest
 ```
 
-UI スモークテストは `MIMI_UI_TEST=1`（デモ認証情報）と `MIMI_AUTO_START=1`（起動時に自動セッション開始、エラー経路の確認用）を付けて `npm run tauri dev` を実行します。
+macOS の UI スモークテストは `./scripts/dev-app.sh --ui-only` で実行します。UI テストモードは実際の認証情報、プロバイダーのネットワーク、システム音声キャプチャへアクセスしません。プロバイダーとのエンドツーエンド確認には通常のコマンドとローカルのキーチェーン認証情報を使用してください。
 
 詳細は [CONTRIBUTING.md](CONTRIBUTING.md) と [SECURITY.md](SECURITY.md) をご覧ください。
 

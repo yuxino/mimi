@@ -1,6 +1,6 @@
 //! Placeholder capture backend for unsupported platforms.
 
-use crate::audio::SystemAudioCaptureError;
+use crate::audio::{AudioCaptureFormat, SystemAudioCaptureError};
 use tokio::sync::mpsc;
 
 #[derive(Clone)]
@@ -15,6 +15,7 @@ impl UnsupportedSystemAudioCapture {
         &self,
         _audio_tx: mpsc::UnboundedSender<Vec<u8>>,
         _error_tx: mpsc::UnboundedSender<String>,
+        _format: AudioCaptureFormat,
     ) -> Result<(), SystemAudioCaptureError> {
         Err(SystemAudioCaptureError::Other(
             "System audio capture is not supported on this platform.".into(),

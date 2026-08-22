@@ -1,8 +1,10 @@
 //! Platform audio capture (system audio only, never microphone) and the
-//! bounded audio send pipeline. Ported from `SystemAudioCapture.swift` and
-//! `AppModel.AudioSendPipeline`.
+//! bounded PCM send pipeline.
 
 pub mod send_pipeline;
+
+#[cfg(any(target_os = "windows", test))]
+mod streaming_resampler;
 
 #[cfg(target_os = "macos")]
 pub mod macos;
@@ -25,6 +27,23 @@ pub enum SystemAudioCaptureError {
     NoPlaybackDevice,
     #[error("{0}")]
     Other(String),
+}
+
+/// Provider-requested wire format. Both supported backends capture system
+/// audio only, mix to mono, resample to this rate, and encode little-endian
+/// PCM16 before emitting buffers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioCaptureFormat {
+    pub sample_rate_hz: u32,
+}
+
+impl AudioCaptureFormat {
+    pub fn pcm16_mono(sample_rate_hz: u32) -> Result<Self, SystemAudioCaptureError> {
+        if !matches!(sample_rate_hz, 16_000 | 24_000) {
+            return Err(SystemAudioCaptureError::UnsupportedAudioFormat);
+        }
+        Ok(Self { sample_rate_hz })
+    }
 }
 
 /// Cross-platform handle for an active capture session.
@@ -67,5 +86,27 @@ impl SystemAudioCapture {
             let _ = app;
             unsupported::UnsupportedSystemAudioCapture::new()
         }
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+
+    #[test]
+    fn provider_sample_rates_are_supported() {
+        assert_eq!(
+            AudioCaptureFormat::pcm16_mono(16_000)
+                .unwrap()
+                .sample_rate_hz,
+            16_000
+        );
+        assert_eq!(
+            AudioCaptureFormat::pcm16_mono(24_000)
+                .unwrap()
+                .sample_rate_hz,
+            24_000
+        );
+        assert!(AudioCaptureFormat::pcm16_mono(48_000).is_err());
     }
 }

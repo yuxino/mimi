@@ -3,9 +3,12 @@ import { Icon } from "../../components/Icon";
 import { I18N } from "../../lib/i18n";
 import { isTauri, overlayPopoverToggle } from "../../lib/ipc";
 import {
+  effectiveTranslationModeForSettings,
+  sourceLanguagesForSettings,
+  translationModesForSettings,
+} from "../../lib/providerCapabilities";
+import {
   OVERLAY_ACTIVITY_PHASES,
-  SOURCE_LANGUAGE_QUICK_CASES,
-  TRANSLATION_MODE_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
   hexToRgba,
   overlayPhaseColor,
@@ -28,6 +31,7 @@ interface LanguagePickerPopoverProps {
   phase: OverlayActivityPhaseKind;
   isHovering: boolean;
   isPaused: boolean;
+  isChangingSession: boolean;
   isWaitingForFinalTranslation: boolean;
   settings: SettingsSnapshot;
   detectedLanguage: string | null;
@@ -45,6 +49,7 @@ export function LanguagePickerPopover({
   phase,
   isHovering,
   isPaused,
+  isChangingSession,
   isWaitingForFinalTranslation,
   settings,
   detectedLanguage,
@@ -56,15 +61,11 @@ export function LanguagePickerPopover({
 
   if (status === null) return null;
 
-  // Interactive whenever not paused: idle, listening, connecting and
-  // stopping all allow quick language/mode switching (the backend rebuilds
-  // the session when a switch lands mid-connect).
-  const canInteract = !isPaused;
+  const canInteract = !isPaused && !isChangingSession;
   const translatesAudio = targetLanguageTranslatesAudio(settings.targetLanguage);
-  // Automatic source runs the low-latency pipeline regardless of the stored
-  // mode; the capsule badge shows the effective mode.
-  const automaticSource = settings.sourceLanguage === "auto";
-  const displayMode = automaticSource ? "lowLatency" : settings.translationMode;
+  const sourceLanguages = sourceLanguagesForSettings(settings);
+  const translationModes = translationModesForSettings(settings);
+  const displayMode = effectiveTranslationModeForSettings(settings);
   const help = translatesAudio
     ? I18N.overlay.pickerHelpTranslating
     : I18N.overlay.pickerHelpOriginal;
@@ -193,11 +194,12 @@ export function LanguagePickerPopover({
           }}
         >
           <PopoverHeader>{I18N.overlay.sourceLanguage}</PopoverHeader>
-          {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
+          {sourceLanguages.map((language) => (
             <PickerRow
               key={language}
               title={sourceLanguageButtonTitle(language)}
               selected={settings.sourceLanguage === language}
+              disabled={!canInteract || sourceLanguages.length === 1}
               onSelect={() => {
                 setOpen(false);
                 onSwitchSourceLanguage(language);
@@ -213,12 +215,12 @@ export function LanguagePickerPopover({
             }}
           />
           <PopoverHeader>{I18N.overlay.translationMode}</PopoverHeader>
-          {TRANSLATION_MODE_CASES.map((mode) => (
+          {translationModes.map((mode) => (
             <PickerRow
               key={mode}
               title={TRANSLATION_MODE_DISPLAY_NAMES[mode]}
               selected={displayMode === mode}
-              disabled={automaticSource}
+              disabled={!canInteract || translationModes.length === 1}
               onSelect={() => {
                 setOpen(false);
                 onSwitchTranslationMode(mode);
@@ -287,8 +289,7 @@ function accessibilityLabel(
   status: LanguageStatus,
   settings: SettingsSnapshot,
 ): string {
-  const effectiveMode =
-    settings.sourceLanguage === "auto" ? "lowLatency" : settings.translationMode;
+  const effectiveMode = effectiveTranslationModeForSettings(settings);
   const mode = targetLanguageTranslatesAudio(settings.targetLanguage)
     ? `${TRANSLATION_MODE_DISPLAY_NAMES[effectiveMode]}${I18N.overlay.translationSuffix}`
     : I18N.overlay.originalOnly;

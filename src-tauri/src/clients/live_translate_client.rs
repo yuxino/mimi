@@ -221,6 +221,9 @@ impl LiveTranslateClient {
 
     /// Sends a WebSocket ping and waits for the matching pong (4s timeout).
     pub async fn ping(&self, timeout: Duration) -> Result<(), LiveTranslateClientError> {
+        let pong = self.inner.pong_notify.notified();
+        tokio::pin!(pong);
+        pong.as_mut().enable();
         {
             let mut sink = self.inner.sink.lock().await;
             let Some(sink) = sink.as_mut() else {
@@ -230,7 +233,7 @@ impl LiveTranslateClient {
                 .await
                 .map_err(|_| LiveTranslateClientError::NotConnected)?;
         }
-        tokio::time::timeout(timeout, self.inner.pong_notify.notified())
+        tokio::time::timeout(timeout, pong)
             .await
             .map_err(|_| LiveTranslateClientError::HealthCheckTimedOut)?;
         Ok(())

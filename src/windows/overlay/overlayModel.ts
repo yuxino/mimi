@@ -190,11 +190,15 @@ export function languageStatus(
   );
 
   if (settings.targetLanguage === "original") {
-    return { source: sourceName, separator: "·", target: I18N.overlay.original };
+    return {
+      source: sourceName,
+      separator: I18N.overlay.dotSeparator,
+      target: I18N.overlay.original,
+    };
   }
   return {
     source: sourceName,
-    separator: "→",
+    separator: I18N.overlay.separator,
     target: TARGET_LANGUAGE_DISPLAY_NAMES[settings.targetLanguage],
   };
 }

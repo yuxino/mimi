@@ -226,6 +226,10 @@ export function OverlayWindow() {
                 phase={phase}
                 isHovering={isHovering}
                 isPaused={session.isPaused}
+                isChangingSession={
+                  session.status.kind === "connecting" ||
+                  session.status.kind === "stopping"
+                }
                 isWaitingForFinalTranslation={isWaiting}
                 settings={settings}
                 detectedLanguage={detectedLanguage}

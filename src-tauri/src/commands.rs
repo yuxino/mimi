@@ -1,9 +1,10 @@
 //! Tauri command handlers exposed to the frontend. The IPC contract is
-//! documented in docs/plans/2026-08-13-tauri-multiplatform.md.
+//! documented in docs/plans/2026-08-22-multi-provider-professional-settings-design.md.
 
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
+use crate::core::provider::{ProviderKind, ServiceProfile};
 use crate::session_manager::{SessionManager, SessionStateEvent};
-use crate::settings_store::SettingsStore;
+use crate::settings_store::{CredentialState, SettingsStore};
 use crate::windows::{OverlayWindowManager, TrayPanelManager};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -18,21 +19,45 @@ pub struct AppState {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ServiceProfilePayload {
+    pub id: String,
+    pub name: String,
+    pub provider: ProviderKind,
+    pub credential_state: CredentialState,
+}
+
+impl ServiceProfilePayload {
+    fn from_profile(store: &SettingsStore, profile: ServiceProfile) -> Self {
+        let credential_state = store.credential_state(&profile);
+        Self {
+            id: profile.id,
+            name: profile.name,
+            provider: profile.provider,
+            credential_state,
+        }
+    }
+
+    fn unavailable(profile: ServiceProfile) -> Self {
+        Self {
+            id: profile.id,
+            name: profile.name,
+            provider: profile.provider,
+            credential_state: CredentialState::Unavailable,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SettingsSnapshotPayload {
-    /// Loaded from the OS keychain so the settings field can be prefilled,
-    /// mirroring the original app's in-memory binding. Never persisted.
-    #[serde(rename = "apiKey")]
-    pub api_key: String,
-    #[serde(rename = "hasAPIKey")]
-    pub has_api_key: bool,
+    pub profiles: Vec<ServiceProfilePayload>,
+    pub active_profile_id: String,
     pub source_language: SourceLanguage,
     pub target_language: TargetLanguage,
     pub translation_mode: TranslationMode,
     pub font_size: f64,
     #[serde(rename = "isOverlayLocked")]
     pub is_overlay_locked: bool,
-    #[serde(rename = "credentialLoadError")]
-    pub credential_load_error: Option<String>,
     #[serde(rename = "uiLanguage")]
     pub ui_language: Option<String>,
 }
@@ -41,49 +66,154 @@ pub struct SettingsSnapshotPayload {
 mod tests {
     use super::*;
 
-    /// The `apiKey` key must survive camelCase renaming (serde would
-    /// otherwise emit `api_key`, which the frontend does not read).
+    struct PartiallyUnavailableSecretStore;
+
+    impl crate::settings_store::SecretStore for PartiallyUnavailableSecretStore {
+        fn load(
+            &self,
+            _service: &str,
+            account: &str,
+        ) -> Result<Option<String>, crate::settings_store::SecretStoreError> {
+            if account.contains("alibaba-default") {
+                Err(crate::settings_store::SecretStoreError::Unavailable)
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn save(
+            &self,
+            _service: &str,
+            _account: &str,
+            _value: &str,
+        ) -> Result<(), crate::settings_store::SecretStoreError> {
+            Ok(())
+        }
+
+        fn delete(
+            &self,
+            _service: &str,
+            _account: &str,
+        ) -> Result<(), crate::settings_store::SecretStoreError> {
+            Ok(())
+        }
+    }
+
     #[test]
-    fn settings_payload_uses_camel_case_keys() {
+    fn settings_payload_is_camel_case_and_write_only() {
         let payload = SettingsSnapshotPayload {
-            api_key: "sk-demo".into(),
-            has_api_key: true,
+            profiles: vec![ServiceProfilePayload {
+                id: "alibaba-default".into(),
+                name: "Alibaba Cloud".into(),
+                provider: ProviderKind::AlibabaCloud,
+                credential_state: CredentialState::Present,
+            }],
+            active_profile_id: "alibaba-default".into(),
             source_language: SourceLanguage::Japanese,
             target_language: TargetLanguage::SimplifiedChinese,
             translation_mode: TranslationMode::HighQuality,
             font_size: 18.0,
             is_overlay_locked: false,
-            credential_load_error: None,
             ui_language: None,
         };
         let json = serde_json::to_value(&payload).unwrap();
-        assert_eq!(json["apiKey"], "sk-demo");
-        assert_eq!(json["hasAPIKey"], true);
+        assert_eq!(json["activeProfileId"], "alibaba-default");
+        assert_eq!(json["profiles"][0]["provider"], "alibabaCloud");
+        assert_eq!(json["profiles"][0]["credentialState"], "present");
+        assert!(json.get("apiKey").is_none());
+        assert!(json.get("hasAPIKey").is_none());
+        assert!(!json.to_string().contains("secret"));
+    }
+
+    #[test]
+    fn active_session_rejects_every_profile_mutation() {
+        assert!(ensure_profile_mutation_allowed(true).is_err());
+        assert!(ensure_profile_mutation_allowed(false).is_ok());
+    }
+
+    #[test]
+    fn active_session_rejects_pipeline_settings_but_allows_visual_settings() {
+        let pipeline = SettingsDraft {
+            source_language: Some(SourceLanguage::Japanese),
+            ..SettingsDraft::default()
+        };
+        assert!(ensure_settings_draft_allowed(&pipeline, true).is_err());
+
+        let visual = SettingsDraft {
+            font_size: Some(19.0),
+            is_overlay_locked: Some(true),
+            ui_language: Some("ja".into()),
+            ..SettingsDraft::default()
+        };
+        assert!(ensure_settings_draft_allowed(&visual, true).is_ok());
+    }
+
+    #[test]
+    fn one_unavailable_credential_does_not_fail_the_snapshot() {
+        let store = SettingsStore::in_memory(Box::new(PartiallyUnavailableSecretStore), false);
+        store
+            .create_profile(ProviderKind::OpenAIRealtime, "OpenAI")
+            .unwrap();
+
+        let payload = SettingsSnapshotPayload::try_from_store(&store).unwrap();
+        assert_eq!(payload.profiles.len(), 2);
+        assert_eq!(
+            payload.profiles[0].credential_state,
+            CredentialState::Unavailable
+        );
+        assert_eq!(
+            payload.profiles[1].credential_state,
+            CredentialState::Missing
+        );
     }
 }
 
 impl SettingsSnapshotPayload {
     pub fn from_store(store: &SettingsStore) -> Self {
+        match Self::try_from_store(store) {
+            Ok(payload) => payload,
+            Err(_) => {
+                let prefs = store.preferences();
+                let (active_profile_id, profiles) = store.profile_catalog_or_default();
+                Self {
+                    profiles: profiles
+                        .into_iter()
+                        .map(ServiceProfilePayload::unavailable)
+                        .collect(),
+                    active_profile_id,
+                    source_language: prefs.source_language,
+                    target_language: prefs.target_language,
+                    translation_mode: prefs.translation_mode,
+                    font_size: prefs.font_size,
+                    is_overlay_locked: prefs.overlay_locked,
+                    ui_language: prefs.ui_language,
+                }
+            }
+        }
+    }
+
+    pub fn try_from_store(store: &SettingsStore) -> Result<Self, String> {
         let prefs = store.preferences();
-        let api_key = store.load_api_key().ok().flatten().unwrap_or_default();
-        Self {
-            has_api_key: !api_key.is_empty(),
-            api_key,
+        let (active_profile_id, profiles) = store.profile_catalog()?;
+        Ok(Self {
+            profiles: profiles
+                .into_iter()
+                .map(|profile| ServiceProfilePayload::from_profile(store, profile))
+                .collect(),
+            active_profile_id,
             source_language: prefs.source_language,
             target_language: prefs.target_language,
             translation_mode: prefs.translation_mode,
             font_size: prefs.font_size,
             is_overlay_locked: prefs.overlay_locked,
-            credential_load_error: store.credential_load_error(),
-            ui_language: prefs.ui_language.clone(),
-        }
+            ui_language: prefs.ui_language,
+        })
     }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SettingsDraft {
-    pub api_key: Option<String>,
     pub source_language: Option<SourceLanguage>,
     pub target_language: Option<TargetLanguage>,
     pub translation_mode: Option<TranslationMode>,
@@ -92,96 +222,180 @@ pub struct SettingsDraft {
     pub ui_language: Option<String>,
 }
 
-/// Reads the settings snapshot. Async: the keychain read (and the one-time
-/// ACL rebind) must not block the main thread — wry dispatches sync commands
-/// on the main thread, and every window calls this at boot.
+/// Reads public settings and per-profile credential presence. API-key values
+/// never enter this payload. Async keeps OS credential-store reads off wry's
+/// main-thread path.
 #[tauri::command]
 pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsSnapshotPayload, String> {
-    tracing::info!(
-        "settings_get invoked from frontend hasKey={} keyLen={}",
-        u8::from(state.settings.has_api_key()),
-        state
-            .settings
-            .load_api_key()
-            .ok()
-            .flatten()
-            .map(|k| k.len())
-            .unwrap_or(0)
-    );
     Ok(SettingsSnapshotPayload::from_store(&state.settings))
 }
 
-/// Saves settings. Async: keychain writes and preference persistence are
-/// disk I/O that must not run on the main thread (sync Tauri commands run on
-/// the main thread in wry, blocking every window's rendering).
+/// Saves non-secret preferences only. Credentials use dedicated write-only
+/// commands so a general settings draft can never echo or overwrite a key.
 #[tauri::command]
 pub async fn settings_save(
     app: AppHandle,
     state: State<'_, AppState>,
     draft: SettingsDraft,
 ) -> Result<SettingsSnapshotPayload, String> {
-    let mut credential_changed = false;
-    {
-        let mut needs_save = false;
-        state.settings.update_preferences(|prefs| {
+    let changes_listening_settings = draft.source_language.is_some()
+        || draft.target_language.is_some()
+        || draft.translation_mode.is_some();
+    let changes_ui_language = draft.ui_language.is_some();
+    let _lifecycle = state
+        .session
+        .settings_mutation_guard(changes_listening_settings)
+        .await?;
+    ensure_settings_draft_allowed(&draft, state.session.has_active_session())?;
+    let needs_save = draft.source_language.is_some()
+        || draft.target_language.is_some()
+        || draft.translation_mode.is_some()
+        || draft.font_size.is_some()
+        || draft.is_overlay_locked.is_some()
+        || draft.ui_language.is_some();
+    if !needs_save {
+        return SettingsSnapshotPayload::try_from_store(&state.settings);
+    }
+
+    state
+        .settings
+        .save_preferences_for_active_profile(|prefs| {
             if let Some(source_language) = draft.source_language {
                 prefs.source_language = source_language;
-                needs_save = true;
             }
             if let Some(target_language) = draft.target_language {
                 prefs.target_language = target_language;
-                needs_save = true;
             }
             if let Some(translation_mode) = draft.translation_mode {
                 prefs.translation_mode = translation_mode;
-                needs_save = true;
             }
             if let Some(font_size) = draft.font_size {
-                prefs.font_size = font_size.clamp(
-                    *crate::settings_store::FONT_SIZE_RANGE.start(),
-                    *crate::settings_store::FONT_SIZE_RANGE.end(),
-                );
-                needs_save = true;
+                prefs.font_size = font_size;
             }
             if let Some(locked) = draft.is_overlay_locked {
                 prefs.overlay_locked = locked;
-                needs_save = true;
             }
             if let Some(language) = &draft.ui_language {
                 prefs.ui_language = Some(language.clone());
-                needs_save = true;
             }
-        });
-        if draft.api_key.is_some() {
-            credential_changed = true;
-            needs_save = true;
-        }
-        if !needs_save {
-            return Ok(SettingsSnapshotPayload::from_store(&state.settings));
-        }
-    }
-
-    if credential_changed {
-        let api_key = draft.api_key.unwrap_or_else(|| {
-            state
-                .settings
-                .load_api_key()
-                .ok()
-                .flatten()
-                .unwrap_or_default()
-        });
-        state.settings.save_credentials(&api_key)?;
-    } else {
-        state.settings.persist();
-    }
-
+        })?;
     if let Some(locked) = draft.is_overlay_locked {
         OverlayWindowManager::update_locked(&app, locked);
     }
+    if changes_ui_language {
+        crate::refresh_native_tray_language(&app);
+    }
 
-    let payload = SettingsSnapshotPayload::from_store(&state.settings);
+    let payload = SettingsSnapshotPayload::try_from_store(&state.settings)?;
     let _ = app.emit("settings-changed", payload.clone());
     Ok(payload)
+}
+
+fn ensure_settings_draft_allowed(draft: &SettingsDraft, is_active: bool) -> Result<(), String> {
+    if is_active
+        && (draft.source_language.is_some()
+            || draft.target_language.is_some()
+            || draft.translation_mode.is_some())
+    {
+        Err(
+            "Listening settings cannot be changed through settings while a session is active."
+                .to_string(),
+        )
+    } else {
+        Ok(())
+    }
+}
+
+fn ensure_profile_mutation_allowed(is_active: bool) -> Result<(), String> {
+    if is_active {
+        Err("Service profiles cannot be changed while a session is active.".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn emit_settings_snapshot(
+    app: &AppHandle,
+    settings: &SettingsStore,
+) -> Result<SettingsSnapshotPayload, String> {
+    let payload = SettingsSnapshotPayload::try_from_store(settings)?;
+    let _ = app.emit("settings-changed", payload.clone());
+    Ok(payload)
+}
+
+#[tauri::command]
+pub async fn profile_create(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider: ProviderKind,
+    name: String,
+) -> Result<SettingsSnapshotPayload, String> {
+    let _lifecycle = state.session.settings_mutation_guard(true).await?;
+    ensure_profile_mutation_allowed(state.session.has_active_session())?;
+    state.settings.create_profile(provider, &name)?;
+    emit_settings_snapshot(&app, &state.settings)
+}
+
+#[tauri::command]
+pub async fn profile_update(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+    name: String,
+) -> Result<SettingsSnapshotPayload, String> {
+    let _lifecycle = state.session.settings_mutation_guard(true).await?;
+    ensure_profile_mutation_allowed(state.session.has_active_session())?;
+    state.settings.update_profile(&profile_id, &name)?;
+    emit_settings_snapshot(&app, &state.settings)
+}
+
+#[tauri::command]
+pub async fn profile_select(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> Result<SettingsSnapshotPayload, String> {
+    let _lifecycle = state.session.settings_mutation_guard(true).await?;
+    ensure_profile_mutation_allowed(state.session.has_active_session())?;
+    state.settings.select_profile(&profile_id)?;
+    emit_settings_snapshot(&app, &state.settings)
+}
+
+#[tauri::command]
+pub async fn profile_delete(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> Result<SettingsSnapshotPayload, String> {
+    let _lifecycle = state.session.settings_mutation_guard(true).await?;
+    ensure_profile_mutation_allowed(state.session.has_active_session())?;
+    state.settings.delete_profile(&profile_id)?;
+    emit_settings_snapshot(&app, &state.settings)
+}
+
+#[tauri::command]
+pub async fn profile_save_api_key(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+    api_key: String,
+) -> Result<SettingsSnapshotPayload, String> {
+    let _lifecycle = state.session.settings_mutation_guard(true).await?;
+    ensure_profile_mutation_allowed(state.session.has_active_session())?;
+    state.settings.save_api_key(&profile_id, &api_key)?;
+    emit_settings_snapshot(&app, &state.settings)
+}
+
+#[tauri::command]
+pub async fn profile_delete_api_key(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> Result<SettingsSnapshotPayload, String> {
+    let _lifecycle = state.session.settings_mutation_guard(true).await?;
+    ensure_profile_mutation_allowed(state.session.has_active_session())?;
+    state.settings.delete_api_key(&profile_id)?;
+    emit_settings_snapshot(&app, &state.settings)
 }
 
 #[tauri::command]
@@ -252,10 +466,9 @@ pub fn overlay_set_locked(
     state: State<'_, AppState>,
     locked: bool,
 ) -> Result<(), String> {
-    state.settings.update_preferences(|prefs| {
-        prefs.overlay_locked = locked;
-    });
-    state.settings.persist();
+    state
+        .settings
+        .save_preferences(|prefs| prefs.overlay_locked = locked)?;
     OverlayWindowManager::update_locked(&app, locked);
     let _ = app.emit(
         "settings-changed",

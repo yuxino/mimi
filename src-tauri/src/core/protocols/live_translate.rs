@@ -124,6 +124,11 @@ pub enum LiveTranslateServerEvent {
     TranslationStarted,
     TranslationDraft(String),
     TranslationFinal(String),
+    SubtitleFinalPair {
+        source: String,
+        language: Option<String>,
+        translation: String,
+    },
     SessionFinished,
     Error {
         code: String,

@@ -3,10 +3,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Icon } from "../../components/Icon";
 import { I18N } from "../../lib/i18n";
 import { isTauri, overlayPopoverHide } from "../../lib/ipc";
+import {
+  effectiveTranslationModeForSettings,
+  sourceLanguagesForSettings,
+  translationModesForSettings,
+} from "../../lib/providerCapabilities";
 import { useStore } from "../../lib/store";
 import {
-  SOURCE_LANGUAGE_QUICK_CASES,
-  TRANSLATION_MODE_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
   type SourceLanguage,
   type TranslationMode,
@@ -25,22 +28,19 @@ export function PopoverWindow() {
   // Narrow selectors: this window never shows subtitle text, so subscribing
   // to the whole session object would re-render it on every streaming event.
   const isPaused = useStore((state) => state.session.isPaused);
+  const sessionStatus = useStore((state) => state.session.status);
   const settings = useStore((state) => state.settings);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
   const switchTranslationMode = useStore(
     (state) => state.switchTranslationMode,
   );
 
-  // Interactive whenever not paused: idle, listening, connecting and
-  // stopping all allow quick language/mode switching (the backend rebuilds
-  // the session when a switch lands mid-connect).
-  const canInteract = !isPaused;
-  // Automatic source runs the low-latency pipeline regardless of the stored
-  // mode, so the picker reflects (and locks onto) the effective mode.
-  const automaticSource = settings.sourceLanguage === "auto";
-  const effectiveMode = automaticSource
-    ? "lowLatency"
-    : settings.translationMode;
+  const isChangingSession =
+    sessionStatus.kind === "connecting" || sessionStatus.kind === "stopping";
+  const canInteract = !isPaused && !isChangingSession;
+  const sourceLanguages = sourceLanguagesForSettings(settings);
+  const translationModes = translationModesForSettings(settings);
+  const effectiveMode = effectiveTranslationModeForSettings(settings);
 
   const close = () => {
     if (isTauri) {
@@ -87,12 +87,12 @@ export function PopoverWindow() {
         }}
       >
         <PopoverHeader>{I18N.overlay.sourceLanguage}</PopoverHeader>
-        {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
+        {sourceLanguages.map((language) => (
           <PickerRow
             key={language}
             title={sourceLanguageButtonTitle(language)}
             selected={settings.sourceLanguage === language}
-            disabled={!canInteract}
+            disabled={!canInteract || sourceLanguages.length === 1}
             onSelect={() => selectSourceLanguage(language)}
           />
         ))}
@@ -105,12 +105,12 @@ export function PopoverWindow() {
           }}
         />
         <PopoverHeader>{I18N.overlay.translationMode}</PopoverHeader>
-        {TRANSLATION_MODE_CASES.map((mode) => (
+        {translationModes.map((mode) => (
           <PickerRow
             key={mode}
             title={TRANSLATION_MODE_DISPLAY_NAMES[mode]}
             selected={effectiveMode === mode}
-            disabled={!canInteract || automaticSource}
+            disabled={!canInteract || translationModes.length === 1}
             onSelect={() => selectTranslationMode(mode)}
           />
         ))}

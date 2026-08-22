@@ -589,11 +589,15 @@ fn persist_user_frame(settings: &SettingsStore, frame: &OverlayFrame) {
         return;
     }
     let frame = *frame;
-    settings.update_preferences(|prefs| {
-        prefs.overlay_frame = Some(frame);
-        prefs.frame_layout_version = OVERLAY_FRAME_LAYOUT_VERSION;
-    });
-    settings.persist();
+    if settings
+        .save_preferences(|prefs| {
+            prefs.overlay_frame = Some(frame);
+            prefs.frame_layout_version = OVERLAY_FRAME_LAYOUT_VERSION;
+        })
+        .is_err()
+    {
+        tracing::warn!("preferences unavailable label=overlay_frame_write_failed");
+    }
 }
 
 /// Clamps the frame origin so the whole frame sits on the screen the overlay
@@ -957,8 +961,8 @@ pub fn ensure_settings_window(app: &AppHandle) {
         let builder =
             WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html".into()))
                 .title(dev_title("mimi 设置"))
-                .inner_size(560.0, 570.0)
-                .min_inner_size(560.0, 570.0)
+                .inner_size(900.0, 760.0)
+                .min_inner_size(560.0, 620.0)
                 .resizable(true)
                 .center()
                 .visible(true);

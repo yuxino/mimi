@@ -1,6 +1,7 @@
 /**
  * Thin wrappers over the Tauri IPC surface defined by the contract in
- * `docs/plans/2026-08-13-tauri-multiplatform.md`. Command names and payload
+ * `docs/plans/2026-08-22-multi-provider-professional-settings-design.md`.
+ * Command names and payload
  * keys are fixed by that contract and must not drift.
  */
 
@@ -8,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   SessionStateEvent,
+  ServiceProvider,
   SettingsDraft,
   SettingsSnapshot,
   SourceLanguage,
@@ -61,6 +63,44 @@ export function settingsGet(): Promise<SettingsSnapshot> {
 
 export function settingsSave(draft: SettingsDraft): Promise<SettingsSnapshot> {
   return invoke<SettingsSnapshot>("settings_save", { draft });
+}
+
+export function profileCreate(
+  provider: ServiceProvider,
+  name: string,
+): Promise<SettingsSnapshot> {
+  return invoke<SettingsSnapshot>("profile_create", { provider, name });
+}
+
+export function profileUpdate(
+  profileId: string,
+  name: string,
+): Promise<SettingsSnapshot> {
+  return invoke<SettingsSnapshot>("profile_update", { profileId, name });
+}
+
+export function profileSelect(profileId: string): Promise<SettingsSnapshot> {
+  return invoke<SettingsSnapshot>("profile_select", { profileId });
+}
+
+export function profileDelete(profileId: string): Promise<SettingsSnapshot> {
+  return invoke<SettingsSnapshot>("profile_delete", { profileId });
+}
+
+export function profileSaveAPIKey(
+  profileId: string,
+  apiKey: string,
+): Promise<SettingsSnapshot> {
+  return invoke<SettingsSnapshot>("profile_save_api_key", {
+    profileId,
+    apiKey,
+  });
+}
+
+export function profileDeleteAPIKey(
+  profileId: string,
+): Promise<SettingsSnapshot> {
+  return invoke<SettingsSnapshot>("profile_delete_api_key", { profileId });
 }
 
 export function overlaySetCollapsed(collapsed: boolean): Promise<void> {

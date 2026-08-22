@@ -6,11 +6,11 @@ Thank you for improving mimi. Small, focused pull requests are the easiest to re
 
 ## 开始之前 / Before you start
 
-1. 不要在 Issue、日志、测试或截图中提交真实 Workspace ID 和 API Key。
+1. 不要在 Issue、日志、测试或截图中提交任何服务商的真实 API Key。
 2. Bug 请附上操作系统（macOS / Windows）与版本、复现步骤、预期行为和实际行为。
 3. 较大的功能先创建 Issue，说明使用场景和体验目标。
 
-1. Never commit a real Workspace ID or API key in issues, logs, tests, or screenshots.
+1. Never commit a real provider API key in issues, logs, tests, or screenshots.
 2. Bug reports should include the operating system (macOS / Windows) and version, reproduction steps, expected behavior, and actual behavior.
 3. Open an issue before a large feature and explain the use case and UX goal.
 
@@ -21,9 +21,9 @@ Thank you for improving mimi. Small, focused pull requests are the easiest to re
 ./scripts/package-app.sh
 ```
 
-界面改动还需要实际启动应用（`npm run tauri dev`），检查设置窗、托盘面板和字幕浮窗的普通、空白、错误、暂停、收起、翻译中和长字幕状态。涉及延迟或流式管线的改动应使用真实阿里云会话（本地凭证）验证并记录测量结果。
+界面改动还需要在 macOS 通过 `./scripts/dev-app.sh` 启动固定身份的应用（Windows 使用 `npm run tauri:dev`），检查设置窗、托盘面板和字幕浮窗的普通、空白、错误、暂停、收起、翻译中和长字幕状态。涉及延迟或流式管线的改动应使用所改服务商的真实会话（仅使用本地系统钥匙串凭证）验证并记录测量结果。
 
-For UI changes, run `npm run tauri dev` and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. Latency- or streaming-sensitive changes should be verified against a real Alibaba Cloud session (with local credentials) and include measured results.
+For UI changes, launch the stable app identity with `./scripts/dev-app.sh` on macOS (`npm run tauri:dev` on Windows) and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. Latency- or streaming-sensitive changes should be verified against a real session for the changed provider, using only local OS-keychain credentials, and include measured results.
 
 ## 平台 / Platforms
 

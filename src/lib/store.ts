@@ -16,6 +16,12 @@ import {
   overlaySetCollapsed,
   overlaySetLocked,
   overlayShow,
+  profileCreate,
+  profileDelete,
+  profileDeleteAPIKey,
+  profileSaveAPIKey,
+  profileSelect,
+  profileUpdate,
   sessionClearSubtitles,
   sessionGetState,
   sessionStart,
@@ -28,10 +34,21 @@ import {
   trayPanelHide,
 } from "./ipc";
 import { effectiveUiLanguage, setStoredUiLanguage } from "./i18n";
+import {
+  sourceLanguagesForSettings,
+  translationModesForSettings,
+} from "./providerCapabilities";
+import {
+  initializeSnapshotStreams,
+  mergeSettingsSnapshot,
+  SettingsSaveCoordinator,
+  SnapshotResponseGate,
+} from "./settingsState";
 import type {
   SessionStateEvent,
   SettingsDraft,
   SettingsSnapshot,
+  ServiceProvider,
   SourceLanguage,
   SubtitleSnapshot,
   TranslationMode,
@@ -55,14 +72,20 @@ const INITIAL_SESSION: SessionStateEvent = {
 };
 
 const INITIAL_SETTINGS: SettingsSnapshot = {
-  apiKey: "",
-  hasAPIKey: false,
+  profiles: [
+    {
+      id: "alibaba-default",
+      name: "Alibaba Cloud",
+      provider: "alibabaCloud",
+      credentialState: isTauri ? "unavailable" : "present",
+    },
+  ],
+  activeProfileId: "alibaba-default",
   sourceLanguage: "auto",
   targetLanguage: "zh",
   translationMode: "lowLatency",
   fontSize: 18,
   isOverlayLocked: false,
-  credentialLoadError: null,
   uiLanguage: null,
 };
 
@@ -78,6 +101,21 @@ interface StoreState {
   switchSourceLanguage: (language: SourceLanguage) => Promise<void>;
   switchTranslationMode: (mode: TranslationMode) => Promise<void>;
   saveSettings: (draft: SettingsDraft) => Promise<void>;
+  createProfile: (
+    provider: ServiceProvider,
+    name: string,
+  ) => Promise<SettingsSnapshot>;
+  updateProfile: (
+    profileId: string,
+    name: string,
+  ) => Promise<SettingsSnapshot>;
+  selectProfile: (profileId: string) => Promise<SettingsSnapshot>;
+  deleteProfile: (profileId: string) => Promise<SettingsSnapshot>;
+  saveProfileAPIKey: (
+    profileId: string,
+    apiKey: string,
+  ) => Promise<SettingsSnapshot>;
+  deleteProfileAPIKey: (profileId: string) => Promise<SettingsSnapshot>;
   setOverlayCollapsed: (collapsed: boolean) => Promise<void>;
   setOverlayLocked: (locked: boolean) => Promise<void>;
   showOverlay: () => Promise<void>;
@@ -87,6 +125,10 @@ interface StoreState {
 }
 
 const unlisteners: UnlistenFn[] = [];
+const settingsSaveCoordinator = new SettingsSaveCoordinator();
+const settingsResponseGate = new SnapshotResponseGate();
+let initializationRetryTimer: number | undefined;
+let initializationRetryDelay = 500;
 
 /**
  * The UI language this window's module-level i18n constants (I18N, display
@@ -118,33 +160,41 @@ export const useStore = create<StoreState>()((set, get) => ({
     set({ initialized: true });
     if (isTauri) {
       try {
-        const [snapshot, session] = await Promise.all([
-          settingsGet(),
-          sessionGetState(),
-        ]);
-        set({ settings: snapshot, session });
-        // Make sure the persisted UI language is reflected before the page
-        // renders. If the backend preference differs from the local override,
-        // apply it and reload once so all module-level i18n constants update.
-        syncUiLanguageFromSettings(snapshot);
-      } catch {
-        // Boot without settings if the backend is unreachable; the event
-        // listeners below will fill in the real state when it emits.
-      }
-      try {
         unlisteners.push(
-          await listenSessionState((session) => set({ session })),
-          await listenSettingsChanged((settings) => {
-            set({ settings });
-            // Language switches initiated from any window reach every other
-            // window through this event; reload so module-level i18n
-            // constants (I18N, display-name tables) are recomputed.
-            syncUiLanguageFromSettings(settings);
-          }),
+          ...(await initializeSnapshotStreams(
+            {
+              listenSettings: listenSettingsChanged,
+              listenSession: listenSessionState,
+              getSettings: settingsGet,
+              getSession: sessionGetState,
+            },
+            {
+              applySettings: (settings) => {
+                settingsResponseGate.advance();
+                settingsSaveCoordinator.invalidate();
+                set({ settings });
+                // Language switches initiated from any window reach every other
+                // window through this event; reload so module-level i18n
+                // constants (I18N, display-name tables) are recomputed.
+                syncUiLanguageFromSettings(settings);
+              },
+              applySession: (session) => set({ session }),
+            },
+          )),
         );
+        initializationRetryDelay = 500;
       } catch {
-        // No listeners, no live updates — the window still renders its boot
-        // snapshot.
+        // Stay fail-closed and retry listener + snapshot setup as one unit.
+        // Partial listeners are removed by initializeSnapshotStreams.
+        set({ initialized: false });
+        if (initializationRetryTimer === undefined) {
+          const delay = initializationRetryDelay;
+          initializationRetryDelay = Math.min(delay * 2, 8_000);
+          initializationRetryTimer = window.setTimeout(() => {
+            initializationRetryTimer = undefined;
+            void get().init();
+          }, delay);
+        }
       }
     }
   },
@@ -221,6 +271,13 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   switchSourceLanguage: async (language) => {
+    const current = get();
+    if (
+      sessionSettingsAreChanging(current.session) ||
+      !sourceLanguagesForSettings(current.settings).includes(language)
+    ) {
+      return;
+    }
     if (isTauri) {
       await sessionSwitchSourceLanguage(language);
       return;
@@ -239,6 +296,13 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   switchTranslationMode: async (mode) => {
+    const current = get();
+    if (
+      sessionSettingsAreChanging(current.session) ||
+      !translationModesForSettings(current.settings).includes(mode)
+    ) {
+      return;
+    }
     if (isTauri) {
       await sessionSwitchTranslationMode(mode);
       return;
@@ -249,12 +313,162 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 
   saveSettings: async (draft) => {
-    // Optimistic local merge so the UI updates immediately (mirrors Swift's
-    // `@Published` settings bindings); the backend snapshot then confirms it.
-    set((state) => ({ settings: mergeSettings(state.settings, draft) }));
-    if (!isTauri) return;
-    const snapshot = await settingsSave(draft);
+    const previous = get().settings;
+    if (!isTauri) {
+      set({ settings: mergeSettingsSnapshot(previous, draft) });
+      return;
+    }
+    await settingsSaveCoordinator.save(previous, draft, settingsSave, (settings) =>
+      {
+        settingsResponseGate.advance();
+        set({ settings });
+      },
+    );
+  },
+
+  createProfile: async (provider, name) => {
+    ensureProfileMutationsAllowed(get().session);
+    if (isTauri) {
+      const revision = settingsResponseGate.capture();
+      const snapshot = await profileCreate(provider, name);
+      if (settingsResponseGate.applyIfCurrent(revision)) {
+        settingsSaveCoordinator.invalidate();
+        set({ settings: snapshot });
+        return snapshot;
+      }
+      return get().settings;
+    }
+    const current = get().settings;
+    if (current.profiles.length >= 20) throw new Error("profile-limit");
+    const id = `mock-${provider}-${Date.now()}`;
+    const snapshot: SettingsSnapshot = {
+      ...current,
+      profiles: [
+        ...current.profiles,
+        { id, name, provider, credentialState: "missing" },
+      ],
+    };
     set({ settings: snapshot });
+    return snapshot;
+  },
+
+  updateProfile: async (profileId, name) => {
+    ensureProfileMutationsAllowed(get().session);
+    if (isTauri) {
+      const revision = settingsResponseGate.capture();
+      const snapshot = await profileUpdate(profileId, name);
+      if (settingsResponseGate.applyIfCurrent(revision)) {
+        settingsSaveCoordinator.invalidate();
+        set({ settings: snapshot });
+        return snapshot;
+      }
+      return get().settings;
+    }
+    const current = get().settings;
+    const snapshot: SettingsSnapshot = {
+      ...current,
+      profiles: current.profiles.map((profile) =>
+        profile.id === profileId ? { ...profile, name } : profile,
+      ),
+    };
+    set({ settings: snapshot });
+    return snapshot;
+  },
+
+  selectProfile: async (profileId) => {
+    ensureProfileMutationsAllowed(get().session);
+    if (isTauri) {
+      const revision = settingsResponseGate.capture();
+      const snapshot = await profileSelect(profileId);
+      if (settingsResponseGate.applyIfCurrent(revision)) {
+        settingsSaveCoordinator.invalidate();
+        set({ settings: snapshot });
+        return snapshot;
+      }
+      return get().settings;
+    }
+    const current = get().settings;
+    const selected = current.profiles.find((profile) => profile.id === profileId);
+    if (!selected) throw new Error("profile-not-found");
+    const snapshot = settingsAfterMockProfileSelection(current, selected.provider);
+    snapshot.activeProfileId = profileId;
+    set({ settings: snapshot });
+    return snapshot;
+  },
+
+  deleteProfile: async (profileId) => {
+    ensureProfileMutationsAllowed(get().session);
+    if (isTauri) {
+      const revision = settingsResponseGate.capture();
+      const snapshot = await profileDelete(profileId);
+      if (settingsResponseGate.applyIfCurrent(revision)) {
+        settingsSaveCoordinator.invalidate();
+        set({ settings: snapshot });
+        return snapshot;
+      }
+      return get().settings;
+    }
+    const current = get().settings;
+    if (current.profiles.length <= 1) throw new Error("last-profile");
+    const profiles = current.profiles.filter((profile) => profile.id !== profileId);
+    const activeProfileId =
+      current.activeProfileId === profileId
+        ? (profiles[0]?.id ?? "")
+        : current.activeProfileId;
+    const snapshot: SettingsSnapshot = { ...current, profiles, activeProfileId };
+    set({ settings: snapshot });
+    return snapshot;
+  },
+
+  saveProfileAPIKey: async (profileId, apiKey) => {
+    ensureProfileMutationsAllowed(get().session);
+    if (isTauri) {
+      const revision = settingsResponseGate.capture();
+      const snapshot = await profileSaveAPIKey(profileId, apiKey);
+      if (settingsResponseGate.applyIfCurrent(revision)) {
+        settingsSaveCoordinator.invalidate();
+        set({ settings: snapshot });
+        return snapshot;
+      }
+      return get().settings;
+    }
+    if (!apiKey.trim()) throw new Error("credential-empty");
+    const current = get().settings;
+    const snapshot: SettingsSnapshot = {
+      ...current,
+      profiles: current.profiles.map((profile) =>
+        profile.id === profileId
+          ? { ...profile, credentialState: "present" }
+          : profile,
+      ),
+    };
+    set({ settings: snapshot });
+    return snapshot;
+  },
+
+  deleteProfileAPIKey: async (profileId) => {
+    ensureProfileMutationsAllowed(get().session);
+    if (isTauri) {
+      const revision = settingsResponseGate.capture();
+      const snapshot = await profileDeleteAPIKey(profileId);
+      if (settingsResponseGate.applyIfCurrent(revision)) {
+        settingsSaveCoordinator.invalidate();
+        set({ settings: snapshot });
+        return snapshot;
+      }
+      return get().settings;
+    }
+    const current = get().settings;
+    const snapshot: SettingsSnapshot = {
+      ...current,
+      profiles: current.profiles.map((profile) =>
+        profile.id === profileId
+          ? { ...profile, credentialState: "missing" }
+          : profile,
+      ),
+    };
+    set({ settings: snapshot });
+    return snapshot;
   },
 
   setOverlayCollapsed: async (collapsed) => {
@@ -295,22 +509,27 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
 }));
 
-function mergeSettings(
+function ensureProfileMutationsAllowed(session: SessionStateEvent): void {
+  if (session.isActive) throw new Error("session-active");
+}
+
+function sessionSettingsAreChanging(session: SessionStateEvent): boolean {
+  return (
+    session.status.kind === "connecting" || session.status.kind === "stopping"
+  );
+}
+
+function settingsAfterMockProfileSelection(
   current: SettingsSnapshot,
-  draft: SettingsDraft,
+  provider: ServiceProvider,
 ): SettingsSnapshot {
+  if (provider === "alibabaCloud") return { ...current };
   return {
     ...current,
-    sourceLanguage: draft.sourceLanguage ?? current.sourceLanguage,
-    targetLanguage: draft.targetLanguage ?? current.targetLanguage,
-    translationMode: draft.translationMode ?? current.translationMode,
-    fontSize: draft.fontSize ?? current.fontSize,
-    isOverlayLocked: draft.isOverlayLocked ?? current.isOverlayLocked,
-    uiLanguage: draft.uiLanguage ?? current.uiLanguage,
-    hasAPIKey:
-      draft.apiKey !== undefined
-        ? draft.apiKey.length > 0
-        : current.hasAPIKey,
+    sourceLanguage: "auto",
+    targetLanguage:
+      current.targetLanguage === "original" ? "zh" : current.targetLanguage,
+    translationMode: "turbo",
   };
 }
 

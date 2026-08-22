@@ -1,9 +1,8 @@
 /**
  * IPC contract types for the mimi Tauri frontend.
  *
- * These mirror `docs/plans/2026-08-13-tauri-multiplatform.md` (the single source
- * of truth for the frontend/backend interface) and `Sources/MimiCore/Models.swift`
- * (language enums, display names, status semantics).
+ * These mirror the Tauri command payloads and `src-tauri/src/core/models.rs`
+ * (language enums and status semantics).
  */
 
 import { I18N, effectiveUiLanguage, isChineseSystem } from "./i18n";
@@ -12,7 +11,7 @@ import { I18N, effectiveUiLanguage, isChineseSystem } from "./i18n";
 // Session state
 // ---------------------------------------------------------------------------
 
-export type SessionStatus =
+type SessionStatus =
   | { kind: "idle" }
   | { kind: "connecting" }
   | { kind: "listening" }
@@ -24,7 +23,7 @@ export interface SubtitleLineSnapshot {
   isFinal: boolean;
 }
 
-export interface SubtitleHistoryItem {
+interface SubtitleHistoryItem {
   source: string;
   translation: string;
   /** Epoch milliseconds. */
@@ -53,31 +52,50 @@ export interface SessionStateEvent {
 // ---------------------------------------------------------------------------
 
 export interface SettingsSnapshot {
-  /** Loaded from the OS keychain so the settings field can be prefilled. */
-  apiKey: string;
-  hasAPIKey: boolean;
+  /** Service profiles never contain credential material, only availability. */
+  profiles: ServiceProfile[];
+  activeProfileId: string;
   sourceLanguage: SourceLanguage;
   targetLanguage: TargetLanguage;
   translationMode: TranslationMode;
   /** 14..20 */
   fontSize: number;
   isOverlayLocked: boolean;
-  credentialLoadError: string | null;
-  /** UI language override; `null` means follow the system language. */
+  /** UI language override; `null` or `system` follows the system language. */
   uiLanguage: UiLanguage | null;
 }
 
 export type UiLanguage = "system" | "zh" | "en" | "ja";
 
 export interface SettingsDraft {
-  /** Only transmitted on settings_save; never present elsewhere. */
-  apiKey?: string;
   sourceLanguage?: SourceLanguage;
   targetLanguage?: TargetLanguage;
   translationMode?: TranslationMode;
   fontSize?: number;
   isOverlayLocked?: boolean;
   uiLanguage?: UiLanguage;
+}
+
+export type ServiceProvider = "alibabaCloud" | "openAIRealtime";
+
+/**
+ * Sanitized keychain state returned by native snapshots. A replacement key
+ * crosses IPC only in the dedicated write-only save command and is never
+ * returned to the frontend.
+ */
+export type CredentialState = "present" | "missing" | "unavailable";
+
+export interface ServiceProfile {
+  id: string;
+  name: string;
+  provider: ServiceProvider;
+  credentialState: CredentialState;
+}
+
+export interface ProviderCapabilities {
+  sourceLanguages: readonly SourceLanguage[];
+  targetLanguages: readonly TargetLanguage[];
+  translationModes: readonly TranslationMode[];
 }
 
 // ---------------------------------------------------------------------------
@@ -88,21 +106,13 @@ export type SourceLanguage = "auto" | "zh" | "en" | "ja" | "ko";
 export type TargetLanguage = "original" | "zh" | "en" | "ja";
 export type TranslationMode = "lowLatency" | "highQuality" | "turbo";
 
-/** Picker order including automatic detection ("自动识别"), which runs the
- * low-latency pipeline and detects the language per utterance. */
+/** Picker order including provider-specific automatic language detection. */
 export const SOURCE_LANGUAGE_QUICK_CASES: readonly SourceLanguage[] = [
   "auto",
   "ja",
   "en",
   "ko",
   "zh",
-];
-
-export const TARGET_LANGUAGE_CASES: readonly TargetLanguage[] = [
-  "original",
-  "zh",
-  "en",
-  "ja",
 ];
 
 export const TRANSLATION_MODE_CASES: readonly TranslationMode[] = [
@@ -281,20 +291,19 @@ export type OverlayActivityPhaseKind =
   | "translating"
   | "paused";
 
-export interface OverlayActivityPhaseInfo {
+interface OverlayActivityPhaseInfo {
   accessibilityLabel: string;
   /** Base RGB as `#RRGGBB`. */
   color: string;
-  /** Opacity already applied by `OverlayActivityPhase.color` in Swift. */
+  /** Opacity applied to the base phase color. */
   baseOpacity: number;
   animationSpeed: number;
   amplitude: number;
 }
 
 /**
- * The `OverlayActivityPhase` table from `SubtitleOverlayView.swift`. Colors,
- * animation speed and amplitude are copied verbatim; `listening` and
- * `connecting` carry a pre-applied opacity just like their Swift counterparts.
+ * Visual parameters for the overlay activity indicator. Listening and
+ * connecting use a quieter opacity than active processing phases.
  */
 export const OVERLAY_ACTIVITY_PHASES: Record<
   OverlayActivityPhaseKind,

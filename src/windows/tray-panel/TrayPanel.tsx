@@ -1,16 +1,18 @@
-import { useEffect } from "react";
 import { Icon } from "../../components/Icon";
 import { Switch } from "../../components/Switch";
 import { I18N, setStoredUiLanguage, type UiLanguage } from "../../lib/i18n";
 import { isTauri } from "../../lib/ipc";
+import {
+  activeServiceProfile,
+  effectiveTranslationModeForSettings,
+  sourceLanguagesForSettings,
+} from "../../lib/providerCapabilities";
 import { useStore } from "../../lib/store";
 import {
-  SOURCE_LANGUAGE_QUICK_CASES,
   TRANSLATION_MODE_DISPLAY_NAMES,
   detectedLanguageDisplayName,
   targetLanguageTranslatesAudio,
   type SessionStateEvent,
-  type SettingsDraft,
   type SettingsSnapshot,
   type SourceLanguage,
 } from "../../lib/types";
@@ -40,22 +42,20 @@ export function TrayPanel() {
   const isChangingSession =
     sessionStatus.kind === "connecting" || sessionStatus.kind === "stopping";
   const isListening = sessionStatus.kind === "listening";
-
-  useEffect(() => {
-    prepareLanguagePreferences(settings, saveSettings);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const sourceLanguages = sourceLanguagesForSettings(settings);
+  const effectiveMode = effectiveTranslationModeForSettings(settings);
 
   const handleLock = (checked: boolean) => {
-    void setOverlayLocked(checked);
-    void saveSettings({ isOverlayLocked: checked }).catch(() => {});
+    void setOverlayLocked(checked).catch(() => {});
   };
 
   const handleUiLanguage = (language: UiLanguage) => {
-    setStoredUiLanguage(language);
     void saveSettings({ uiLanguage: language })
-      .catch(() => {})
-      .finally(() => window.location.reload());
+      .then(() => {
+        setStoredUiLanguage(language);
+        window.location.reload();
+      })
+      .catch(() => {});
   };
 
   const pickerValue = settings.sourceLanguage;
@@ -95,7 +95,9 @@ export function TrayPanel() {
           </span>
           <select
             value={pickerValue}
-            disabled={isChangingSession || isPaused}
+            disabled={
+              isChangingSession || isPaused || sourceLanguages.length === 1
+            }
             aria-label={I18N.tray.sourceLanguage}
             onChange={(event) =>
               void switchSourceLanguage(event.target.value as SourceLanguage)
@@ -108,10 +110,13 @@ export function TrayPanel() {
               color: "rgba(255,255,255,0.9)",
               border: "1px solid rgba(255,255,255,0.12)",
               fontSize: 13,
-              opacity: isChangingSession || isPaused ? 0.5 : 1,
+              opacity:
+                isChangingSession || isPaused || sourceLanguages.length === 1
+                  ? 0.5
+                  : 1,
             }}
           >
-            {SOURCE_LANGUAGE_QUICK_CASES.map((language) => (
+            {sourceLanguages.map((language) => (
               <option key={language} value={language}>
                 {sourceLanguageButtonTitle(language)}
               </option>
@@ -169,7 +174,7 @@ export function TrayPanel() {
                 ? `${detectedLanguageDisplayName(detectedLanguage)} · `
                 : "";
             return targetLanguageTranslatesAudio(settings.targetLanguage)
-              ? `${detected}${TRANSLATION_MODE_DISPLAY_NAMES[settings.translationMode]}${I18N.overlay.translationSuffix}`
+              ? `${detected}${TRANSLATION_MODE_DISPLAY_NAMES[effectiveMode]}${I18N.overlay.translationSuffix}`
               : `${detected}${I18N.tray.originalOnly}`;
           })()}
         </div>
@@ -278,7 +283,7 @@ function statusText(
 
   switch (status.kind) {
     case "idle":
-      return !settings.hasAPIKey
+      return activeServiceProfile(settings)?.credentialState !== "present"
         ? I18N.tray.setupRequired
         : I18N.tray.ready;
     case "connecting":
@@ -304,22 +309,5 @@ function statusColor(
       return RED;
     default:
       return SECONDARY;
-  }
-}
-
-function prepareLanguagePreferences(
-  settings: SettingsSnapshot,
-  saveSettings: (draft: SettingsDraft) => Promise<void>,
-): void {
-  // Note: automatic source is the user's persistent choice now (the
-  // backend resolves the engine language); only the Chinese-source
-  // original-target rule is applied here.
-  const source = settings.sourceLanguage;
-  let target = settings.targetLanguage;
-  if (source === "zh") target = "original";
-  if (target !== settings.targetLanguage) {
-    void saveSettings({ sourceLanguage: source, targetLanguage: target }).catch(
-      () => {},
-    );
   }
 }

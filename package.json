@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "tauri": "tauri",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {

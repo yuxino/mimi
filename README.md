@@ -30,24 +30,30 @@ Turn Chinese, Japanese, English, or Korean audio playing on your device into liv
 
 - **Live subtitles** — works with browsers, players, games, meetings, and desktop apps.
 - **Live translation** — Turbo, Low latency, and High quality modes.
+- **Service profiles** — keep multiple provider configurations and switch without re-entering credentials.
 - **Flexible overlay** — move, resize, collapse, or lock the subtitle panel for click-through.
 - **Multiple languages** — recognize Chinese, Japanese, English, and Korean.
-- **Privacy** — no microphone, no account, and no saved audio or subtitle history.
+- **Privacy** — no microphone, no mimi account, and no saved audio or subtitle history.
 - **Global shortcut** — **⌘ ⇧ Space** on macOS, **Ctrl+Shift+Space** on Windows to start or stop listening.
 
 ## Get started
 
 1. Download the latest version for your platform from [Releases](https://github.com/yuxino/mimi/releases/latest).
-2. Add your Alibaba Cloud Model Studio (DashScope) API key.
+2. Open **Service profiles** and save an API key. Alibaba Cloud is selected by default; OpenAI Realtime is also supported.
 3. Play something and select **Start**.
 
-Your API key is stored in the OS keychain (macOS Keychain / Windows Credential Manager). mimi talks to DashScope's unified endpoints with the API key alone — no Workspace ID needed. Model usage may incur charges.
+Each profile's API key is stored separately in the OS keychain (macOS Keychain / Windows Credential Manager) and is never read back into the settings page. Existing Alibaba Cloud setups migrate to the default profile automatically. Provider usage may incur charges.
 
-[Create an API key](https://help.aliyun.com/en/model-studio/get-api-key)
+[Create an Alibaba Cloud API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Create an OpenAI API key](https://platform.openai.com/api-keys)
+
+| Provider | Source audio | Subtitle targets | Modes |
+| --- | --- | --- | --- |
+| Alibaba Cloud Model Studio | Auto, Chinese, English, Japanese, Korean | Original, Simplified Chinese, English, Japanese | Turbo, Low latency, High quality |
+| OpenAI Realtime | Auto | Simplified Chinese, English, Japanese | Turbo |
 
 ### Platform notes
 
-- **macOS**: the first session asks for Screen Recording permission (used only to capture system audio; mimi does not record your screen and excludes its own sound).
+- **macOS**: the first session asks for Screen & System Audio Recording access (mimi captures system audio only, does not record the screen, and excludes its own sound).
 - **Windows**: captures the default playback device's full mix through WASAPI loopback — no permissions needed; mimi plays no audio, so there is no echo.
 
 ## Build from source
@@ -57,8 +63,9 @@ Requires Rust 1.85+ and Node.js 20+ (macOS also needs the Xcode Command Line Too
 ```bash
 git clone https://github.com/yuxino/mimi.git
 cd mimi
-npm install
-npm run tauri dev        # develop (bare binary)
+npm ci
+./scripts/dev-app.sh     # develop on macOS with a stable app identity
+npm run tauri:dev        # develop on Windows with isolated dev settings
 ./scripts/check.sh       # full check (fmt/clippy/tests/frontend build)
 ./scripts/package-app.sh # package (macOS: .dmg; Windows: .msi/.nsis)
 ```
@@ -67,17 +74,18 @@ Build the Windows package on a Windows machine (Rust's C dependencies cannot cro
 
 ### macOS dev notes
 
-- `npm run tauri dev` runs the bare binary, which has no `.app` bundle — macOS then shows a generic icon in the Dock (macOS only reads icons from bundles). Use `./scripts/dev-app.sh` instead for the icon-correct run: it builds a release binary with `--features tauri/custom-protocol` (the same build `tauri build` performs), wraps it in a real `.app` (the original icon, window titles/tooltip marked "(dev)"), and launches it, so the Dock icon matches the release app exactly. (Without the `custom-protocol` feature, Tauri treats the build as dev and replaces the Dock icon with an unmasked square at runtime.)
-- Local builds are signed with the stable `mimi Local Development` identity when present (`scripts/codesign-identity.sh`), so Screen Recording and keychain grants survive rebuilds. Permissions must be granted once per app identity.
+- Always launch a working macOS build through `./scripts/dev-app.sh`. It packages and verifies a real `.app`, installs it at one canonical path, and refuses an unstable ad-hoc identity. This keeps Screen & System Audio Recording and Keychain grants attached to the same app across rebuilds.
+- The launcher selects the stable `mimi Local Development` identity through `scripts/codesign-identity.sh`. Avoid any `tauri dev` command or bare binary on macOS: each ad-hoc rebuild can look like a different app to macOS and request permission again.
+- Development builds use a separate app identifier, settings directory, and credential namespace, so they never read or modify an installed release's profiles or API keys.
 
 ## Tests
 
 ```bash
-cd src-tauri && cargo test   # Rust unit tests (protocols, subtitle assembly, config, PCM…)
-npm run test                 # frontend vitest
+cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests (protocols, subtitle assembly, config, PCM…)
+npm run test                                      # frontend vitest
 ```
 
-For UI smoke tests, run `npm run tauri dev` with `MIMI_UI_TEST=1` (demo credentials) and optionally `MIMI_AUTO_START=1` (auto-starts a session to exercise the error path).
+For macOS UI smoke tests, run `./scripts/dev-app.sh --ui-only`; UI-test mode does not access real credentials, provider networks, or system-audio capture. Use the normal command for an end-to-end provider session with local Keychain credentials.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 

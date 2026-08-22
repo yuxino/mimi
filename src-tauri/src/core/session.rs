@@ -1,5 +1,4 @@
-//! Session state controller, ported 1:1 from
-//! `Sources/MimiCore/SessionController.swift`.
+//! Provider-neutral session state controller.
 
 use crate::core::models::{DetectedLanguage, SessionStatus, SubtitleSnapshot};
 use crate::core::protocols::live_translate::LiveTranslateServerEvent;
@@ -32,6 +31,8 @@ pub struct TranslationSessionController {
 
 impl TranslationSessionController {
     pub fn begin_connecting(&mut self) {
+        self.subtitle_reducer.reset_transient();
+        self.state.subtitles = self.subtitle_reducer.snapshot.clone();
         self.state.status = SessionStatus::Connecting;
         self.state.detected_language = None;
         self.state.is_translation_pending = false;
@@ -76,10 +77,13 @@ impl TranslationSessionController {
     }
 
     pub fn handle(&mut self, event: LiveTranslateServerEvent) {
-        // Finishing a realtime session can flush synthetic tail events after
-        // audio capture has already stopped. Keep the last real subtitle on
-        // screen instead of presenting that service-generated cleanup text.
-        if self.state.status == SessionStatus::Stopping {
+        // Alibaba teardown can emit synthetic source/translation cleanup
+        // finals, which are intentionally ignored. OpenAI has no separate
+        // final events: a real `session.closed` may flush one client-aligned
+        // atomic pair, and that verified tail is safe to keep.
+        if self.state.status == SessionStatus::Stopping
+            && !matches!(event, LiveTranslateServerEvent::SubtitleFinalPair { .. })
+        {
             return;
         }
 
@@ -107,6 +111,19 @@ impl TranslationSessionController {
                 self.state.is_translation_pending = false;
                 self.subtitle_reducer
                     .apply(crate::core::models::SubtitleEvent::TranslationFinal(text));
+            }
+            LiveTranslateServerEvent::SubtitleFinalPair {
+                source,
+                language,
+                translation,
+            } => {
+                self.update_detected_language(language.as_deref());
+                self.state.is_translation_pending = false;
+                self.subtitle_reducer
+                    .apply(crate::core::models::SubtitleEvent::FinalPair {
+                        source,
+                        translation,
+                    });
             }
             LiveTranslateServerEvent::SubtitleRevoked => {
                 self.subtitle_reducer
@@ -323,6 +340,30 @@ mod tests {
     }
 
     #[test]
+    fn stopping_accepts_a_provider_confirmed_atomic_tail_pair() {
+        let mut controller = TranslationSessionController::default();
+        controller.did_connect();
+        controller.begin_stopping();
+
+        controller.handle(LiveTranslateServerEvent::SubtitleFinalPair {
+            source: "Confirmed tail".into(),
+            language: Some("en".into()),
+            translation: "已确认的尾句".into(),
+        });
+
+        assert_eq!(controller.state.status, SessionStatus::Stopping);
+        assert_eq!(controller.state.subtitles.history.len(), 1);
+        assert_eq!(
+            controller.state.subtitles.history[0].source,
+            "Confirmed tail"
+        );
+        assert_eq!(
+            controller.state.subtitles.history[0].translation,
+            "已确认的尾句"
+        );
+    }
+
+    #[test]
     fn unknown_server_events_leave_state_unchanged() {
         let mut controller = TranslationSessionController::default();
         let before = controller.state.clone();
@@ -382,6 +423,29 @@ mod tests {
         assert_eq!(
             controller.state.subtitles.history[0].translation,
             "你好。今天天气很好。希望明天也放晴。"
+        );
+    }
+
+    #[test]
+    fn atomic_pair_updates_history_and_detected_language_together() {
+        let mut controller = TranslationSessionController::default();
+        controller.did_connect();
+        controller.handle(LiveTranslateServerEvent::SubtitleFinalPair {
+            source: "Hello.".into(),
+            language: Some("en".into()),
+            translation: "你好。".into(),
+        });
+
+        assert_eq!(controller.state.subtitles.history.len(), 1);
+        assert_eq!(controller.state.subtitles.history[0].source, "Hello.");
+        assert_eq!(controller.state.subtitles.history[0].translation, "你好。");
+        assert_eq!(
+            controller
+                .state
+                .detected_language
+                .as_ref()
+                .map(|value| value.code.as_str()),
+            Some("en")
         );
     }
 

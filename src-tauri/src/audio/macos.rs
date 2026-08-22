@@ -1,15 +1,12 @@
 //! macOS system-audio capture through ScreenCaptureKit (audio only, own
-//! process audio excluded, 16 kHz mono), ported from
-//! `Sources/MimiApp/SystemAudioCapture.swift`.
+//! process audio excluded, provider-rate PCM16 mono).
 //!
-//! ScreenCaptureKit types are main-thread-only (!Send), mirroring the Swift
-//! `@MainActor` confinement. All SCStream/handler/content objects are
-//! therefore created, used, and destroyed inside closures dispatched to the
-//! main thread; the shareable-content and capture completions (which fire on
-//! arbitrary queues) re-dispatch to the main thread through a raw-pointer
-//! wrapper that is only ever dereferenced on the main thread.
+//! ScreenCaptureKit types are main-thread-only (!Send). All stream, handler,
+//! and content objects are therefore created, used, and destroyed inside
+//! closures dispatched to the main thread; completions that fire on arbitrary
+//! queues re-dispatch there before touching those objects.
 
-use crate::audio::SystemAudioCaptureError;
+use crate::audio::{AudioCaptureFormat, SystemAudioCaptureError};
 use crate::core::pcm16::PCM16Encoder;
 use crate::pipeline_log;
 use core_media::block_buffer::{CMBlockBufferGetDataLength, CMBlockBufferGetDataPointer};
@@ -33,14 +30,14 @@ use screen_capture_kit::stream::{
     SCContentFilter, SCStream, SCStreamConfiguration, SCStreamDelegate, SCStreamOutput,
     SCStreamOutputType,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::panic::AssertUnwindSafe;
 use std::ptr::null_mut;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
-use tokio::sync::{mpsc, oneshot};
+use std::time::{Duration, Instant};
+use tokio::sync::{mpsc, oneshot, Notify};
 
 /// Executes a closure on the main thread (wraps `AppHandle::run_on_main_thread`).
 pub type MainThreadDispatcher = Arc<dyn Fn(Box<dyn FnOnce() + Send>) + Send + Sync>;
@@ -54,12 +51,13 @@ struct AudioHandlerState {
     last_audio_buffer_at: Mutex<Option<Instant>>,
     /// Decoded-buffer counter used to throttle diagnostics.
     decoded_buffers: Mutex<u64>,
-    /// 16 kHz resampler; rebuilt when the stream sample rate changes.
+    /// Provider-rate resampler; rebuilt for every capture session.
     /// SCStream delivers the device rate (typically 48 kHz) regardless of the
     /// requested configuration, so the samples must be resampled before the
-    /// ASR pipeline (which expects 16 kHz PCM).
+    /// selected provider's input rate (16 or 24 kHz PCM).
     resampler: Mutex<Option<rubato::Fft<f32>>>,
     pending_frames: Mutex<Vec<f32>>,
+    target_sample_rate_hz: u32,
 }
 
 /// A pointer that is only ever dereferenced on the main thread, inside the
@@ -169,12 +167,114 @@ thread_local! {
     static MAIN_HANDLER: RefCell<Option<Retained<MimiAudioStreamHandler>>> =
         const { RefCell::new(None) };
     static MAIN_STATE: RefCell<Option<Box<AudioHandlerState>>> = const { RefCell::new(None) };
+    static MAIN_GENERATION: Cell<Option<u64>> = const { Cell::new(None) };
+}
+
+const CAPTURE_START_TIMEOUT: Duration = Duration::from_secs(10);
+const CAPTURE_STOP_TIMEOUT: Duration = Duration::from_secs(2);
+const CAPTURE_START_CANCELLED: &str = "System audio capture start was cancelled.";
+
+/// Invalidates asynchronous ScreenCaptureKit completions from older starts.
+/// A stop changes the value synchronously, before its main-thread teardown is
+/// dispatched, so a pending content callback cannot install a ghost stream.
+#[derive(Clone, Default)]
+struct CaptureGeneration {
+    value: Arc<AtomicU64>,
+}
+
+impl CaptureGeneration {
+    fn begin(&self) -> u64 {
+        self.value.fetch_add(1, Ordering::SeqCst).wrapping_add(1)
+    }
+
+    fn invalidate(&self) -> u64 {
+        self.value.fetch_add(1, Ordering::SeqCst)
+    }
+
+    fn invalidate_if_current(&self, token: u64) -> bool {
+        self.value
+            .compare_exchange(
+                token,
+                token.wrapping_add(1),
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_ok()
+    }
+
+    fn is_current(&self, token: u64) -> bool {
+        self.value.load(Ordering::SeqCst) == token
+    }
+}
+
+#[derive(Clone, Default)]
+struct PendingTeardown {
+    count: Arc<AtomicUsize>,
+    notify: Arc<Notify>,
+}
+
+impl PendingTeardown {
+    fn begin(&self) -> PendingTeardownGuard {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        PendingTeardownGuard {
+            count: Arc::clone(&self.count),
+            notify: Arc::clone(&self.notify),
+        }
+    }
+
+    fn is_pending(&self) -> bool {
+        self.count.load(Ordering::SeqCst) > 0
+    }
+
+    async fn wait_until_clear(&self) {
+        loop {
+            let notified = self.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if !self.is_pending() {
+                return;
+            }
+            notified.await;
+        }
+    }
+}
+
+struct PendingTeardownGuard {
+    count: Arc<AtomicUsize>,
+    notify: Arc<Notify>,
+}
+
+impl Drop for PendingTeardownGuard {
+    fn drop(&mut self) {
+        if self.count.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.notify.notify_waiters();
+        }
+    }
+}
+
+async fn finish_failed_capture_start<F>(
+    generation: &CaptureGeneration,
+    started: &AtomicBool,
+    generation_token: u64,
+    teardown: F,
+) where
+    F: std::future::Future<Output = ()>,
+{
+    if generation.invalidate_if_current(generation_token) {
+        started.store(false, Ordering::SeqCst);
+    }
+    // Phase 2 can install and start the stream immediately before the setup
+    // acknowledgement loses a timeout race. The failing start must therefore
+    // await token-scoped teardown instead of relying on a later `stop()` call.
+    teardown.await;
 }
 
 #[derive(Clone)]
 pub struct MacSystemAudioCapture {
     dispatcher: MainThreadDispatcher,
     started: Arc<AtomicBool>,
+    generation: CaptureGeneration,
+    pending_teardown: PendingTeardown,
 }
 
 impl MacSystemAudioCapture {
@@ -182,6 +282,8 @@ impl MacSystemAudioCapture {
         Self {
             dispatcher,
             started: Arc::new(AtomicBool::new(false)),
+            generation: CaptureGeneration::default(),
+            pending_teardown: PendingTeardown::default(),
         }
     }
 
@@ -191,41 +293,76 @@ impl MacSystemAudioCapture {
         &self,
         audio_tx: AudioSender,
         error_tx: ErrorSender,
+        format: AudioCaptureFormat,
     ) -> Result<(), SystemAudioCaptureError> {
         if self.started.swap(true, Ordering::SeqCst) {
             return Err(SystemAudioCaptureError::AlreadyRunning);
+        }
+        let generation_token = self.generation.begin();
+        if tokio::time::timeout(
+            CAPTURE_START_TIMEOUT,
+            self.pending_teardown.wait_until_clear(),
+        )
+        .await
+        .is_err()
+        {
+            self.finish_failed_start(generation_token).await;
+            return Err(SystemAudioCaptureError::Other(
+                "The previous system audio capture is still stopping.".into(),
+            ));
+        }
+        if !self.generation.is_current(generation_token) {
+            self.finish_failed_start(generation_token).await;
+            return Err(SystemAudioCaptureError::Other(
+                CAPTURE_START_CANCELLED.into(),
+            ));
         }
 
         // Phase 1 (main thread): ask ScreenCaptureKit for shareable content.
         let dispatcher = Arc::clone(&self.dispatcher);
         let phase2_dispatcher = Arc::clone(&self.dispatcher);
+        let generation = self.generation.clone();
+        let pending_teardown = self.pending_teardown.clone();
         let (content_tx, content_rx) = oneshot::channel::<Result<(), String>>();
         let content_tx = Arc::new(Mutex::new(Some(content_tx)));
         dispatcher(Box::new(move || {
+            if !generation.is_current(generation_token) {
+                send_start_result(&content_tx, Err(CAPTURE_START_CANCELLED.into()));
+                return;
+            }
             // ScreenCaptureKit calls can raise Objective-C exceptions; catch
             // them here so they surface as errors instead of aborting.
-            let _ = objc2::exception::catch(AssertUnwindSafe(|| {
+            let content_tx_for_callback = Arc::clone(&content_tx);
+            let generation_for_callback = generation.clone();
+            let pending_teardown_for_callback = pending_teardown.clone();
+            let request = objc2::exception::catch(AssertUnwindSafe(|| {
                 SCShareableContent::get_shareable_content_excluding_desktop_windows(
                     false,
                     false,
                     move |content, error| {
+                        if !generation_for_callback.is_current(generation_token) {
+                            send_start_result(
+                                &content_tx_for_callback,
+                                Err(CAPTURE_START_CANCELLED.into()),
+                            );
+                            return;
+                        }
                         // This completion fires on an arbitrary queue; re-dispatch
                         // phase 2 to the main thread with the content.
                         let content = match (content, error) {
                             (Some(content), _) => content,
                             (None, Some(error)) => {
-                                if let Some(tx) = content_tx.lock().unwrap().take() {
-                                    let _ = tx.send(Err(error.to_string()));
-                                }
+                                send_start_result(&content_tx_for_callback, Err(error.to_string()));
                                 return;
                             }
                             (None, None) => {
-                                if let Some(tx) = content_tx.lock().unwrap().take() {
-                                    let _ = tx.send(Err(
+                                send_start_result(
+                                    &content_tx_for_callback,
+                                    Err(
                                     "mimi could not find a display to use for system audio capture."
                                         .into(),
-                                ));
-                                }
+                                    ),
+                                );
                                 return;
                             }
                         };
@@ -233,54 +370,88 @@ impl MacSystemAudioCapture {
                         let audio_tx = audio_tx.clone();
                         let error_tx = error_tx.clone();
                         let dispatcher = Arc::clone(&phase2_dispatcher);
-                        let content_tx = Arc::clone(&content_tx);
+                        let content_tx = Arc::clone(&content_tx_for_callback);
+                        let generation = generation_for_callback.clone();
+                        let pending_teardown = pending_teardown_for_callback.clone();
                         dispatcher(Box::new(move || {
                             let raw = ptr.into_inner();
                             let content =
                                 unsafe { *Box::from_raw(raw as *mut Retained<SCShareableContent>) };
+                            if !generation.is_current(generation_token) {
+                                send_start_result(&content_tx, Err(CAPTURE_START_CANCELLED.into()));
+                                return;
+                            }
                             let result = objc2::exception::catch(AssertUnwindSafe(|| {
-                                start_capture_on_main(content, audio_tx, error_tx)
+                                start_capture_on_main(
+                                    content,
+                                    audio_tx,
+                                    error_tx,
+                                    format,
+                                    generation,
+                                    generation_token,
+                                    pending_teardown,
+                                )
                             }));
                             let result = match result {
-                            Ok(result) => result,
-                            Err(exception) => match exception {
-                                Some(exception) => Err(exception_message(&exception)),
-                                None => Err(
-                                    "System audio capture raised an unknown Objective-C exception."
-                                        .into(),
-                                ),
-                            },
-                        };
-                            if let Some(tx) = content_tx.lock().unwrap().take() {
-                                let _ = tx.send(result);
-                            }
+                                Ok(result) => result,
+                                Err(exception) => match exception {
+                                    Some(exception) => Err(exception_message(&exception)),
+                                    None => Err(
+                                        "System audio capture raised an unknown Objective-C exception."
+                                            .into(),
+                                    ),
+                                },
+                            };
+                            send_start_result(&content_tx, result);
                         }));
                     },
                 );
             }));
+            if let Err(exception) = request {
+                let error = match exception {
+                    Some(exception) => exception_message(&exception),
+                    None => "System audio capture raised an unknown Objective-C exception.".into(),
+                };
+                send_start_result(&content_tx, Err(error));
+            }
         }));
 
-        match content_rx.await {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) => {
-                self.started.store(false, Ordering::SeqCst);
-                Err(SystemAudioCaptureError::Other(error))
-            }
-            Err(_) => {
-                self.started.store(false, Ordering::SeqCst);
-                Err(SystemAudioCaptureError::NoDisplay)
-            }
+        let result = match tokio::time::timeout(CAPTURE_START_TIMEOUT, content_rx).await {
+            Ok(Ok(Ok(()))) if self.generation.is_current(generation_token) => Ok(()),
+            Ok(Ok(Ok(()))) => Err(SystemAudioCaptureError::Other(
+                CAPTURE_START_CANCELLED.into(),
+            )),
+            Ok(Ok(Err(error))) => Err(SystemAudioCaptureError::Other(error)),
+            Ok(Err(_)) => Err(SystemAudioCaptureError::NoDisplay),
+            Err(_) => Err(SystemAudioCaptureError::Other(
+                "System audio capture setup timed out.".into(),
+            )),
+        };
+        if result.is_err() {
+            self.finish_failed_start(generation_token).await;
         }
+        result
     }
 
     pub async fn stop(&self) {
         if !self.started.swap(false, Ordering::SeqCst) {
             return;
         }
+        let generation_token = self.generation.invalidate();
         pipeline_log!("capture stop requested");
+        self.teardown_generation(generation_token).await;
+    }
+
+    async fn teardown_generation(&self, generation_token: u64) {
         let (done_tx, done_rx) = oneshot::channel::<()>();
         let dispatcher = Arc::clone(&self.dispatcher);
+        let pending_teardown = self.pending_teardown.clone();
         dispatcher(Box::new(move || {
+            if MAIN_GENERATION.get() != Some(generation_token) {
+                let _ = done_tx.send(());
+                return;
+            }
+            MAIN_GENERATION.set(None);
             let stream = MAIN_STREAM.take();
             let state = MAIN_STATE.take();
             let handler = MAIN_HANDLER.take();
@@ -290,6 +461,7 @@ impl MacSystemAudioCapture {
                 let _ = done_tx.send(());
                 return;
             };
+            let teardown_guard = pending_teardown.begin();
             // ScreenCaptureKit requires the stream and its output to stay
             // retained until the stop completion fires. Releasing them right
             // after calling stop_capture can leave the capture session
@@ -301,15 +473,39 @@ impl MacSystemAudioCapture {
             let completion_stream = std::cell::Cell::new(Some(stream.clone()));
             let completion_state = std::cell::Cell::new(state);
             let completion_handler = std::cell::Cell::new(handler);
+            let completion_teardown = std::cell::Cell::new(Some(teardown_guard));
+            let completion_done = std::cell::Cell::new(Some(done_tx));
             stream.stop_capture(move |_error| {
                 pipeline_log!("capture stop completed");
                 drop(completion_stream.take());
                 drop(completion_state.take());
                 drop(completion_handler.take());
+                drop(completion_teardown.take());
+                if let Some(done_tx) = completion_done.take() {
+                    let _ = done_tx.send(());
+                }
             });
-            let _ = done_tx.send(());
         }));
-        let _ = done_rx.await;
+        let _ = tokio::time::timeout(CAPTURE_STOP_TIMEOUT, done_rx).await;
+    }
+
+    async fn finish_failed_start(&self, generation_token: u64) {
+        finish_failed_capture_start(
+            &self.generation,
+            &self.started,
+            generation_token,
+            self.teardown_generation(generation_token),
+        )
+        .await;
+    }
+}
+
+fn send_start_result(
+    sender: &Mutex<Option<oneshot::Sender<Result<(), String>>>>,
+    result: Result<(), String>,
+) {
+    if let Some(sender) = sender.lock().unwrap().take() {
+        let _ = sender.send(result);
     }
 }
 
@@ -319,8 +515,21 @@ fn start_capture_on_main(
     content: Retained<SCShareableContent>,
     audio_tx: AudioSender,
     error_tx: ErrorSender,
+    format: AudioCaptureFormat,
+    generation: CaptureGeneration,
+    generation_token: u64,
+    pending_teardown: PendingTeardown,
 ) -> Result<(), String> {
-    pipeline_log!("audio3 capture phase2 start");
+    if !generation.is_current(generation_token) {
+        return Err(CAPTURE_START_CANCELLED.into());
+    }
+    if MAIN_STREAM.with(|stream| stream.borrow().is_some()) {
+        return Err("System audio capture is already running.".into());
+    }
+    if pending_teardown.is_pending() {
+        return Err("The previous system audio capture is still stopping.".into());
+    }
+    pipeline_log!("system audio capture phase2 start");
     // Pick the main display, falling back to the first one.
     let displays = content.displays();
     let main_display_id = unsafe { core_graphics2::display::CGMainDisplayID() };
@@ -357,13 +566,13 @@ fn start_capture_on_main(
         &excluded,
         &no_windows,
     );
-    pipeline_log!("audio3 capture filter built");
+    pipeline_log!("system audio capture filter built");
 
-    // Audio-only stream configuration: 16 kHz mono, own audio excluded.
+    // Audio-only stream configuration at the provider rate, own audio excluded.
     let configuration = SCStreamConfiguration::new();
     configuration.set_captures_audio(true);
     configuration.set_excludes_current_process_audio(true);
-    configuration.set_sample_rate(16_000.0);
+    configuration.set_sample_rate(format.sample_rate_hz as f64);
     configuration.set_channel_count(1);
     configuration.set_width(2);
     configuration.set_height(2);
@@ -390,6 +599,7 @@ fn start_capture_on_main(
         decoded_buffers: Mutex::new(0),
         resampler: Mutex::new(None),
         pending_frames: Mutex::new(Vec::new()),
+        target_sample_rate_hz: format.sample_rate_hz,
     });
     let state_ptr: *mut c_void = (&*state as *const AudioHandlerState) as *mut c_void;
     let this = MimiAudioStreamHandler::alloc().set_ivars(MimiAudioStreamHandlerIvars { state_ptr });
@@ -398,14 +608,14 @@ fn start_capture_on_main(
     let delegate = ProtocolObject::from_ref(&*handler);
 
     let stream = SCStream::init_with_filter(SCStream::alloc(), &filter, &configuration, delegate);
-    pipeline_log!("audio3 capture stream created");
+    pipeline_log!("system audio capture stream created");
 
     // Deliver audio samples on a dedicated serial queue.
     let queue = DispatchQueue::new("app.yuxino.mimi.system-audio", DispatchQueueAttr::SERIAL);
     if let Err(error) = stream.add_stream_output(output, SCStreamOutputType::Audio, &queue) {
         return Err(error.to_string());
     }
-    pipeline_log!("audio3 capture output attached");
+    pipeline_log!("system audio capture output attached");
 
     // Start capture. The completion can take hundreds of milliseconds on the
     // first stream (ScreenCaptureKit enumerates windows and apps while
@@ -414,16 +624,57 @@ fn start_capture_on_main(
     // window's rendering right at session start. Failures surface
     // asynchronously through the existing error channel, which the session
     // manager routes into its auto-recovery path.
+    let generation_for_completion = generation.clone();
     stream.start_capture(move |error| {
-        if let Some(error) = error {
-            let _ = start_error_tx.send(format!("System audio capture failed to start: {error}"));
+        if generation_for_completion.is_current(generation_token) {
+            if let Some(error) = error {
+                let _ =
+                    start_error_tx.send(format!("System audio capture failed to start: {error}"));
+            }
         }
     });
-    pipeline_log!("audio3 capture start requested (async)");
+    pipeline_log!("system audio capture start requested (async)");
+    if !generation.is_current(generation_token) {
+        stop_uninstalled_capture(stream, Some(handler), Some(state), pending_teardown.clone());
+        return Err(CAPTURE_START_CANCELLED.into());
+    }
+    MAIN_GENERATION.set(Some(generation_token));
     MAIN_STREAM.set(Some(stream));
     MAIN_HANDLER.set(Some(handler));
     MAIN_STATE.set(Some(state));
+    if !generation.is_current(generation_token) {
+        MAIN_GENERATION.set(None);
+        let stream = MAIN_STREAM
+            .take()
+            .expect("capture stream was just installed");
+        let handler = MAIN_HANDLER.take();
+        let state = MAIN_STATE.take();
+        stop_uninstalled_capture(stream, handler, state, pending_teardown);
+        return Err(CAPTURE_START_CANCELLED.into());
+    }
     Ok(())
+}
+
+/// Stops a stream that lost its generation race before it could become the
+/// installed capture. Resources stay alive until ScreenCaptureKit confirms
+/// the stop, preventing the callback handler from observing freed state.
+fn stop_uninstalled_capture(
+    stream: Retained<SCStream>,
+    handler: Option<Retained<MimiAudioStreamHandler>>,
+    state: Option<Box<AudioHandlerState>>,
+    pending_teardown: PendingTeardown,
+) {
+    let teardown_guard = pending_teardown.begin();
+    let completion_stream = Cell::new(Some(stream.clone()));
+    let completion_state = Cell::new(state);
+    let completion_handler = Cell::new(handler);
+    let completion_teardown = Cell::new(Some(teardown_guard));
+    stream.stop_capture(move |_error| {
+        drop(completion_stream.take());
+        drop(completion_state.take());
+        drop(completion_handler.take());
+        drop(completion_teardown.take());
+    });
 }
 
 /// Renders an Objective-C exception as a content-free error description.
@@ -445,7 +696,7 @@ fn own_bundle_identifier() -> Option<String> {
 }
 
 /// Extracts the sample buffer as f32 mono samples (honoring the stream's
-/// format description), resamples them to 16 kHz with `rubato` when needed,
+/// format description), resamples them to the provider rate with `rubato` when needed,
 /// and quantizes to PCM16 for the ASR pipeline.
 fn capture_to_pcm16(
     state: &AudioHandlerState,
@@ -514,8 +765,9 @@ fn capture_to_pcm16(
     // and the throttled `capture decode buffers=` stats plus the send
     // pipeline's peakDbFS already cover silence/decode diagnosis.
 
-    // Resample to 16 kHz when the device rate differs from the ASR pipeline.
-    let pcm = if (sample_rate - TARGET_SAMPLE_RATE).abs() < 0.5 {
+    let target_sample_rate = state.target_sample_rate_hz as f64;
+    // Resample when the device rate differs from the selected provider.
+    let pcm = if (sample_rate - target_sample_rate).abs() < 0.5 {
         PCM16Encoder::encode(&[samples])
     } else {
         let mut pending = state.pending_frames.lock().unwrap();
@@ -524,7 +776,7 @@ fn capture_to_pcm16(
         if resampler_guard.is_none() {
             let resampler = rubato::Fft::<f32>::new(
                 sample_rate as usize,
-                TARGET_SAMPLE_RATE as usize,
+                state.target_sample_rate_hz as usize,
                 RESAMPLE_CHUNK_FRAMES,
                 1,
                 rubato::FixedSync::Input,
@@ -553,7 +805,6 @@ fn capture_to_pcm16(
     Ok(Some(pcm))
 }
 
-const TARGET_SAMPLE_RATE: f64 = 16_000.0;
 const RESAMPLE_CHUNK_FRAMES: usize = 1024;
 
 /// Decodes interleaved/planar linear PCM into mono f32 samples. Both the
@@ -742,6 +993,105 @@ mod resampler_tests {
     }
 
     #[test]
+    fn stopping_invalidates_a_pending_capture_generation() {
+        let generation = CaptureGeneration::default();
+        let first = generation.begin();
+        assert!(generation.is_current(first));
+
+        assert_eq!(generation.invalidate(), first);
+        assert!(!generation.is_current(first));
+
+        let second = generation.begin();
+        assert_ne!(second, first);
+        assert!(generation.is_current(second));
+        assert!(!generation.invalidate_if_current(first));
+        assert!(generation.is_current(second));
+    }
+
+    #[tokio::test]
+    async fn timeout_after_phase_two_install_tears_down_token_and_allows_retry() {
+        let generation = CaptureGeneration::default();
+        let started = AtomicBool::new(true);
+        let timed_out_token = generation.begin();
+        let installed_stream = Arc::new(Mutex::new(Some(timed_out_token)));
+
+        // This channel is the phase-2 barrier: the native stream is already
+        // installed, but its start acknowledgement has not reached `start`.
+        let (phase_two_installed_tx, phase_two_installed_rx) = oneshot::channel();
+        phase_two_installed_tx.send(()).unwrap();
+        phase_two_installed_rx.await.unwrap();
+
+        let teardown_slot = Arc::clone(&installed_stream);
+        finish_failed_capture_start(&generation, &started, timed_out_token, async move {
+            let mut slot = teardown_slot.lock().unwrap();
+            if *slot == Some(timed_out_token) {
+                *slot = None;
+            }
+        })
+        .await;
+
+        assert!(!started.load(Ordering::SeqCst));
+        assert_eq!(*installed_stream.lock().unwrap(), None);
+
+        let retry_token = generation.begin();
+        let mut slot = installed_stream.lock().unwrap();
+        assert!(slot.is_none(), "stale stream would reject a retry");
+        *slot = Some(retry_token);
+        assert_eq!(*slot, Some(retry_token));
+    }
+
+    #[tokio::test]
+    async fn timed_out_native_stop_keeps_the_teardown_barrier_closed() {
+        let pending = PendingTeardown::default();
+        let native_completion = pending.begin();
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), pending.wait_until_clear(),)
+                .await
+                .is_err(),
+            "a hung native completion must keep a retry waiting"
+        );
+        assert!(
+            pending.is_pending(),
+            "the caller timeout must not abandon native teardown ownership"
+        );
+
+        drop(native_completion);
+        tokio::time::timeout(Duration::from_millis(100), pending.wait_until_clear())
+            .await
+            .expect("late completion releases the teardown barrier");
+        assert!(!pending.is_pending());
+    }
+
+    #[tokio::test]
+    async fn late_native_stop_completion_unblocks_every_waiting_retry() {
+        let pending = PendingTeardown::default();
+        let native_completion = pending.begin();
+        let first_pending = pending.clone();
+        let second_pending = pending.clone();
+        let first_retry = tokio::spawn(async move {
+            first_pending.wait_until_clear().await;
+        });
+        let second_retry = tokio::spawn(async move {
+            second_pending.wait_until_clear().await;
+        });
+
+        tokio::task::yield_now().await;
+        assert!(!first_retry.is_finished());
+        assert!(!second_retry.is_finished());
+
+        // Model ScreenCaptureKit invoking its completion after the caller's
+        // bounded stop wait has already returned.
+        drop(native_completion);
+        tokio::time::timeout(Duration::from_millis(100), async {
+            first_retry.await.unwrap();
+            second_retry.await.unwrap();
+        })
+        .await
+        .expect("all retries resume after the real native completion");
+    }
+
+    #[test]
     fn fft_resampler_48000_to_16000_produces_non_silent_output() {
         let mut resampler = rubato::Fft::<f32>::new(48_000, 16_000, 1024, 1, FixedSync::Input)
             .expect("resampler builds");
@@ -756,10 +1106,7 @@ mod resampler_tests {
         let frames = output.frames();
         let data = output.take_data();
 
-        eprintln!(
-            "input_frames={input_frames} output_frames={frames} peak={}",
-            peak(&data)
-        );
+        assert!((200..=350).contains(&frames));
         assert!(!data.is_empty(), "resampler produced no output");
         assert!(
             peak(&data) > 0.01,
@@ -769,10 +1116,28 @@ mod resampler_tests {
     }
 
     #[test]
+    fn fft_resampler_48000_to_openai_24000_produces_non_silent_output() {
+        let mut resampler = rubato::Fft::<f32>::new(48_000, 24_000, 1024, 1, FixedSync::Input)
+            .expect("resampler builds");
+        let input_frames = resampler.input_frames_next();
+        let samples: Vec<f32> = (0..input_frames)
+            .map(|index| {
+                (index as f64 * 2.0 * std::f64::consts::PI * 1_000.0 / 48_000.0).sin() as f32 * 0.5
+            })
+            .collect();
+        let binding = [samples];
+        let input = SequentialSliceOfVecs::new(&binding, 1, input_frames).expect("adapter builds");
+        let output = resampler.process(&input, None).expect("process succeeds");
+        let data = output.take_data();
+
+        assert!(!data.is_empty());
+        assert!(peak(&data) > 0.01);
+    }
+
+    #[test]
     fn fft_resampler_streams_multiple_chunks_without_silence() {
         let mut resampler = rubato::Fft::<f32>::new(48_000, 16_000, 1024, 1, FixedSync::Input)
             .expect("resampler builds");
-        let delay = resampler.output_delay();
         let input_frames = resampler.input_frames_next();
         let samples: Vec<f32> = (0..input_frames)
             .map(|i| (i as f64 * 2.0 * std::f64::consts::PI * 1000.0 / 48_000.0).sin() as f32 * 0.5)
@@ -780,7 +1145,7 @@ mod resampler_tests {
         let binding = [samples.clone()];
         let input = SequentialSliceOfVecs::new(&binding, 1, input_frames).expect("adapter");
 
-        let out1 = resampler
+        let _warmup = resampler
             .process(&input, None)
             .expect("process 1")
             .take_data();
@@ -791,16 +1156,9 @@ mod resampler_tests {
             .expect("process 2")
             .take_data();
 
-        eprintln!(
-            "output_delay={delay} out1_frames={} out1_peak={} out2_frames={} out2_peak={}",
-            out1.len(),
-            peak(&out1),
-            out2.len(),
-            peak(&out2)
-        );
         assert!(
             peak(&out2) > 0.01,
-            "streaming second chunk is silent (delay={delay} out2_peak={})",
+            "streaming second chunk is silent (out2_peak={})",
             peak(&out2)
         );
     }
@@ -809,11 +1167,6 @@ mod resampler_tests {
     fn fft_resampler_reports_expected_chunk_sizes() {
         let resampler = rubato::Fft::<f32>::new(48_000, 16_000, 1024, 1, FixedSync::Input)
             .expect("resampler builds");
-        eprintln!(
-            "input_frames_next={} output_frames_next={}",
-            resampler.input_frames_next(),
-            resampler.output_frames_next()
-        );
         // The first block is a warm-up chunk (fewer frames); subsequent
         // blocks output ≈1024/3 frames. The streaming test above asserts
         // non-silent, correctly-sized output across multiple chunks.
