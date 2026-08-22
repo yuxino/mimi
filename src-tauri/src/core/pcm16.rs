@@ -1,12 +1,11 @@
-//! Float samples to signed 16-bit little-endian PCM, ported 1:1 from
-//! `Sources/MimiCore/PCM16Encoder.swift`.
+//! Float samples to signed 16-bit little-endian PCM.
 
 pub enum PCM16Encoder {}
 
 impl PCM16Encoder {
     /// Averages the channels per frame, clamps to [-1, 1], and quantizes to
-    /// i16 little-endian bytes. Mirrors the Swift quantization: positive
-    /// samples use `round(x * 32767)`, negative samples `round(x * 32768)`.
+    /// i16 little-endian bytes. Positive samples use `round(x * 32767)` and
+    /// negative samples use `round(x * 32768)` to span the signed range.
     pub fn encode(channels: &[Vec<f32>]) -> Vec<u8> {
         if channels.is_empty() {
             return Vec::new();

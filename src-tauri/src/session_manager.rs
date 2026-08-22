@@ -554,10 +554,6 @@ impl SessionManager {
         self.is_overlay_collapsed.load(Ordering::SeqCst)
     }
 
-    pub fn app_handle(&self) -> &AppHandle {
-        &self.app
-    }
-
     /// Starts (or restarts) a listening session with the saved settings.
     pub async fn start(self: &Arc<Self>, clear_subtitles: bool) -> Result<(), String> {
         if !try_begin_start(&self.start_in_progress) {
@@ -2444,12 +2440,15 @@ mod lifecycle_tests {
         let sequence = Arc::new(AtomicU64::new(121));
         let operations = Arc::new(AtomicUsize::new(0));
         let owner = Arc::new(AtomicU64::new(121));
-        let active_settings = Arc::new(Mutex::new(Some(LiveTranslationConfiguration::new(
-            "test-key",
-            SourceLanguage::English,
-            crate::core::models::TargetLanguage::SimplifiedChinese,
-            TranslationMode::LowLatency,
-        ))));
+        let active_settings = Arc::new(Mutex::new(Some(
+            LiveTranslationConfiguration::for_provider(
+                crate::core::provider::ProviderKind::AlibabaCloud,
+                "test-key",
+                SourceLanguage::English,
+                crate::core::models::TargetLanguage::SimplifiedChinese,
+                TranslationMode::LowLatency,
+            ),
+        )));
 
         // The switch has acquired the lifecycle gate and passed both stale
         // intent checks. Pause then claims the next epoch but must wait for

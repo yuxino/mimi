@@ -25,7 +25,7 @@ import {
 
 const ACCENT = "#7AA8FF";
 
-/** Floating subtitle overlay; 1:1 port of `SubtitleOverlayView.swift`. */
+/** Floating subtitle overlay driven by native session and geometry state. */
 export function OverlayWindow() {
   const session = useStore((state) => state.session);
   const settings = useStore((state) => state.settings);
@@ -217,9 +217,7 @@ export function OverlayWindow() {
             </div>
           </div>
 
-          {/* Quick language / translation-mode switcher. Always visible so the
-              user can switch before starting to listen, not only while active
-              (the Swift original only showed it while listening). */}
+          {/* Keep quick language and mode switching available before listening. */}
           {status !== null && (
             <div className="absolute" style={{ top: 10, left: 12 }}>
               <LanguagePickerPopover
@@ -284,12 +282,9 @@ export function OverlayWindow() {
           <div
             className="flex min-h-0 flex-col"
             style={{
-              // The top band (drag handle / language capsule / control
-              // buttons) floats over the canvas in this port, so reserve its
-              // exact height here — mirroring the Swift in-flow drag-area
-              // frame — otherwise subtitle rows slide underneath the
-              // controls and overlap them. (+13 matches the handle's lowered
-              // position so the pill never overlaps the first row.)
+              // The top band floats over the canvas, so reserve its exact
+              // height or subtitle rows will slide underneath the controls.
+              // The extra 13px follows the lowered handle position.
               paddingTop: topBandHeight,
               height: "100%",
             }}

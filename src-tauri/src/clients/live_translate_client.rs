@@ -1,5 +1,4 @@
-//! Live-translate WebSocket client (`qwen3.5-livetranslate-flash-realtime`),
-//! ported from `Sources/MimiCore/LiveTranslateClient.swift`.
+//! Live-translate WebSocket client (`qwen3.5-livetranslate-flash-realtime`).
 
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use crate::core::protocols::live_translate::{
@@ -27,8 +26,6 @@ pub enum LiveTranslateClientError {
     NotConnected,
     #[error("The live translation connection stopped responding.")]
     HealthCheckTimedOut,
-    #[error("The live translation service returned an unsupported WebSocket message.")]
-    UnsupportedMessage,
     #[error("{0}")]
     Other(String),
 }
@@ -42,8 +39,8 @@ struct Inner {
     receive_task: Mutex<Option<JoinHandle<()>>>,
 }
 
-/// An async client whose receive loop emits decoded server events onto a
-/// bounded channel. `disconnect` is idempotent and cancels the receive task.
+/// An async client whose receive loop emits decoded server events onto the
+/// session event channel. `disconnect` is idempotent and cancels the task.
 #[derive(Clone)]
 pub struct LiveTranslateClient {
     inner: Arc<Inner>,

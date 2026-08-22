@@ -18,7 +18,7 @@ type SessionStatus =
   | { kind: "stopping" }
   | { kind: "error"; message: string };
 
-export interface SubtitleLineSnapshot {
+interface SubtitleLineSnapshot {
   text: string;
   isFinal: boolean;
 }
@@ -121,7 +121,7 @@ export const TRANSLATION_MODE_CASES: readonly TranslationMode[] = [
   "turbo",
 ];
 
-/** `SourceLanguage.displayName` (Models.swift), following the system language. */
+/** Localized source-language labels for the active UI language. */
 export const SOURCE_LANGUAGE_DISPLAY_NAMES: Record<SourceLanguage, string> =
   effectiveUiLanguage() === "ja"
     ? {
@@ -147,7 +147,7 @@ export const SOURCE_LANGUAGE_DISPLAY_NAMES: Record<SourceLanguage, string> =
           ko: "Korean",
         };
 
-/** `TargetLanguage.displayName` (Models.swift), following the system language. */
+/** Localized target-language labels for the active UI language. */
 export const TARGET_LANGUAGE_DISPLAY_NAMES: Record<TargetLanguage, string> =
   effectiveUiLanguage() === "ja"
     ? {
@@ -170,7 +170,7 @@ export const TARGET_LANGUAGE_DISPLAY_NAMES: Record<TargetLanguage, string> =
           ja: "Japanese",
         };
 
-/** `TranslationMode.displayName` (Models.swift), following the system language. */
+/** Localized translation-mode labels for the active UI language. */
 export const TRANSLATION_MODE_DISPLAY_NAMES: Record<TranslationMode, string> =
   effectiveUiLanguage() === "ja"
     ? {
@@ -190,10 +190,7 @@ export const TRANSLATION_MODE_DISPLAY_NAMES: Record<TranslationMode, string> =
           turbo: "Turbo",
         };
 
-/**
- * `DetectedLanguage.displayName` (Models.swift). The incoming code is already
- * normalized to the primary language segment (e.g. "zh", "en", "ja").
- */
+/** Display labels for normalized recognition-service language codes. */
 const DETECTED_LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
   zh: "中文",
   chinese: "中文",
@@ -232,14 +229,11 @@ const DETECTED_LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
   sv: "Svenska",
 };
 
-export function detectedLanguageDisplayName(code: string): string {
+function detectedLanguageDisplayName(code: string): string {
   return DETECTED_LANGUAGE_DISPLAY_NAMES[code] ?? code.toUpperCase();
 }
 
-/**
- * `SourceLanguage.statusDisplayName(detectedLanguage:targetLanguage:)`
- * (Models.swift).
- */
+/** Builds the source-language status shown while automatic detection runs. */
 export function sourceLanguageStatusDisplayName(
   sourceLanguage: SourceLanguage,
   detectedLanguage: string | null,
@@ -257,10 +251,7 @@ export function sourceLanguageStatusDisplayName(
   return `${I18N.overlay.autoDetectedPrefix}${detectedLanguageDisplayName(detectedLanguage)}${I18N.overlay.autoDetectedSuffix}`;
 }
 
-/**
- * `SourceLanguage.targetLanguageAfterQuickSwitch(from:currentTarget:)`
- * (Models.swift).
- */
+/** Keeps quick source changes paired with a meaningful target language. */
 export function targetLanguageAfterQuickSwitch(
   language: SourceLanguage,
   previousSource: SourceLanguage,
@@ -275,13 +266,13 @@ export function targetLanguageAfterQuickSwitch(
   return currentTarget;
 }
 
-/** `TargetLanguage.translatesAudio` (Models.swift). */
+/** Whether the selected target requires machine translation. */
 export function targetLanguageTranslatesAudio(target: TargetLanguage): boolean {
   return target !== "original";
 }
 
 // ---------------------------------------------------------------------------
-// Overlay activity phase (SubtitleOverlayView.swift)
+// Overlay activity phase
 // ---------------------------------------------------------------------------
 
 export type OverlayActivityPhaseKind =

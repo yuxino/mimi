@@ -1,4 +1,4 @@
-//! Core domain models, ported 1:1 from `Sources/MimiCore/Models.swift`.
+//! Core domain models shared by providers, session state, and IPC.
 
 use serde::{Deserialize, Serialize};
 
@@ -67,36 +67,6 @@ impl SourceLanguage {
         }
     }
 
-    pub fn display_name(self) -> &'static str {
-        match self {
-            SourceLanguage::Automatic => "自动识别",
-            SourceLanguage::Chinese => "中文",
-            SourceLanguage::English => "English",
-            SourceLanguage::Japanese => "日本語",
-            SourceLanguage::Korean => "한국어",
-        }
-    }
-
-    /// The source-language label shown in the overlay capsule. When automatic,
-    /// it reports the detected language; when the detected language equals a
-    /// Chinese target, it stays on "自动识别中" (recognizing).
-    pub fn status_display_name(
-        self,
-        detected_language: Option<&DetectedLanguage>,
-        target_language: TargetLanguage,
-    ) -> String {
-        if self != SourceLanguage::Automatic {
-            return self.display_name().to_string();
-        }
-        let Some(detected) = detected_language else {
-            return "自动识别中".to_string();
-        };
-        if target_language == TargetLanguage::SimplifiedChinese && detected.code == "zh" {
-            return "自动识别中".to_string();
-        }
-        format!("自动识别（{}）", detected.display_name())
-    }
-
     /// Target-language adjustment applied when the user quick-switches the
     /// source language from a menu or picker.
     pub fn target_language_after_quick_switch(
@@ -133,39 +103,6 @@ impl DetectedLanguage {
             .unwrap_or(&normalized)
             .to_string();
         Some(Self { code })
-    }
-
-    pub fn display_name(&self) -> String {
-        match self.code.as_str() {
-            "zh" | "chinese" | "mandarin" => "中文".to_string(),
-            "yue" | "cantonese" => "粤语".to_string(),
-            "en" | "english" => "English".to_string(),
-            "ja" | "japanese" => "日本語".to_string(),
-            "ko" | "korean" => "한국어".to_string(),
-            "de" => "Deutsch".to_string(),
-            "fr" => "Français".to_string(),
-            "es" => "Español".to_string(),
-            "pt" => "Português".to_string(),
-            "it" => "Italiano".to_string(),
-            "ru" => "Русский".to_string(),
-            "ar" => "العربية".to_string(),
-            "hi" => "हिन्दी".to_string(),
-            "id" => "Bahasa Indonesia".to_string(),
-            "th" => "ไทย".to_string(),
-            "tr" => "Türkçe".to_string(),
-            "vi" => "Tiếng Việt".to_string(),
-            "uk" => "Українська".to_string(),
-            "cs" => "Čeština".to_string(),
-            "da" => "Dansk".to_string(),
-            "tl" | "fil" => "Filipino".to_string(),
-            "fi" => "Suomi".to_string(),
-            "is" => "Íslenska".to_string(),
-            "ms" => "Bahasa Melayu".to_string(),
-            "no" | "nb" => "Norsk".to_string(),
-            "pl" => "Polski".to_string(),
-            "sv" => "Svenska".to_string(),
-            other => other.to_uppercase(),
-        }
     }
 }
 
@@ -293,8 +230,7 @@ impl SubtitleLine {
 pub struct SubtitlePair {
     pub source: String,
     pub translation: String,
-    /// Epoch milliseconds; equality intentionally ignores it (matches Swift's
-    /// `SubtitlePair.==`).
+    /// Epoch milliseconds; equality intentionally ignores display time.
     #[serde(rename = "createdAt")]
     pub created_at_ms: u64,
 }
@@ -364,11 +300,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn automatic_language_has_a_clear_display_name() {
-        assert_eq!(SourceLanguage::Automatic.display_name(), "自动识别");
-    }
-
-    #[test]
     fn chinese_quick_switch_shows_original_subtitles() {
         assert_eq!(
             SourceLanguage::Chinese.target_language_after_quick_switch(
@@ -402,41 +333,6 @@ mod tests {
     }
 
     #[test]
-    fn automatic_language_status_includes_the_detected_language() {
-        let japanese = DetectedLanguage::from_reported(Some("ja-JP"));
-        assert_eq!(
-            SourceLanguage::Automatic
-                .status_display_name(japanese.as_ref(), TargetLanguage::SimplifiedChinese),
-            "自动识别（日本語）"
-        );
-        assert_eq!(
-            SourceLanguage::Automatic.status_display_name(None, TargetLanguage::SimplifiedChinese),
-            "自动识别中"
-        );
-        assert_eq!(
-            SourceLanguage::Automatic.status_display_name(
-                DetectedLanguage::from_reported(Some("zh")).as_ref(),
-                TargetLanguage::SimplifiedChinese
-            ),
-            "自动识别中"
-        );
-        assert_eq!(
-            SourceLanguage::Automatic.status_display_name(
-                DetectedLanguage::from_reported(Some("zh")).as_ref(),
-                TargetLanguage::English
-            ),
-            "自动识别（中文）"
-        );
-        assert_eq!(
-            SourceLanguage::Japanese.status_display_name(
-                DetectedLanguage::from_reported(Some("en")).as_ref(),
-                TargetLanguage::SimplifiedChinese
-            ),
-            "日本語"
-        );
-    }
-
-    #[test]
     fn target_languages_expose_service_codes_and_display_names() {
         assert!(!TargetLanguage::Original.translates_audio());
         assert_eq!(TargetLanguage::SimplifiedChinese.raw_value(), "zh");
@@ -444,29 +340,25 @@ mod tests {
     }
 
     #[test]
-    fn detected_languages_normalize_service_codes_for_display() {
+    fn detected_languages_normalize_service_codes() {
         assert_eq!(
-            DetectedLanguage::from_reported(Some("ja-JP"))
-                .unwrap()
-                .display_name(),
-            "日本語"
+            DetectedLanguage::from_reported(Some("ja-JP")).unwrap().code,
+            "ja"
         );
         assert_eq!(
-            DetectedLanguage::from_reported(Some("yue"))
-                .unwrap()
-                .display_name(),
-            "粤语"
+            DetectedLanguage::from_reported(Some("yue")).unwrap().code,
+            "yue"
         );
         assert_eq!(
             DetectedLanguage::from_reported(Some("unknown"))
                 .unwrap()
-                .display_name(),
-            "UNKNOWN"
+                .code,
+            "unknown"
         );
     }
 
     #[test]
-    fn session_status_active_flag_matches_swift() {
+    fn session_status_active_flag_matches_lifecycle_contract() {
         assert!(!SessionStatus::Idle.is_active());
         assert!(SessionStatus::Connecting.is_active());
         assert!(SessionStatus::Listening.is_active());

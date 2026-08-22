@@ -20,7 +20,7 @@ body.settings-body {
   background: #101314;
 }
 
-/* Overlay collapse/expand cross-fade (180ms easeInOut, matches Swift). */
+/* Overlay collapse/expand cross-fade, synchronized with native geometry. */
 @keyframes overlay-enter-collapsed {
   from {
     opacity: 0;

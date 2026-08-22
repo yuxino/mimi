@@ -1,5 +1,4 @@
-//! Audio 3.0 high-quality ASR WebSocket client, ported from
-//! `Sources/MimiCore/Audio3ASRClient.swift`.
+//! Audio 3.0 high-quality ASR WebSocket client.
 
 use crate::core::models::SourceLanguage;
 use crate::core::protocols::audio3::{
@@ -27,8 +26,6 @@ pub enum Audio3ASRClientError {
     NotConnected,
     #[error("The speech recognition connection stopped responding.")]
     HealthCheckTimedOut,
-    #[error("The speech recognition service returned an unsupported WebSocket message.")]
-    UnsupportedMessage,
     #[error("{0}")]
     Task(String),
     #[error("{0}")]

@@ -1,5 +1,4 @@
-//! Qwen-MT HTTP client (chat/completions, streaming and non-streaming),
-//! ported from `Sources/MimiCore/QwenMTClient.swift`.
+//! Qwen-MT HTTP client for streaming and non-streaming chat completions.
 
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use crate::core::protocols::qwen_mt::{

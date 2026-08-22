@@ -1,7 +1,6 @@
 /**
- * Pure derived state for the subtitle overlay, ported from
- * `SubtitleOverlayView.swift`. Keeping these as pure functions makes the
- * phase/row logic testable and keeps the React components lean.
+ * Pure derived state for the subtitle overlay. Keeping these transformations
+ * outside React makes the phase and row logic deterministic and testable.
  */
 
 import type {

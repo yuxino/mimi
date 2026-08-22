@@ -1,10 +1,4 @@
-/**
- * Pure TypeScript port of `Sources/MimiCore/SubtitleTextSegmenter.swift`.
- *
- * Text is iterated by Unicode code point (the plan's "Unicode 标量" guidance);
- * for the CJK and Latin inputs the segmenter handles this matches the Swift
- * `Character` iteration exactly.
- */
+/** Pure Unicode-aware subtitle segmentation for CJK and Latin text. */
 
 const SENTENCE_ENDINGS = new Set(["。", "！", "？", "!", "?", "；", ";", "\n"]);
 const PREFERRED_BREAKS = new Set([

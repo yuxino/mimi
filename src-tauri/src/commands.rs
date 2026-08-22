@@ -485,17 +485,6 @@ pub fn overlay_show(app: AppHandle, state: State<'_, AppState>) -> Result<(), St
     Ok(())
 }
 
-#[tauri::command]
-pub fn overlay_set_size(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    width: f64,
-    height: f64,
-) -> Result<(), String> {
-    OverlayWindowManager::set_size(&app, &state.overlay, width, height);
-    Ok(())
-}
-
 /// Toggles the language/mode popover window, anchored under the overlay's
 /// language capsule (the anchor is derived from the overlay window's own
 /// position). The overlay window itself is never resized for the menu.

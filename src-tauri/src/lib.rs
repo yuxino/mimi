@@ -1,13 +1,13 @@
 //! mimi — live translated subtitles for anything playing on your device.
 //! Tauri v2 shell wiring: plugins, tray, global shortcut, windows, and state.
 
-pub mod audio;
-pub mod clients;
-pub mod commands;
-pub mod core;
-pub mod session_manager;
-pub mod settings_store;
-pub mod windows;
+mod audio;
+mod clients;
+mod commands;
+mod core;
+mod session_manager;
+mod settings_store;
+mod windows;
 
 use commands::AppState;
 use session_manager::SessionManager;
@@ -105,9 +105,8 @@ pub fn run() {
                 WindowEvent::Focused(false) if window.label() == "tray-panel" => {
                     windows::TrayPanelManager::hide(app);
                 }
-                // The language/mode menu closes when focus moves elsewhere
-                // (mirrors the Swift NSPopover's transient behavior). The
-                // delayed hide lets a capsule click that stole focus re-open
+                // The language/mode menu closes when focus moves elsewhere.
+                // Delayed hiding lets a capsule click that stole focus reopen
                 // or toggle the menu without a hide/show flicker.
                 WindowEvent::Focused(false) if window.label() == "language-popover" => {
                     windows::LanguagePopoverManager::schedule_hide(app);
@@ -145,7 +144,6 @@ pub fn run() {
             commands::overlay_set_collapsed,
             commands::overlay_set_locked,
             commands::overlay_show,
-            commands::overlay_set_size,
             commands::overlay_popover_toggle,
             commands::overlay_popover_hide,
             commands::session_get_state,
@@ -499,7 +497,7 @@ fn setup_global_shortcut(
             if event.state() != ShortcutState::Pressed {
                 return;
             }
-            // Debounce repeated presses like the Swift hotkey controller.
+            // Debounce repeated global-shortcut presses.
             let now_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as u64)

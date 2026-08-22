@@ -1,7 +1,6 @@
-//! Qwen-MT chat-completions protocol, domain prompts, and filler glossaries,
-//! ported 1:1 from `Sources/MimiCore/QwenMTProtocol.swift`. The domain hint
-//! strings and filler term tables are verbatim — they are the core of
-//! translation quality and must not be reworded.
+//! Qwen-MT chat-completions protocol, domain prompts, and filler glossaries.
+//! The domain hints and filler tables are provider wire assets that directly
+//! affect translation quality and must not be casually reworded.
 
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use serde::{Deserialize, Serialize};
@@ -115,7 +114,6 @@ impl QwenMTEndpoint {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QwenMTModel {
-    Lite,
     Flash,
     Plus,
 }
@@ -123,7 +121,6 @@ pub enum QwenMTModel {
 impl QwenMTModel {
     pub fn raw_name(self) -> &'static str {
         match self {
-            Self::Lite => "qwen-mt-lite",
             Self::Flash => "qwen-mt-flash",
             Self::Plus => "qwen-mt-plus",
         }
@@ -159,15 +156,6 @@ impl QwenMTTerm {
 pub struct QwenMTMemoryPair {
     pub source: String,
     pub target: String,
-}
-
-impl QwenMTMemoryPair {
-    pub fn new(source: &str, target: &str) -> Self {
-        Self {
-            source: source.to_string(),
-            target: target.to_string(),
-        }
-    }
 }
 
 pub enum QwenMTRequestEncoder {}
@@ -261,8 +249,7 @@ impl QwenMTStreamDecoder {
     }
 }
 
-/// Domain prompts and filler glossaries for spoken-dialogue translation.
-/// All strings are verbatim ports of the Swift `QwenMTDomainHint`.
+/// Provider-facing domain prompts and filler glossaries for spoken dialogue.
 pub enum QwenMTDomainHint {}
 
 impl QwenMTDomainHint {
@@ -472,7 +459,7 @@ mod tests {
             text,
             source_language,
             TargetLanguage::SimplifiedChinese,
-            QwenMTModel::Lite,
+            QwenMTModel::Flash,
             false,
             None,
             &[],
@@ -491,12 +478,12 @@ mod tests {
     }
 
     #[test]
-    fn request_selects_lite_and_full_language_names() {
+    fn request_selects_model_and_language_names() {
         let json = request("今日は晴れです。", SourceLanguage::Japanese);
         let messages = json["messages"].as_array().unwrap();
         let options = &json["translation_options"];
 
-        assert_eq!(json["model"], "qwen-mt-lite");
+        assert_eq!(json["model"], "qwen-mt-flash");
         assert_eq!(json["stream"], false);
         assert_eq!(messages[0]["role"], "user");
         assert_eq!(messages[0]["content"], "今日は晴れです。");
@@ -510,7 +497,7 @@ mod tests {
             "今日は晴れです。",
             SourceLanguage::Japanese,
             TargetLanguage::SimplifiedChinese,
-            QwenMTModel::Lite,
+            QwenMTModel::Flash,
             true,
             None,
             &[],
@@ -526,7 +513,7 @@ mod tests {
             "今日は晴れです。",
             SourceLanguage::Japanese,
             TargetLanguage::English,
-            QwenMTModel::Lite,
+            QwenMTModel::Flash,
             false,
             None,
             &[],
@@ -639,7 +626,10 @@ mod tests {
             false,
             None,
             &[],
-            &[QwenMTMemoryPair::new("今日は晴れです。", "今天天气很好。")],
+            &[QwenMTMemoryPair {
+                source: "今日は晴れです。".to_string(),
+                target: "今天天气很好。".to_string(),
+            }],
         )
         .unwrap();
         let memory = json["translation_options"]["tm_list"].as_array().unwrap();

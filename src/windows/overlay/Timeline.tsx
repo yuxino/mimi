@@ -35,9 +35,8 @@ export const Timeline = memo(function Timeline({
     const element = containerRef.current;
     if (!element) return;
     if (rows.length !== prevRowCountRef.current) {
-      // A new row arrived: glide to the bottom (Swift's scrollTo animates
-      // too). The draft-growth pinning below is skipped this render so the
-      // two never fight.
+      // A new row glides to the bottom. Skip draft-growth pinning in this
+      // render so the two scroll updates never fight.
       prevRowCountRef.current = rows.length;
       element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
     } else {
@@ -139,7 +138,7 @@ function rowOpacity(distance: number): number {
   }
 }
 
-/** HH:mm in local time, 24h (matches Swift's `.hour(.twoDigits(amPM: .omitted))`). */
+/** HH:mm in local time using a 24-hour clock. */
 function formatTimestamp(createdAt: number): string {
   const date = new Date(createdAt);
   const hours = String(date.getHours()).padStart(2, "0");

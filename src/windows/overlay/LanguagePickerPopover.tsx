@@ -40,9 +40,8 @@ interface LanguagePickerPopoverProps {
 }
 
 /**
- * The top-left language capsule. In Tauri the menu lives in its own window
- * (like the Swift NSPopover), so the overlay window's size is never affected
- * by the menu; clicking the capsule toggles that window anchored underneath.
+ * The top-left language capsule. In Tauri the menu lives in its own anchored
+ * window, so opening it never changes the subtitle overlay's geometry.
  * In the plain `vite dev` preview the menu renders inline instead.
  */
 export function LanguagePickerPopover({
@@ -73,8 +72,7 @@ export function LanguagePickerPopover({
   const handleToggle = () => {
     if (!canInteract) return;
     if (isTauri) {
-      // The menu lives in its own window (like the Swift NSPopover); the
-      // backend anchors it under this capsule from the overlay window's own
+      // The backend anchors the menu under this capsule from the overlay's
       // position, so the overlay size is never affected by the menu.
       void overlayPopoverToggle();
       return;

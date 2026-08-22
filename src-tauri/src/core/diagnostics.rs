@@ -1,7 +1,5 @@
-//! Content-free pipeline diagnostics, ported from
-//! `Sources/MimiCore/PipelineDiagnostics.swift`. Diagnostics contain timing,
-//! counts, language codes, and sanitized error labels only; recognized or
-//! translated text must never be logged.
+//! Content-free pipeline diagnostics: timing, counts, language codes, and
+//! sanitized error labels only. Recognized or translated text is forbidden.
 
 /// Logs a pipeline diagnostic through `tracing`. Disabled when the
 /// `MIMI_PIPELINE_DIAGNOSTICS` environment variable is exactly `"0"`.

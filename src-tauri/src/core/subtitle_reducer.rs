@@ -136,8 +136,7 @@ impl Default for SubtitleReducer {
     }
 }
 
-/// Trims Unicode whitespace and newlines (same semantics as Swift's
-/// `.trimmingCharacters(in: .whitespacesAndNewlines)`).
+/// Trims leading and trailing Unicode whitespace.
 pub(crate) fn trim(text: &str) -> String {
     text.trim().to_string()
 }

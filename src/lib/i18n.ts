@@ -9,7 +9,7 @@ import type { ServiceProvider, UiLanguage } from "./types";
 
 export type { UiLanguage } from "./types";
 
-export const UI_LANGUAGE_STORAGE_KEY = "mimi-ui-language";
+const UI_LANGUAGE_STORAGE_KEY = "mimi-ui-language";
 
 /** Returns the user-selected UI language override, if any. */
 function getStoredUiLanguage(): UiLanguage | null {

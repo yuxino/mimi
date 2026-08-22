@@ -173,8 +173,9 @@ mod tests {
     }
 
     #[test]
-    fn legacy_factory_still_selects_alibaba() {
-        let configuration = LiveTranslationConfiguration::new(
+    fn provider_factory_selects_alibaba() {
+        let configuration = LiveTranslationConfiguration::for_provider(
+            ProviderKind::AlibabaCloud,
             "sk-test-not-real",
             SourceLanguage::Automatic,
             TargetLanguage::SimplifiedChinese,

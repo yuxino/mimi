@@ -1,7 +1,6 @@
-//! Audio 3.0 high-quality ASR protocol (`qwen-audio-3.0-asr-flash-streaming`
-//! over DashScope's unified `/api-ws/v1/inference` endpoint), ported 1:1 from
-//! `Sources/MimiCore/Audio3ASRProtocol.swift`. The unified endpoint is
-//! authenticated with a Bearer API key only — no workspace id.
+//! Audio 3.0 high-quality ASR protocol (`qwen-audio-3.0-asr-flash-streaming`)
+//! over DashScope's shared `/api-ws/v1/inference` endpoint. Authentication is
+//! a Bearer API key; no Workspace ID participates in the request.
 
 use crate::core::models::SourceLanguage;
 use crate::core::protocols::live_translate::{
@@ -191,7 +190,7 @@ impl Audio3ASRServerEventDecoder {
     }
 }
 
-/// Recognition context hints, verbatim from the Swift `Audio3ASRContext`.
+/// Provider-facing recognition context hints. These strings are wire assets.
 pub enum Audio3ASRContext {}
 
 impl Audio3ASRContext {

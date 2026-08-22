@@ -25,10 +25,8 @@ import {
 } from "lucide-react";
 
 /**
- * Icon set backed by lucide-react (modern, MIT, tree-shakeable SVG
- * components). The `IconName` union mirrors the SF Symbols used by the
- * Swift views; the component renders 1em-square and inherits the current
- * text color, so call sites keep using `fontSize`/`color` styles.
+ * Icon set backed by tree-shakeable Lucide SVG components. Icons render at
+ * 1em and inherit the current text color.
  */
 
 export type IconName =

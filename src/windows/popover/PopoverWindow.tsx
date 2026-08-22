@@ -19,10 +19,8 @@ import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
 const ACCENT = "#7AA8FF";
 
 /**
- * The language/mode picker menu, rendered inside its own window anchored
- * under the overlay's language capsule (the Swift original used an
- * NSPopover). Because the menu is a separate window, the subtitle overlay's
- * size and position are never affected by the menu.
+ * The language/mode picker is a separate window anchored under the overlay's
+ * language capsule, so it never changes the subtitle window's geometry.
  */
 export function PopoverWindow() {
   // Narrow selectors: this window never shows subtitle text, so subscribing
@@ -49,7 +47,7 @@ export function PopoverWindow() {
     }
   };
 
-  // Escape dismisses the menu, matching the transient NSPopover behavior.
+  // Escape dismisses the transient menu.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
