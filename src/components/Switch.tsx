@@ -5,7 +5,7 @@ interface SwitchProps {
   "aria-label"?: string;
 }
 
-/** A macOS-style toggle switch used by the tray panel and settings window. */
+/** Platform-neutral toggle used by settings surfaces. */
 export function Switch({
   checked,
   onChange,
@@ -20,31 +20,10 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       aria-label={rest["aria-label"]}
-      style={{
-        position: "relative",
-        width: 40,
-        height: 24,
-        borderRadius: 12,
-        border: "none",
-        background: checked ? "#3478F0" : "rgba(255,255,255,0.22)",
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        transition: "background 160ms ease",
-        flexShrink: 0,
-      }}
+      className="mimi-switch"
+      data-checked={checked}
     >
-      <span
-        style={{
-          position: "absolute",
-          top: 2,
-          left: checked ? 18 : 2,
-          width: 20,
-          height: 20,
-          borderRadius: "50%",
-          background: "#ffffff",
-          transition: "left 160ms ease",
-        }}
-      />
+      <span className="mimi-switch__thumb" aria-hidden="true" />
     </button>
   );
 }

@@ -3,7 +3,7 @@ import { useState } from 'react'
 const downloadUrl = 'https://github.com/yuxino/mimi/releases/latest'
 const repositoryUrl = 'https://github.com/yuxino/mimi'
 const apiKeyUrl = 'https://help.aliyun.com/zh/model-studio/get-api-key'
-const workspaceUrl = 'https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id'
+const openAiApiKeyUrl = 'https://platform.openai.com/api-keys'
 
 function ArrowUpRight() {
   return (
@@ -33,7 +33,7 @@ const features = [
   {
     index: '01',
     title: '听系统声音',
-    copy: '不占用麦克风。mimi 直接听 Mac 正在播放的声音，浏览器、播放器和桌面应用都能用。',
+    copy: '不占用麦克风。mimi 直接听电脑正在播放的系统声音，macOS 和 Windows 上的浏览器、播放器和桌面应用都能用。',
     accent: 'mint',
   },
   {
@@ -58,8 +58,8 @@ const scenes = [
 ]
 
 const setupSteps = [
-  { index: '01', title: '下载并打开', copy: '从 GitHub Releases 获取最新版。首次打开若被拦截，可在“隐私与安全性”中选择仍要打开。' },
-  { index: '02', title: '填入凭证', copy: '准备同一华北 2（北京）业务空间下的 Workspace ID 与 API Key，凭证只保存在钥匙串。' },
+  { index: '01', title: '下载并打开', copy: '从 GitHub Releases 获取适合 macOS 或 Windows 的最新版，按系统提示安装并打开。' },
+  { index: '02', title: '填入凭证', copy: '选择阿里云百炼（默认）或 OpenAI Realtime，并填写对应 API Key；阿里共享 API 无需 Workspace ID。' },
   { index: '03', title: '开始听', copy: '播放视频后点击 Start Listening，把字幕窗放到舒服的位置，就可以继续看了。' },
 ]
 
@@ -105,15 +105,15 @@ function App() {
           <div className="hero-glow hero-glow--mint" />
           <div className="hero-glow hero-glow--lilac" />
           <div className="hero-copy">
-            <div className="eyebrow eyebrow--light"><span className="eyebrow-dot" /> macOS 原生实时翻译字幕</div>
+            <div className="eyebrow eyebrow--light"><span className="eyebrow-dot" /> macOS + Windows 实时翻译字幕</div>
             <h1>听懂<br /><em>正在发生的事。</em></h1>
-            <p className="hero-lead">mimi 把 Mac 上播放的日语、英语或韩语，变成自然、清晰、不会挡路的实时字幕。</p>
+            <p className="hero-lead">mimi 把电脑上播放的日语、英语或韩语，变成自然、清晰、不会挡路的实时字幕。</p>
             <div className="hero-actions">
               <a className="button button--mint" href={downloadUrl} target="_blank" rel="noreferrer">下载最新版 <ArrowUpRight /></a>
               <a className="hero-text-link" href="#features">看看它怎么工作 <span>↓</span></a>
             </div>
             <div className="hero-meta">
-              <span><i /> macOS 14+</span>
+              <span><i /> macOS + Windows</span>
               <span><i /> English / 日本語 / 한국어</span>
             </div>
           </div>
@@ -143,8 +143,8 @@ function App() {
         <section className="trust-strip" aria-label="mimi 产品特点">
           <div><span>01</span><strong>系统声音</strong><small>不使用麦克风</small></div>
           <div><span>02</span><strong>无需账号</strong><small>打开就能开始</small></div>
-          <div><span>03</span><strong>钥匙串保存</strong><small>凭证留在这台 Mac</small></div>
-          <div><span>04</span><strong>原生体验</strong><small>macOS 14+</small></div>
+          <div><span>03</span><strong>安全保存</strong><small>系统安全凭据存储</small></div>
+          <div><span>04</span><strong>双平台支持</strong><small>macOS + Windows</small></div>
         </section>
 
         <section className="statement-section" aria-labelledby="statement-title">
@@ -224,7 +224,7 @@ function App() {
           <div className="start-heading">
             <div className="section-label">05 / 三步开始</div>
             <h2 id="start-title">把语言门槛，<br /><em>留在三分钟以前。</em></h2>
-            <p>mimi 是开源项目，目前需要你自己的阿里云百炼凭证。配置只做一次，之后它会安静地记住。</p>
+            <p>mimi 是开源项目。选择阿里云百炼（默认）或 OpenAI Realtime，保存对应 API Key；阿里共享 API 无需 Workspace ID。</p>
           </div>
           <div className="setup-grid">
             {setupSteps.map((step) => (
@@ -244,8 +244,8 @@ function App() {
               <h3>下载，填好凭证，<br />然后继续看你的。</h3>
               <div className="start-card-links">
                 <a className="button button--ink" href={downloadUrl} target="_blank" rel="noreferrer">下载最新版 <ArrowUpRight /></a>
-                <a href={apiKeyUrl} target="_blank" rel="noreferrer">创建 API Key</a>
-                <a href={workspaceUrl} target="_blank" rel="noreferrer">查找 Workspace ID</a>
+                <a href={apiKeyUrl} target="_blank" rel="noreferrer">阿里云 API Key</a>
+                <a href={openAiApiKeyUrl} target="_blank" rel="noreferrer">OpenAI API Key</a>
               </div>
             </div>
           </aside>
@@ -255,13 +255,13 @@ function App() {
           <div className="privacy-copy">
             <div className="section-label">06 / 不多打扰</div>
             <h2 id="privacy-title">你的声音，<br /><em>只经过，不留下。</em></h2>
-            <p>mimi 不使用麦克风，不需要注册账号，也不会保存音频和字幕记录。API Key 保存在 Mac 的钥匙串中。</p>
+            <p>mimi 不使用麦克风，不需要注册账号，也不会保存音频和字幕记录。API Key 保存在系统安全凭据存储中。</p>
             <a className="inline-link" href={repositoryUrl} target="_blank" rel="noreferrer">在 GitHub 查看更多 <ArrowUpRight /></a>
           </div>
           <div className="settings-card">
-            <div className="settings-card-top"><span>mimi Settings</span><span className="settings-lights"><i /><i /><i /></span></div>
-            <img src="/mimi/settings-560.jpg" alt="mimi 设置界面，API Key 保存在 Keychain" width={560} height={492} loading="lazy" decoding="async" />
-            <span className="settings-caption">credentials stay on this Mac</span>
+            <div className="settings-card-top"><span>mimi Settings</span><span>macOS + Windows</span></div>
+            <img src="/mimi/settings-560.jpg" alt="mimi 设置界面，API Key 保存在系统安全凭据存储中" width={560} height={492} loading="lazy" decoding="async" />
+            <span className="settings-caption">secure OS credential storage</span>
           </div>
         </section>
 
@@ -273,7 +273,7 @@ function App() {
           <div className="download-copy">
             <div className="section-label section-label--light">07 / 现在就听</div>
             <h2 id="download-title">给耳朵<br /><em>多一个选择。</em></h2>
-            <p>开源、原生、轻轻地待在你的 Mac 上。</p>
+            <p>开源、轻巧，安静地待在你的电脑上。</p>
             <div className="download-actions">
               <a className="button button--mint" href={downloadUrl} target="_blank" rel="noreferrer">下载 mimi <ArrowUpRight /></a>
               <a className="button button--ghost" href={repositoryUrl} target="_blank" rel="noreferrer">查看源码</a>
@@ -287,7 +287,7 @@ function App() {
           <CatMark dark />
           <span>mimi</span>
         </a>
-        <p>Live translated subtitles on Mac.</p>
+        <p>Live translated subtitles on macOS and Windows.</p>
         <div className="footer-links">
           <a href={repositoryUrl} target="_blank" rel="noreferrer">GitHub</a>
           <a href={`${repositoryUrl}/issues`} target="_blank" rel="noreferrer">反馈问题</a>

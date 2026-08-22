@@ -30,7 +30,7 @@ Turn Chinese, Japanese, English, or Korean audio playing on your device into liv
 
 - **Live subtitles** — works with browsers, players, games, meetings, and desktop apps.
 - **Live translation** — Turbo, Low latency, and High quality modes.
-- **Service profiles** — keep multiple provider configurations and switch without re-entering credentials.
+- **Service configurations** — save multiple provider configurations and switch without re-entering credentials.
 - **Flexible overlay** — move, resize, collapse, or lock the subtitle panel for click-through.
 - **Multiple languages** — recognize Chinese, Japanese, English, and Korean.
 - **Privacy** — no microphone, no mimi account, and no saved audio or subtitle history.
@@ -39,10 +39,10 @@ Turn Chinese, Japanese, English, or Korean audio playing on your device into liv
 ## Get started
 
 1. Download the latest version for your platform from [Releases](https://github.com/yuxino/mimi/releases/latest).
-2. Open **Service profiles** and save an API key. Alibaba Cloud is selected by default; OpenAI Realtime is also supported.
+2. Open **Service configurations** and save an API key. Alibaba Cloud is selected by default; OpenAI Realtime is also supported.
 3. Play something and select **Start**.
 
-Each profile's API key is stored separately in the OS keychain (macOS Keychain / Windows Credential Manager) and is never read back into the settings page. Existing Alibaba Cloud setups migrate to the default profile automatically. Provider usage may incur charges.
+Each service configuration's API key is stored separately in the operating system's secure credential storage (macOS Keychain / Windows Credential Manager) and is never read back into the settings page. Alibaba Cloud's shared API requires only an API key—no Workspace ID. Existing Alibaba Cloud settings migrate to the default service configuration automatically. Provider usage may incur charges.
 
 [Create an Alibaba Cloud API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Create an OpenAI API key](https://platform.openai.com/api-keys)
 
@@ -74,9 +74,9 @@ Build the Windows package on a Windows machine (Rust's C dependencies cannot cro
 
 ### macOS dev notes
 
-- Always launch a working macOS build through `./scripts/dev-app.sh`. It packages and verifies a real `.app`, installs it at one canonical path, and refuses an unstable ad-hoc identity. This keeps Screen & System Audio Recording and Keychain grants attached to the same app across rebuilds.
+- Always launch a working macOS build through `./scripts/dev-app.sh`. It packages and verifies a real `.app`, installs it at one canonical path, and refuses an unstable ad-hoc identity. This keeps Screen & System Audio Recording and secure credential storage access attached to the same app across rebuilds.
 - The launcher selects the stable `mimi Local Development` identity through `scripts/codesign-identity.sh`. Avoid any `tauri dev` command or bare binary on macOS: each ad-hoc rebuild can look like a different app to macOS and request permission again.
-- Development builds use a separate app identifier, settings directory, and credential namespace, so they never read or modify an installed release's profiles or API keys.
+- Development builds use a separate app identifier, settings directory, and credential namespace, so they never read or modify an installed release's service configurations or API keys.
 
 ## Tests
 
@@ -85,7 +85,7 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests (protocols, 
 npm run test                                      # frontend vitest
 ```
 
-For macOS UI smoke tests, run `./scripts/dev-app.sh --ui-only`; UI-test mode does not access real credentials, provider networks, or system-audio capture. Use the normal command for an end-to-end provider session with local Keychain credentials.
+For macOS UI smoke tests, run `./scripts/dev-app.sh --ui-only`; UI-test mode does not access real credentials, provider networks, or system-audio capture. Use the normal command for an end-to-end provider session with credentials from local secure credential storage.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 

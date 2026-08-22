@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Icon } from "../../components/Icon";
 import { I18N, providerDisplayName } from "../../lib/i18n";
 import { subtitlePreferencesChanged } from "../../lib/providerCapabilities";
@@ -9,7 +9,11 @@ import type {
   ServiceProvider,
   SettingsSnapshot,
 } from "../../lib/types";
-import { InlineFeedback, SettingsSection } from "./SettingsPrimitives";
+import {
+  InlineFeedback,
+  SettingsSection,
+  SettingsSelect,
+} from "./SettingsPrimitives";
 
 type Feedback = { tone: "success" | "error" | "info"; message: string };
 type PendingAction =
@@ -35,36 +39,29 @@ export function ServiceProfiles({
   const saveProfileAPIKey = useStore((state) => state.saveProfileAPIKey);
   const deleteProfileAPIKey = useStore((state) => state.deleteProfileAPIKey);
 
-  const initialProfile =
+  const activeProfile =
     settings.profiles.find(
       (profile) => profile.id === settings.activeProfileId,
     ) ?? settings.profiles[0];
   const [selectedProfileId, setSelectedProfileId] = useState(
-    initialProfile?.id ?? settings.activeProfileId,
+    activeProfile?.id ?? settings.activeProfileId,
   );
   const [showsProviderPicker, setShowsProviderPicker] = useState(false);
-  const [nameDraft, setNameDraft] = useState(initialProfile?.name ?? "");
-  const [apiKey, setApiKey] = useState("");
+  const [nameDraft, setNameDraft] = useState(activeProfile?.name ?? "");
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [renderedProfile, setRenderedProfile] = useState({
-    id: initialProfile?.id,
-    name: initialProfile?.name,
+    id: activeProfile?.id,
+    name: activeProfile?.name,
   });
 
   const selectedProfile = useMemo(
     () =>
       settings.profiles.find((profile) => profile.id === selectedProfileId) ??
-      settings.profiles.find(
-        (profile) => profile.id === settings.activeProfileId,
-      ) ??
-      settings.profiles[0],
-    [selectedProfileId, settings.activeProfileId, settings.profiles],
+      activeProfile,
+    [activeProfile, selectedProfileId, settings.profiles],
   );
 
-  // Keep local, write-only editor drafts aligned with a profile selected or
-  // renamed through a settings snapshot. This is React's render-time derived
-  // state adjustment, avoiding an effect-driven extra commit.
   if (
     selectedProfile &&
     (selectedProfile.id !== renderedProfile.id ||
@@ -75,7 +72,6 @@ export function ServiceProfiles({
       name: selectedProfile.name,
     });
     setNameDraft(selectedProfile.name);
-    setApiKey("");
     setFeedback(null);
   }
 
@@ -138,13 +134,12 @@ export function ServiceProfiles({
     );
   };
 
-  const handleSelect = async () => {
-    if (!selectedProfile || selectedProfile.id === settings.activeProfileId) {
-      return;
-    }
+  const handleSelect = async (profileId: string) => {
+    if (profileId === settings.activeProfileId) return;
+    setSelectedProfileId(profileId);
     await perform(
       "select",
-      () => selectProfile(selectedProfile.id),
+      () => selectProfile(profileId),
       (snapshot) =>
         subtitlePreferencesChanged(settings, snapshot)
           ? {
@@ -174,51 +169,30 @@ export function ServiceProfiles({
     if (snapshot) setSelectedProfileId(snapshot.activeProfileId);
   };
 
-  const handleSaveCredential = async () => {
-    if (!selectedProfile || !apiKey.trim()) return;
-    const replacement = apiKey.trim();
-    // The editor is write-only: discard the plaintext draft before the
-    // Keychain operation starts, and never restore it after a failure.
-    setApiKey("");
-    await perform(
+  const handleSaveCredential = async (
+    profileId: string,
+    replacement: string,
+  ) => {
+    return perform(
       "save-key",
-      () => saveProfileAPIKey(selectedProfile.id, replacement),
+      () => saveProfileAPIKey(profileId, replacement),
       I18N.settings.credentialsSaved,
     );
   };
 
-  const handleDeleteCredential = async () => {
-    if (
-      !selectedProfile ||
-      !window.confirm(I18N.settings.deleteCredentialsConfirm)
-    ) {
-      return;
-    }
-    const snapshot = await perform(
+  const handleDeleteCredential = async (profileId: string) => {
+    if (!window.confirm(I18N.settings.deleteCredentialsConfirm)) return;
+    await perform(
       "delete-key",
-      () => deleteProfileAPIKey(selectedProfile.id),
+      () => deleteProfileAPIKey(profileId),
       I18N.settings.credentialsDeleted,
     );
-    if (snapshot) setApiKey("");
   };
 
   return (
     <SettingsSection
       id="service-profiles"
-      icon="key"
       title={I18N.settings.serviceProfilesTitle}
-      description={I18N.settings.serviceProfilesDescription}
-      action={
-        <button
-          type="button"
-          className="settings-button settings-button--compact settings-button--quiet"
-          disabled={mutationsDisabled || atProfileLimit}
-          onClick={() => setShowsProviderPicker((visible) => !visible)}
-        >
-          <Icon name="plus" />
-          {I18N.settings.addProfile}
-        </button>
-      }
     >
       {sessionIsActive && (
         <InlineFeedback tone="info" icon="lock">
@@ -226,194 +200,335 @@ export function ServiceProfiles({
         </InlineFeedback>
       )}
 
-      {atProfileLimit && !sessionIsActive && (
-        <InlineFeedback tone="info" icon="exclamation-triangle">
-          {I18N.settings.profileLimitReached}
-        </InlineFeedback>
+      {activeProfile && (
+        <>
+          <div className="active-profile-summary">
+            <ProviderMark provider={activeProfile.provider} />
+            <span className="active-profile-summary__picker">
+              <span>{I18N.settings.currentProfile}</span>
+              <SettingsSelect
+                value={activeProfile.id}
+                disabled={mutationsDisabled || settings.profiles.length === 1}
+                label={I18N.settings.currentProfile}
+                onChange={(profileId) => void handleSelect(profileId)}
+                options={settings.profiles.map((profile) => ({
+                  value: profile.id,
+                  label: profile.name,
+                }))}
+              />
+            </span>
+            <CredentialBadge state={activeProfile.credentialState} />
+          </div>
+
+          <CredentialEditor
+            key={`active-${activeProfile.id}`}
+            profile={activeProfile}
+            inputId="profile-api-key"
+            disabled={mutationsDisabled}
+            busy={
+              pendingAction === "save-key" || pendingAction === "delete-key"
+            }
+            onSave={(replacement) =>
+              handleSaveCredential(activeProfile.id, replacement)
+            }
+            onDelete={() => handleDeleteCredential(activeProfile.id)}
+          />
+        </>
       )}
 
-      {showsProviderPicker && !sessionIsActive && (
-        <ProviderPicker
-          disabled={pendingAction !== null}
-          onChoose={(provider) => void handleCreate(provider)}
-          onCancel={() => setShowsProviderPicker(false)}
-        />
+      {feedback && (
+        <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback>
       )}
 
-      <div className="profiles-workspace">
-        <div className="profile-list" aria-label={I18N.settings.serviceProfilesTitle}>
-          <span className="profile-list__count">
-            {I18N.settings.profileCount(settings.profiles.length)}
+      <details className="profile-management">
+        <summary>
+          <span className="profile-management__summary-copy">
+            <strong>{I18N.settings.manageServiceProfiles}</strong>
+            <small>{I18N.settings.profileCount(settings.profiles.length)}</small>
           </span>
-          {settings.profiles.map((profile) => (
-            <ProfileListItem
-              key={profile.id}
-              profile={profile}
-              selected={profile.id === selectedProfile?.id}
-              active={profile.id === settings.activeProfileId}
-              disabled={pendingAction !== null}
-              onSelect={() => setSelectedProfileId(profile.id)}
-            />
-          ))}
-        </div>
+          <Icon name="chevron-down" />
+        </summary>
 
-        {selectedProfile && (
-          <div className="profile-editor">
-            <div className="profile-editor__identity">
-              <ProviderMark provider={selectedProfile.provider} />
-              <span>
-                <strong>{selectedProfile.name}</strong>
-                <small>{providerDisplayName(selectedProfile.provider)}</small>
-              </span>
-              {selectedProfile.id === settings.activeProfileId && (
-                <span className="profile-active-badge">
-                  <Icon name="checkmark" />
-                  {I18N.settings.activeProfile}
-                </span>
-              )}
+        <div className="profile-management__content">
+          <div className="profile-management__toolbar">
+            <p>{I18N.settings.serviceProfilesDescription}</p>
+            <button
+              type="button"
+              className="settings-button settings-button--compact settings-button--quiet"
+              disabled={mutationsDisabled || atProfileLimit}
+              onClick={() => setShowsProviderPicker((visible) => !visible)}
+            >
+              <Icon name="plus" />
+              {I18N.settings.addProfile}
+            </button>
+          </div>
+
+          {atProfileLimit && !sessionIsActive && (
+            <InlineFeedback tone="info" icon="exclamation-triangle">
+              {I18N.settings.profileLimitReached}
+            </InlineFeedback>
+          )}
+
+          {showsProviderPicker && !sessionIsActive && (
+            <ProviderPicker
+              disabled={pendingAction !== null}
+              onChoose={(provider) => void handleCreate(provider)}
+              onCancel={() => setShowsProviderPicker(false)}
+            />
+          )}
+
+          <div className="profiles-workspace">
+            <div
+              className="profile-list"
+              aria-label={I18N.settings.serviceProfilesTitle}
+            >
+              {settings.profiles.map((profile) => (
+                <ProfileListItem
+                  key={profile.id}
+                  profile={profile}
+                  selected={profile.id === selectedProfile?.id}
+                  active={profile.id === settings.activeProfileId}
+                  disabled={pendingAction !== null}
+                  onSelect={() => setSelectedProfileId(profile.id)}
+                />
+              ))}
             </div>
 
-            <form
-              className="profile-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleRename();
-              }}
-            >
-              <div className="settings-field">
-                <label htmlFor="profile-name">{I18N.settings.profileName}</label>
-                <span className="settings-field__inline">
-                  <input
-                    id="profile-name"
-                    value={nameDraft}
-                    maxLength={64}
+            {selectedProfile && (
+              <div className="profile-editor">
+                <div className="profile-editor__identity">
+                  <ProviderMark provider={selectedProfile.provider} />
+                  <span>
+                    <strong>{selectedProfile.name}</strong>
+                    <small>{providerDisplayName(selectedProfile.provider)}</small>
+                  </span>
+                  {selectedProfile.id === settings.activeProfileId && (
+                    <span className="profile-active-badge">
+                      <Icon name="checkmark" />
+                      {I18N.settings.activeProfile}
+                    </span>
+                  )}
+                </div>
+
+                <form
+                  className="profile-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleRename();
+                  }}
+                >
+                  <div className="settings-field">
+                    <label htmlFor="profile-name">
+                      {I18N.settings.profileName}
+                    </label>
+                    <span className="settings-field__inline">
+                      <input
+                        id="profile-name"
+                        value={nameDraft}
+                        maxLength={64}
+                        disabled={mutationsDisabled}
+                        placeholder={I18N.settings.profileNamePlaceholder}
+                        onChange={(event) => {
+                          setNameDraft(event.target.value);
+                          setFeedback(null);
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        className="settings-button settings-button--quiet"
+                        disabled={
+                          mutationsDisabled ||
+                          !nameDraft.trim() ||
+                          nameDraft.trim() === selectedProfile.name
+                        }
+                      >
+                        {I18N.settings.saveName}
+                      </button>
+                    </span>
+                  </div>
+                </form>
+
+                {selectedProfile.id !== activeProfile?.id && (
+                  <CredentialEditor
+                    key={`managed-${selectedProfile.id}`}
+                    profile={selectedProfile}
+                    inputId={`profile-api-key-${selectedProfile.id}`}
                     disabled={mutationsDisabled}
-                    placeholder={I18N.settings.profileNamePlaceholder}
-                    onChange={(event) => {
-                      setNameDraft(event.target.value);
-                      setFeedback(null);
-                    }}
+                    busy={
+                      pendingAction === "save-key" ||
+                      pendingAction === "delete-key"
+                    }
+                    onSave={(replacement) =>
+                      handleSaveCredential(selectedProfile.id, replacement)
+                    }
+                    onDelete={() =>
+                      handleDeleteCredential(selectedProfile.id)
+                    }
                   />
+                )}
+
+                <div className="profile-editor__footer">
                   <button
-                    type="submit"
+                    type="button"
                     className="settings-button settings-button--quiet"
                     disabled={
                       mutationsDisabled ||
-                      !nameDraft.trim() ||
-                      nameDraft.trim() === selectedProfile.name
+                      selectedProfile.id === settings.activeProfileId
                     }
+                    onClick={() => void handleSelect(selectedProfile.id)}
                   >
-                    {I18N.settings.saveName}
+                    <Icon name="checkmark-circle" />
+                    {I18N.settings.useProfile}
                   </button>
-                </span>
-              </div>
-
-              <div className="profile-provider-summary">
-                <span>{I18N.settings.profileProvider}</span>
-                <strong>{providerDisplayName(selectedProfile.provider)}</strong>
-                <small>{providerDescription(selectedProfile.provider)}</small>
-              </div>
-            </form>
-
-            <div className="credential-panel">
-              <div className="credential-panel__heading">
-                <span>
-                  <span className="credential-panel__label">
-                    {I18N.settings.credentials}
-                  </span>
-                  <CredentialBadge state={selectedProfile.credentialState} />
-                </span>
-                {selectedProfile.credentialState === "present" && (
                   <button
                     type="button"
                     className="settings-link settings-link--danger"
-                    disabled={mutationsDisabled}
-                    onClick={() => void handleDeleteCredential()}
+                    disabled={
+                      mutationsDisabled || settings.profiles.length <= 1
+                    }
+                    onClick={() => void handleDelete()}
                   >
-                    {I18N.settings.deleteCredentials}
+                    <Icon name="trash" />
+                    {I18N.settings.deleteProfile}
                   </button>
-                )}
+                </div>
               </div>
-
-              {selectedProfile.credentialState === "unavailable" && (
-                <p className="credential-unavailable" role="status">
-                  {I18N.settings.credentialUnavailableHelp}
-                </p>
-              )}
-
-              <form
-                className="credential-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleSaveCredential();
-                }}
-              >
-                <label className="settings-field">
-                  <span>{I18N.settings.apiKey}</span>
-                  <input
-                    id="profile-api-key"
-                    type="password"
-                    value={apiKey}
-                    autoComplete="new-password"
-                    spellCheck={false}
-                    aria-describedby="credential-storage-note"
-                    disabled={mutationsDisabled}
-                    placeholder={I18N.settings.apiKeyPlaceholder}
-                    onChange={(event) => {
-                      setApiKey(event.target.value);
-                      setFeedback(null);
-                    }}
-                  />
-                </label>
-                <p id="credential-storage-note" className="settings-caption">
-                  <Icon name="shield-check" />
-                  <span>{I18N.settings.credentialNote}</span>
-                </p>
-                <button
-                  type="submit"
-                  className="settings-button settings-button--primary"
-                  disabled={mutationsDisabled || !apiKey.trim()}
-                >
-                  {selectedProfile.credentialState === "present"
-                    ? I18N.settings.replaceCredentials
-                    : I18N.settings.saveCredentials}
-                </button>
-              </form>
-            </div>
-
-            {feedback && (
-              <InlineFeedback tone={feedback.tone}>
-                {feedback.message}
-              </InlineFeedback>
             )}
-
-            <div className="profile-editor__footer">
-              <button
-                type="button"
-                className="settings-button settings-button--quiet"
-                disabled={
-                  mutationsDisabled ||
-                  selectedProfile.id === settings.activeProfileId
-                }
-                onClick={() => void handleSelect()}
-              >
-                <Icon name="checkmark-circle" />
-                {I18N.settings.useProfile}
-              </button>
-              <button
-                type="button"
-                className="settings-link settings-link--danger"
-                disabled={mutationsDisabled || settings.profiles.length <= 1}
-                onClick={() => void handleDelete()}
-              >
-                <Icon name="trash" />
-                {I18N.settings.deleteProfile}
-              </button>
-            </div>
           </div>
+        </div>
+      </details>
+    </SettingsSection>
+  );
+}
+
+function CredentialEditor({
+  profile,
+  inputId,
+  disabled,
+  busy,
+  onSave,
+  onDelete,
+}: {
+  profile: ServiceProfile;
+  inputId: string;
+  disabled: boolean;
+  busy: boolean;
+  onSave: (replacement: string) => Promise<unknown>;
+  onDelete: () => Promise<unknown>;
+}) {
+  const [apiKey, setApiKey] = useState("");
+  const [editingSavedCredential, setEditingSavedCredential] = useState(false);
+  const noteId = `${inputId}-storage-note`;
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const replacement = apiKey.trim();
+    if (!replacement) return;
+    // Discard plaintext before secure storage I/O and never restore it after a
+    // failure. The editor remains a write-only credential surface.
+    setApiKey("");
+    void onSave(replacement).then((saved) => {
+      if (saved) setEditingSavedCredential(false);
+    });
+  };
+
+  if (profile.credentialState === "present" && !editingSavedCredential) {
+    return (
+      <div className="credential-panel credential-panel--saved">
+        <span className="credential-panel__saved-actions">
+          <button
+            type="button"
+            className="settings-button settings-button--quiet"
+            disabled={disabled}
+            onClick={() => setEditingSavedCredential(true)}
+          >
+            {I18N.settings.replaceCredentials}
+          </button>
+          <button
+            type="button"
+            className="settings-link settings-link--danger"
+            disabled={disabled}
+            onClick={() => void onDelete()}
+          >
+            {I18N.settings.deleteCredentials}
+          </button>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="credential-panel" aria-busy={busy}>
+      <div className="credential-panel__heading">
+        <span>
+          <span className="credential-panel__label">
+            {I18N.settings.credentials}
+          </span>
+          <CredentialBadge state={profile.credentialState} />
+        </span>
+        {profile.credentialState === "present" && (
+          <button
+            type="button"
+            className="settings-link settings-link--danger"
+            disabled={disabled}
+            onClick={() => void onDelete()}
+          >
+            {I18N.settings.deleteCredentials}
+          </button>
         )}
       </div>
-    </SettingsSection>
+
+      {profile.credentialState === "unavailable" && (
+        <p className="credential-unavailable" role="status">
+          {I18N.settings.credentialUnavailableHelp}
+        </p>
+      )}
+
+      <form className="credential-form" onSubmit={handleSubmit}>
+        <label className="settings-field" htmlFor={inputId}>
+          <span>{I18N.settings.apiKey}</span>
+          <input
+            id={inputId}
+            type="password"
+            value={apiKey}
+            autoComplete="new-password"
+            spellCheck={false}
+            aria-describedby={noteId}
+            disabled={disabled}
+            placeholder={I18N.settings.apiKeyPlaceholder}
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+        </label>
+        <p id={noteId} className="settings-caption">
+          <Icon name="shield-check" />
+          <span>{I18N.settings.credentialNote}</span>
+        </p>
+        <span className="credential-form__actions">
+          {profile.credentialState === "present" && (
+            <button
+              type="button"
+              className="settings-link"
+              disabled={disabled}
+              onClick={() => {
+                setApiKey("");
+                setEditingSavedCredential(false);
+              }}
+            >
+              {I18N.settings.cancel}
+            </button>
+          )}
+          <button
+            type="submit"
+            className="settings-button settings-button--primary"
+            disabled={disabled || !apiKey.trim()}
+          >
+            {profile.credentialState === "present"
+              ? I18N.settings.replaceCredentials
+              : I18N.settings.saveCredentials}
+          </button>
+        </span>
+      </form>
+    </div>
   );
 }
 

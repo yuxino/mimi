@@ -12,13 +12,11 @@ pub mod windows;
 use commands::AppState;
 use session_manager::SessionManager;
 use settings_store::{SettingsStore, DEVELOPMENT_APPLICATION_IDENTIFIER};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::menu::{
-    CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItem, MenuItemBuilder, Submenu,
-    SubmenuBuilder,
-};
+use tauri::menu::{MenuBuilder, MenuItem, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Listener, Manager, WindowEvent};
 
 /// Runs the mimi Tauri application.
 pub fn run() {
@@ -171,16 +169,8 @@ enum NativeMenuLanguage {
 
 #[derive(Debug, Clone, Copy)]
 struct NativeMenuLabels {
-    live_subtitles: &'static str,
-    lock_position: &'static str,
-    language_menu: &'static str,
-    lang_auto: &'static str,
-    lang_ja: &'static str,
-    lang_en: &'static str,
-    lang_ko: &'static str,
-    lang_zh: &'static str,
-    show_subtitles: &'static str,
-    clear_subtitles: &'static str,
+    start_subtitles: &'static str,
+    stop_subtitles: &'static str,
     toggle_devtools: &'static str,
     settings: &'static str,
     quit: &'static str,
@@ -188,16 +178,7 @@ struct NativeMenuLabels {
 
 #[derive(Clone)]
 struct NativeTrayMenuItems {
-    live_subtitles: CheckMenuItem<tauri::Wry>,
-    lock_position: CheckMenuItem<tauri::Wry>,
-    language_menu: Submenu<tauri::Wry>,
-    lang_auto: MenuItem<tauri::Wry>,
-    lang_ja: MenuItem<tauri::Wry>,
-    lang_en: MenuItem<tauri::Wry>,
-    lang_ko: MenuItem<tauri::Wry>,
-    lang_zh: MenuItem<tauri::Wry>,
-    show_subtitles: MenuItem<tauri::Wry>,
-    clear_subtitles: MenuItem<tauri::Wry>,
+    session_action: MenuItem<tauri::Wry>,
     toggle_devtools: Option<MenuItem<tauri::Wry>>,
     settings: MenuItem<tauri::Wry>,
     quit: MenuItem<tauri::Wry>,
@@ -225,46 +206,22 @@ fn effective_native_menu_language(
 fn native_menu_labels(language: NativeMenuLanguage) -> NativeMenuLabels {
     match language {
         NativeMenuLanguage::Chinese => NativeMenuLabels {
-            live_subtitles: "实时字幕",
-            lock_position: "锁定字幕位置",
-            language_menu: "识别语言",
-            lang_auto: "自动识别",
-            lang_ja: "日语",
-            lang_en: "英语",
-            lang_ko: "韩语",
-            lang_zh: "中文原文",
-            show_subtitles: "显示字幕窗口",
-            clear_subtitles: "清空字幕",
+            start_subtitles: "开始字幕",
+            stop_subtitles: "停止字幕",
             toggle_devtools: "打开调试工具",
             settings: "设置…",
             quit: "退出 mimi",
         },
         NativeMenuLanguage::Japanese => NativeMenuLabels {
-            live_subtitles: "ライブ字幕",
-            lock_position: "字幕位置を固定",
-            language_menu: "認識言語",
-            lang_auto: "自動検出",
-            lang_ja: "日本語",
-            lang_en: "英語",
-            lang_ko: "韓国語",
-            lang_zh: "中国語（原文）",
-            show_subtitles: "字幕ウィンドウを表示",
-            clear_subtitles: "字幕を消去",
+            start_subtitles: "字幕を開始",
+            stop_subtitles: "字幕を停止",
             toggle_devtools: "開発者ツールを開く",
             settings: "設定…",
             quit: "mimiを終了",
         },
         NativeMenuLanguage::English => NativeMenuLabels {
-            live_subtitles: "Live Subtitles",
-            lock_position: "Lock Subtitle Position",
-            language_menu: "Recognition Language",
-            lang_auto: "Auto Detect",
-            lang_ja: "Japanese",
-            lang_en: "English",
-            lang_ko: "Korean",
-            lang_zh: "Chinese (Original)",
-            show_subtitles: "Show Subtitle Window",
-            clear_subtitles: "Clear Subtitles",
+            start_subtitles: "Start Subtitles",
+            stop_subtitles: "Stop Subtitles",
             toggle_devtools: "Open DevTools",
             settings: "Settings…",
             quit: "Quit mimi",
@@ -272,7 +229,19 @@ fn native_menu_labels(language: NativeMenuLanguage) -> NativeMenuLabels {
     }
 }
 
-/// Reads the macOS language code used when the preference follows the system.
+fn native_session_action_label(labels: NativeMenuLabels, is_active: bool) -> &'static str {
+    if is_active {
+        labels.stop_subtitles
+    } else {
+        labels.start_subtitles
+    }
+}
+
+fn native_tray_session_is_active(status: &str) -> bool {
+    matches!(status, "connecting" | "listening" | "stopping")
+}
+
+/// Reads the operating-system language code when the preference follows the system.
 #[cfg(target_os = "macos")]
 fn system_language_code() -> Option<String> {
     use objc2::msg_send;
@@ -296,55 +265,51 @@ fn system_language_code() -> Option<String> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn system_language_code() -> Option<String> {
+    use windows_sys::Win32::Globalization::GetUserDefaultLocaleName;
+
+    // Windows defines LOCALE_NAME_MAX_LENGTH as 85 UTF-16 code units,
+    // including the trailing null terminator.
+    let mut buffer = [0_u16; 85];
+    let length =
+        unsafe { GetUserDefaultLocaleName(buffer.as_mut_ptr(), i32::try_from(buffer.len()).ok()?) };
+    if length <= 1 {
+        return None;
+    }
+    String::from_utf16(&buffer[..usize::try_from(length - 1).ok()?]).ok()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn system_language_code() -> Option<String> {
     None
 }
 
-/// Tray icon with the mimi menu (start/stop, language, lock, settings, quit)
-/// and a left-click popup control panel. Copy follows the saved UI override,
-/// falling back to the system language.
+/// Tray icon with a compact native menu and a left-click popup control panel.
+/// Copy follows the saved UI override, falling back to the system language.
 fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let override_language = app
+    let (override_language, session_is_active) = app
         .try_state::<AppState>()
-        .and_then(|state| state.settings.preferences().ui_language);
+        .map(|state| {
+            (
+                state.settings.preferences().ui_language,
+                native_tray_session_is_active(&state.session.status_kind()),
+            )
+        })
+        .unwrap_or((None, false));
     let system_language = system_language_code();
     let labels = native_menu_labels(effective_native_menu_language(
         override_language.as_deref(),
         system_language.as_deref(),
     ));
 
-    let live_subtitles =
-        CheckMenuItemBuilder::with_id("live-subtitles", labels.live_subtitles).build(app)?;
-    let lock_position =
-        CheckMenuItemBuilder::with_id("lock-position", labels.lock_position).build(app)?;
+    let session_action = MenuItemBuilder::with_id(
+        "live-subtitles",
+        native_session_action_label(labels, session_is_active),
+    )
+    .build(app)?;
 
-    let lang_auto = MenuItemBuilder::with_id("lang-auto", labels.lang_auto).build(app)?;
-    let lang_ja = MenuItemBuilder::with_id("lang-ja", labels.lang_ja).build(app)?;
-    let lang_en = MenuItemBuilder::with_id("lang-en", labels.lang_en).build(app)?;
-    let lang_ko = MenuItemBuilder::with_id("lang-ko", labels.lang_ko).build(app)?;
-    let lang_zh = MenuItemBuilder::with_id("lang-zh", labels.lang_zh).build(app)?;
-
-    let language_menu = SubmenuBuilder::new(app, labels.language_menu)
-        .item(&lang_auto)
-        .item(&lang_ja)
-        .item(&lang_en)
-        .item(&lang_ko)
-        .item(&lang_zh)
-        .build()?;
-
-    let show_subtitles =
-        MenuItemBuilder::with_id("show-subtitles", labels.show_subtitles).build(app)?;
-    let clear_subtitles =
-        MenuItemBuilder::with_id("clear-subtitles", labels.clear_subtitles).build(app)?;
-
-    let mut menu_builder = MenuBuilder::new(app)
-        .item(&live_subtitles)
-        .item(&language_menu)
-        .item(&lock_position)
-        .item(&show_subtitles)
-        .item(&clear_subtitles)
-        .separator();
+    let mut menu_builder = MenuBuilder::new(app).item(&session_action).separator();
 
     // Dev builds expose a manual "open inspector" action instead of opening
     // the WebView devtools automatically, so the user decides when to look.
@@ -369,27 +334,6 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .or_else(|| app.default_window_icon().cloned())
         .expect("the tray icon is bundled");
 
-    let live_subtitles_clone = live_subtitles.clone();
-    let lock_position_clone = lock_position.clone();
-    let language_items = [
-        (
-            crate::core::models::SourceLanguage::Automatic,
-            lang_auto.clone(),
-        ),
-        (
-            crate::core::models::SourceLanguage::Japanese,
-            lang_ja.clone(),
-        ),
-        (
-            crate::core::models::SourceLanguage::English,
-            lang_en.clone(),
-        ),
-        (crate::core::models::SourceLanguage::Korean, lang_ko.clone()),
-        (
-            crate::core::models::SourceLanguage::Chinese,
-            lang_zh.clone(),
-        ),
-    ];
     let _tray = TrayIconBuilder::with_id("mimi-tray")
         .icon(icon)
         .icon_as_template(true)
@@ -411,33 +355,6 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                         }
                     });
                 }
-                "lang-auto" => {
-                    switch_language(state, crate::core::models::SourceLanguage::Automatic)
-                }
-                "lang-ja" => switch_language(state, crate::core::models::SourceLanguage::Japanese),
-                "lang-en" => switch_language(state, crate::core::models::SourceLanguage::English),
-                "lang-ko" => switch_language(state, crate::core::models::SourceLanguage::Korean),
-                "lang-zh" => switch_language(state, crate::core::models::SourceLanguage::Chinese),
-                "lock-position" => {
-                    let locked = !state.settings.preferences().overlay_locked;
-                    match state
-                        .settings
-                        .save_preferences(|prefs| prefs.overlay_locked = locked)
-                    {
-                        Ok(()) => {
-                            windows::OverlayWindowManager::update_locked(app, locked);
-                            let _ = app.emit(
-                                "settings-changed",
-                                commands::SettingsSnapshotPayload::from_store(&state.settings),
-                            );
-                        }
-                        Err(_) => {
-                            tracing::warn!("preferences unavailable label=tray_lock_write_failed")
-                        }
-                    }
-                }
-                "show-subtitles" => windows::OverlayWindowManager::show(app),
-                "clear-subtitles" => state.session.clear_subtitles(),
                 "toggle-devtools" => {
                     // Manual inspector toggle (dev builds only). Open the
                     // overlay's WebView devtools so the user decides when to
@@ -482,46 +399,24 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .build(app)?;
 
     app.manage(NativeTrayMenuItems {
-        live_subtitles,
-        lock_position,
-        language_menu,
-        lang_auto,
-        lang_ja,
-        lang_en,
-        lang_ko,
-        lang_zh,
-        show_subtitles,
-        clear_subtitles,
+        session_action,
         toggle_devtools,
         settings: settings_item,
         quit: quit_item,
     });
 
-    if let Some(state) = app.try_state::<AppState>() {
-        update_tray_language_availability(&state, &language_items);
-    }
-
-    // Keep the live-subtitles check state in sync with the session. The
-    // polling interval is deliberately coarse: the check states change only
-    // on user actions, so 2s staleness is invisible while the loop stays
-    // nearly free.
-    let app_for_state = app.clone();
-    let language_items_for_state = language_items.clone();
-    tauri::async_runtime::spawn(async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-            let Some(state) = app_for_state.try_state::<AppState>() else {
-                continue;
-            };
-            let active = state.session.is_active();
-            if live_subtitles_clone.is_checked().unwrap_or(false) != active {
-                let _ = live_subtitles_clone.set_checked(active);
-            }
-            let locked = state.settings.preferences().overlay_locked;
-            if lock_position_clone.is_checked().unwrap_or(false) != locked {
-                let _ = lock_position_clone.set_checked(locked);
-            }
-            update_tray_language_availability(&state, &language_items_for_state);
+    // Session broadcasts already cover every start/stop path (native menu,
+    // tray panel, settings, shortcut, recovery). Update the native action
+    // only when activity changes instead of polling all menu state.
+    let app_for_session = app.clone();
+    let session_was_active = AtomicBool::new(session_is_active);
+    app.listen("session-state", move |_| {
+        let Some(state) = app_for_session.try_state::<AppState>() else {
+            return;
+        };
+        let is_active = native_tray_session_is_active(&state.session.status_kind());
+        if session_was_active.swap(is_active, Ordering::Relaxed) != is_active {
+            refresh_native_tray_session_action(&app_for_session, is_active);
         }
     });
 
@@ -529,9 +424,15 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 }
 
 pub(crate) fn refresh_native_tray_language(app: &tauri::AppHandle) {
-    let override_language = app
+    let (override_language, session_is_active) = app
         .try_state::<AppState>()
-        .and_then(|state| state.settings.preferences().ui_language);
+        .map(|state| {
+            (
+                state.settings.preferences().ui_language,
+                native_tray_session_is_active(&state.session.status_kind()),
+            )
+        })
+        .unwrap_or((None, false));
     let system_language = system_language_code();
     let labels = native_menu_labels(effective_native_menu_language(
         override_language.as_deref(),
@@ -541,16 +442,9 @@ pub(crate) fn refresh_native_tray_language(app: &tauri::AppHandle) {
         return;
     };
 
-    let _ = items.live_subtitles.set_text(labels.live_subtitles);
-    let _ = items.lock_position.set_text(labels.lock_position);
-    let _ = items.language_menu.set_text(labels.language_menu);
-    let _ = items.lang_auto.set_text(labels.lang_auto);
-    let _ = items.lang_ja.set_text(labels.lang_ja);
-    let _ = items.lang_en.set_text(labels.lang_en);
-    let _ = items.lang_ko.set_text(labels.lang_ko);
-    let _ = items.lang_zh.set_text(labels.lang_zh);
-    let _ = items.show_subtitles.set_text(labels.show_subtitles);
-    let _ = items.clear_subtitles.set_text(labels.clear_subtitles);
+    let _ = items
+        .session_action
+        .set_text(native_session_action_label(labels, session_is_active));
     if let Some(item) = &items.toggle_devtools {
         let _ = item.set_text(labels.toggle_devtools);
     }
@@ -558,45 +452,20 @@ pub(crate) fn refresh_native_tray_language(app: &tauri::AppHandle) {
     let _ = items.quit.set_text(labels.quit);
 }
 
-fn update_tray_language_availability(
-    state: &AppState,
-    items: &[(crate::core::models::SourceLanguage, MenuItem<tauri::Wry>)],
-) {
-    let status = state.session.status_kind();
-    let provider = state
-        .settings
-        .active_profile()
-        .map(|profile| profile.provider);
-    for (language, item) in items {
-        let enabled = provider
-            .as_ref()
-            .map(|provider| tray_language_is_enabled(*provider, &status, *language))
-            .unwrap_or(false);
-        if item.is_enabled().unwrap_or(!enabled) != enabled {
-            let _ = item.set_enabled(enabled);
-        }
+fn refresh_native_tray_session_action(app: &tauri::AppHandle, is_active: bool) {
+    let override_language = app
+        .try_state::<AppState>()
+        .and_then(|state| state.settings.preferences().ui_language);
+    let system_language = system_language_code();
+    let labels = native_menu_labels(effective_native_menu_language(
+        override_language.as_deref(),
+        system_language.as_deref(),
+    ));
+    if let Some(items) = app.try_state::<NativeTrayMenuItems>() {
+        let _ = items
+            .session_action
+            .set_text(native_session_action_label(labels, is_active));
     }
-}
-
-fn tray_language_is_enabled(
-    provider: crate::core::provider::ProviderKind,
-    status: &str,
-    language: crate::core::models::SourceLanguage,
-) -> bool {
-    !matches!(status, "connecting" | "stopping")
-        && provider.capabilities().source_languages.contains(&language)
-}
-
-fn switch_language(
-    state: tauri::State<'_, AppState>,
-    language: crate::core::models::SourceLanguage,
-) {
-    // The session manager broadcasts settings-changed itself, immediately
-    // after the preference write.
-    let session = Arc::clone(&state.session);
-    tauri::async_runtime::spawn(async move {
-        session.switch_source_language(language).await;
-    });
 }
 
 /// Registers the global start/stop shortcut — ⌘⇧Space on macOS (matching the
@@ -666,31 +535,28 @@ fn setup_global_shortcut(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::models::SourceLanguage;
-    use crate::core::provider::ProviderKind;
 
     #[test]
-    fn native_tray_languages_follow_provider_capabilities_and_session_state() {
-        assert!(tray_language_is_enabled(
-            ProviderKind::OpenAIRealtime,
-            "idle",
-            SourceLanguage::Automatic,
-        ));
-        assert!(!tray_language_is_enabled(
-            ProviderKind::OpenAIRealtime,
-            "idle",
-            SourceLanguage::Japanese,
-        ));
-        assert!(!tray_language_is_enabled(
-            ProviderKind::AlibabaCloud,
-            "connecting",
-            SourceLanguage::Japanese,
-        ));
-        assert!(tray_language_is_enabled(
-            ProviderKind::AlibabaCloud,
-            "listening",
-            SourceLanguage::Japanese,
-        ));
+    fn native_tray_session_action_follows_status_in_all_three_languages() {
+        for (language, start, stop) in [
+            (NativeMenuLanguage::Chinese, "开始字幕", "停止字幕"),
+            (
+                NativeMenuLanguage::English,
+                "Start Subtitles",
+                "Stop Subtitles",
+            ),
+            (NativeMenuLanguage::Japanese, "字幕を開始", "字幕を停止"),
+        ] {
+            let labels = native_menu_labels(language);
+            assert_eq!(native_session_action_label(labels, false), start);
+            assert_eq!(native_session_action_label(labels, true), stop);
+        }
+
+        assert!(!native_tray_session_is_active("idle"));
+        assert!(native_tray_session_is_active("connecting"));
+        assert!(native_tray_session_is_active("listening"));
+        assert!(native_tray_session_is_active("stopping"));
+        assert!(!native_tray_session_is_active("error"));
     }
 
     #[test]

@@ -1,6 +1,7 @@
-import { Icon } from "../../components/Icon";
-import { Switch } from "../../components/Switch";
-import { I18N, setStoredUiLanguage, type UiLanguage } from "../../lib/i18n";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Icon, type IconName } from "../../components/Icon";
+import { I18N, providerDisplayName } from "../../lib/i18n";
 import { isTauri } from "../../lib/ipc";
 import {
   activeServiceProfile,
@@ -9,305 +10,461 @@ import {
 } from "../../lib/providerCapabilities";
 import { useStore } from "../../lib/store";
 import {
+  TARGET_LANGUAGE_DISPLAY_NAMES,
   TRANSLATION_MODE_DISPLAY_NAMES,
-  detectedLanguageDisplayName,
   targetLanguageTranslatesAudio,
   type SessionStateEvent,
   type SettingsSnapshot,
   type SourceLanguage,
 } from "../../lib/types";
 import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
+import {
+  actionErrorMessage,
+  deriveTrayPresentation,
+  hasSubtitleContent,
+  type TrayActionPresentation,
+  type TraySessionAction,
+  type TrayStatusKind,
+} from "./trayModel";
+import "./tray-panel.css";
 
-const GREEN = "#30D158";
-const RED = "#FF453A";
-const ORANGE = "#FF9F0A";
-const SECONDARY = "rgba(255,255,255,0.55)";
+const TRAY_WINDOW_WIDTH = 320;
+const TRAY_WINDOW_PADDING = 6;
 
-/** Menu-bar style control panel; 1:1 port of `MenuBarView.swift`. */
+type PendingAction =
+  | TraySessionAction
+  | "language"
+  | "lock"
+  | "show"
+  | "clear"
+  | "settings"
+  | "quit";
+
+/** Compact cross-platform command center shown from the tray icon. */
 export function TrayPanel() {
-  // Narrow selectors: this window never shows subtitle text, so subscribing
-  // to the whole session object would re-render it on every streaming event.
+  // Keep streaming subtitle updates from repainting this window after content
+  // first becomes available; the selector returns a stable boolean.
   const sessionStatus = useStore((state) => state.session.status);
   const isPaused = useStore((state) => state.session.isPaused);
-  const detectedLanguage = useStore((state) => state.session.detectedLanguage);
+  const subtitleHasContent = useStore((state) =>
+    hasSubtitleContent(state.session.subtitles),
+  );
   const settings = useStore((state) => state.settings);
+  const start = useStore((state) => state.start);
+  const stop = useStore((state) => state.stop);
+  const togglePaused = useStore((state) => state.togglePaused);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
   const setOverlayLocked = useStore((state) => state.setOverlayLocked);
-  const saveSettings = useStore((state) => state.saveSettings);
   const showOverlay = useStore((state) => state.showOverlay);
   const clearSubtitles = useStore((state) => state.clearSubtitles);
+  const hideTrayPanel = useStore((state) => state.hideTrayPanel);
   const showSettings = useStore((state) => state.showSettings);
   const quit = useStore((state) => state.quit);
 
-  const isChangingSession =
-    sessionStatus.kind === "connecting" || sessionStatus.kind === "stopping";
-  const isListening = sessionStatus.kind === "listening";
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  const activeProfile = activeServiceProfile(settings);
   const sourceLanguages = sourceLanguagesForSettings(settings);
-  const effectiveMode = effectiveTranslationModeForSettings(settings);
+  const presentation = deriveTrayPresentation({
+    status: sessionStatus,
+    isPaused,
+    credentialState: activeProfile?.credentialState,
+    hasSubtitleContent: subtitleHasContent,
+  });
+  const anyActionPending = pendingAction !== null;
+  const sourcePickerDisabled =
+    anyActionPending ||
+    !presentation.canChangeSourceLanguage ||
+    sourceLanguages.length === 1;
 
-  const handleLock = (checked: boolean) => {
-    void setOverlayLocked(checked).catch(() => {});
-  };
-
-  const handleUiLanguage = (language: UiLanguage) => {
-    void saveSettings({ uiLanguage: language })
-      .then(() => {
-        setStoredUiLanguage(language);
-        window.location.reload();
+  const performAction = (
+    name: PendingAction,
+    operation: () => Promise<void>,
+  ) => {
+    if (pendingAction !== null) return;
+    setPendingAction(name);
+    setOperationError(null);
+    void operation()
+      .catch((error: unknown) => {
+        setOperationError(
+          actionErrorMessage(error, I18N.settings.profileActionFailed),
+        );
       })
-      .catch(() => {});
+      .finally(() => setPendingAction(null));
   };
 
-  const pickerValue = settings.sourceLanguage;
+  const runSessionAction = (action: TraySessionAction) => {
+    switch (action) {
+      case "start":
+        performAction(action, start);
+        break;
+      case "configure":
+        performAction(action, showSettings);
+        break;
+      case "pause":
+      case "resume":
+        performAction(action, togglePaused);
+        break;
+      case "stop":
+        performAction(action, stop);
+        break;
+      case "connecting":
+      case "stopping":
+        break;
+    }
+  };
+
+  // Match the native window to the rendered surface so inline errors and
+  // localized labels never leave a transparent click-catching tail.
+  useLayoutEffect(() => {
+    if (!isTauri || !panelRef.current) return;
+
+    const currentWindow = getCurrentWindow();
+    let lastHeight = 0;
+    let animationFrame = 0;
+    const resize = () => {
+      animationFrame = 0;
+      const surface = panelRef.current;
+      if (!surface) return;
+      const height = Math.ceil(
+        surface.getBoundingClientRect().height + TRAY_WINDOW_PADDING * 2,
+      );
+      if (height === lastHeight) return;
+      lastHeight = height;
+      void currentWindow
+        .setSize(new LogicalSize(TRAY_WINDOW_WIDTH, height))
+        .catch(() => {});
+    };
+    const scheduleResize = () => {
+      if (animationFrame !== 0) return;
+      animationFrame = window.requestAnimationFrame(resize);
+    };
+    const observer = new ResizeObserver(scheduleResize);
+    observer.observe(panelRef.current);
+    scheduleResize();
+
+    return () => {
+      observer.disconnect();
+      if (animationFrame !== 0) window.cancelAnimationFrame(animationFrame);
+    };
+  }, []);
+
+  useEffect(() => {
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      void hideTrayPanel().catch((error: unknown) => {
+        setOperationError(
+          actionErrorMessage(error, I18N.settings.profileActionFailed),
+        );
+      });
+    };
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => window.removeEventListener("keydown", dismissOnEscape);
+  }, [hideTrayPanel]);
 
   const panel = (
-    <div
-      style={{
-        width: 290,
-        padding: 14,
-        borderRadius: 14,
-        background: "#1e1e1e",
-        border: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
-      }}
+    <section
+      ref={panelRef}
+      className="tray-panel"
+      data-state={presentation.visualState}
+      aria-label={I18N.tray.appName}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: "#ffffff" }}>
-            {I18N.tray.appName}
-          </span>
-          <span
-            style={{
-              fontSize: 12,
-              color: statusColor(sessionStatus, isPaused),
-              lineHeight: 1.3,
-            }}
-          >
-            {statusText(sessionStatus, isPaused, settings)}
-          </span>
-        </div>
+      <header className="tray-header">
+        <span className="tray-wordmark" aria-hidden="true">
+          <Icon name="captions-bubble" />
+        </span>
 
-        <Divider />
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
-            {I18N.tray.sourceLanguage}
+        <span className="tray-header__copy">
+          <strong>{I18N.tray.appName}</strong>
+          <span className="tray-status" aria-live="polite">
+            <span className="tray-status__dot" aria-hidden="true" />
+            <span>{statusText(presentation.statusKind, sessionStatus)}</span>
           </span>
-          <select
-            value={pickerValue}
-            disabled={
-              isChangingSession || isPaused || sourceLanguages.length === 1
-            }
-            aria-label={I18N.tray.sourceLanguage}
-            onChange={(event) =>
-              void switchSourceLanguage(event.target.value as SourceLanguage)
-            }
-            style={{
-              height: 28,
-              padding: "0 8px",
-              borderRadius: 6,
-              background: "rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.9)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              fontSize: 13,
-              opacity:
-                isChangingSession || isPaused || sourceLanguages.length === 1
-                  ? 0.5
-                  : 1,
-            }}
-          >
-            {sourceLanguages.map((language) => (
-              <option key={language} value={language}>
-                {sourceLanguageButtonTitle(language)}
-              </option>
-            ))}
-          </select>
-        </div>
+        </span>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
-            {I18N.settings.appLanguage}
-          </span>
-          <select
-            value={settings.uiLanguage ?? "system"}
-            aria-label={I18N.settings.appLanguage}
-            onChange={(event) =>
-              handleUiLanguage(event.target.value as UiLanguage)
-            }
-            style={{
-              height: 28,
-              padding: "0 8px",
-              borderRadius: 6,
-              background: "rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.9)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              fontSize: 13,
-            }}
-          >
-            <option value="system">{I18N.settings.systemLanguage}</option>
-            <option value="zh">{I18N.settings.chinese}</option>
-            <option value="en">{I18N.settings.english}</option>
-            <option value="ja">{I18N.settings.japanese}</option>
-          </select>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            alignItems: "center",
-            fontSize: 12,
-            color: SECONDARY,
-          }}
+        <span
+          className="tray-profile"
+          title={
+            activeProfile
+              ? `${activeProfile.name} · ${providerDisplayName(activeProfile.provider)}`
+              : I18N.settings.noActiveProfile
+          }
+          aria-label={`${I18N.settings.currentProfile}: ${activeProfile?.name ?? I18N.settings.noActiveProfile}`}
         >
           <Icon
             name={
-              targetLanguageTranslatesAudio(settings.targetLanguage)
-                ? "sparkles"
-                : "text-quote"
+              activeProfile?.provider === "openAIRealtime" ? "waves" : "cloud"
             }
-            style={{ fontSize: 12 }}
           />
-          {(() => {
-            const detected =
-              settings.sourceLanguage === "auto" && detectedLanguage
-                ? `${detectedLanguageDisplayName(detectedLanguage)} · `
-                : "";
-            return targetLanguageTranslatesAudio(settings.targetLanguage)
-              ? `${detected}${TRANSLATION_MODE_DISPLAY_NAMES[effectiveMode]}${I18N.overlay.translationSuffix}`
-              : `${detected}${I18N.tray.originalOnly}`;
-          })()}
-        </div>
+          <span>{activeProfile?.name ?? I18N.settings.noActiveProfile}</span>
+        </span>
+      </header>
 
-        <ToggleRow
-          label={I18N.tray.lockPosition}
-          checked={settings.isOverlayLocked}
-          onChange={handleLock}
+      <div
+        className="tray-session-actions"
+        data-layout={presentation.secondaryAction ? "split" : "single"}
+      >
+        <SessionActionButton
+          presentation={presentation.primaryAction}
+          pending={pendingAction === presentation.primaryAction.action}
+          blocked={anyActionPending}
+          onClick={runSessionAction}
         />
-
-        <TrayButton
-          label={I18N.tray.showSubtitleWindow}
-          disabled={!isListening}
-          onClick={() => void showOverlay()}
-        />
-        <TrayButton
-          label={I18N.tray.clearSubtitles}
-          onClick={() => void clearSubtitles()}
-        />
-
-        <Divider />
-
-        <TrayButton
-          label={I18N.tray.settings}
-          icon="gear"
-          onClick={() => void showSettings()}
-        />
-        <TrayButton label={I18N.tray.quit} onClick={() => void quit()} />
+        {presentation.secondaryAction && (
+          <SessionActionButton
+            presentation={presentation.secondaryAction}
+            pending={pendingAction === presentation.secondaryAction.action}
+            blocked={anyActionPending}
+            onClick={runSessionAction}
+            secondary
+          />
+        )}
       </div>
-    </div>
+
+      <div className="tray-card" aria-label={I18N.settings.subtitleTitle}>
+        <label className="tray-setting-row tray-setting-row--language">
+          <span className="tray-setting-row__icon" aria-hidden="true">
+            <Icon name="languages" />
+          </span>
+          <span className="tray-setting-row__copy">
+            <span>{I18N.tray.sourceLanguage}</span>
+            <small>{translationSummary(settings)}</small>
+          </span>
+          <span className="tray-select-wrap">
+            <select
+              value={settings.sourceLanguage}
+              disabled={sourcePickerDisabled}
+              aria-label={I18N.tray.sourceLanguage}
+              onChange={(event) => {
+                const language = event.target.value as SourceLanguage;
+                performAction("language", () =>
+                  switchSourceLanguage(language),
+                );
+              }}
+            >
+              {sourceLanguages.map((language) => (
+                <option key={language} value={language}>
+                  {sourceLanguageButtonTitle(language)}
+                </option>
+              ))}
+            </select>
+            <Icon name="chevron-down" />
+          </span>
+        </label>
+
+        <span className="tray-card__divider" />
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.isOverlayLocked}
+          aria-label={I18N.tray.lockPosition}
+          disabled={anyActionPending}
+          className="tray-setting-row tray-setting-row--toggle"
+          onClick={() =>
+            performAction("lock", () =>
+              setOverlayLocked(!settings.isOverlayLocked),
+            )
+          }
+        >
+          <span className="tray-setting-row__icon" aria-hidden="true">
+            <Icon name="lock" />
+          </span>
+          <span className="tray-setting-row__copy">
+            <span>{I18N.tray.lockPosition}</span>
+          </span>
+          <span className="tray-switch" aria-hidden="true">
+            <span />
+          </span>
+        </button>
+      </div>
+
+      {(presentation.canShowOverlay || presentation.canClearSubtitles) && (
+        <div className="tray-tools">
+          <ToolButton
+            icon="app-window"
+            label={I18N.tray.showSubtitleWindow}
+            disabled={anyActionPending || !presentation.canShowOverlay}
+            pending={pendingAction === "show"}
+            onClick={() => performAction("show", showOverlay)}
+          />
+          <ToolButton
+            icon="eraser"
+            label={I18N.tray.clearSubtitles}
+            disabled={anyActionPending || !presentation.canClearSubtitles}
+            pending={pendingAction === "clear"}
+            onClick={() => performAction("clear", clearSubtitles)}
+          />
+        </div>
+      )}
+
+      {operationError && (
+        <div className="tray-alert" role="alert">
+          <Icon name="exclamation-triangle" />
+          <span>{operationError}</span>
+        </div>
+      )}
+
+      <footer className="tray-footer">
+        <button
+          type="button"
+          disabled={anyActionPending}
+          onClick={() => performAction("settings", showSettings)}
+        >
+          <Icon name="gear" />
+          <span>{I18N.tray.settings}</span>
+        </button>
+        <button
+          type="button"
+          disabled={anyActionPending}
+          onClick={() => performAction("quit", quit)}
+        >
+          {I18N.tray.quit}
+        </button>
+      </footer>
+    </section>
   );
 
-  if (isTauri) {
-    return <div className="h-full w-full bg-transparent p-0">{panel}</div>;
-  }
   return (
-    <div className="flex h-screen w-screen items-start justify-center pt-8">
-      {panel}
-    </div>
+    <div className={isTauri ? "tray-shell" : "tray-preview"}>{panel}</div>
   );
 }
 
-function ToggleRow({
-  label,
-  checked,
-  onChange,
+function SessionActionButton({
+  presentation,
+  pending,
+  blocked,
+  onClick,
+  secondary = false,
 }: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
+  presentation: TrayActionPresentation;
+  pending: boolean;
+  blocked: boolean;
+  onClick: (action: TraySessionAction) => void;
+  secondary?: boolean;
 }) {
+  const disabled = presentation.disabled || blocked;
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-      <span style={{ flex: 1, fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
-        {label}
-      </span>
-      <Switch checked={checked} onChange={onChange} aria-label={label} />
-    </div>
+    <button
+      type="button"
+      className="tray-session-button"
+      data-action={presentation.action}
+      data-secondary={secondary || undefined}
+      disabled={disabled}
+      aria-busy={pending}
+      onClick={() => onClick(presentation.action)}
+    >
+      {pending || presentation.disabled ? (
+        <span className="tray-session-button__spinner" aria-hidden="true" />
+      ) : (
+        <Icon name={sessionActionIcon(presentation.action)} />
+      )}
+      <span>{sessionActionLabel(presentation.action)}</span>
+    </button>
   );
 }
 
-function TrayButton({
-  label,
+function ToolButton({
   icon,
-  disabled = false,
+  label,
+  disabled,
+  pending,
   onClick,
 }: {
+  icon: IconName;
   label: string;
-  icon?: "gear";
-  disabled?: boolean;
+  disabled: boolean;
+  pending: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      className="tray-tool-button"
       disabled={disabled}
+      aria-busy={pending}
       onClick={onClick}
-      className="ux-hover ux-hover-bg flex w-full items-center"
-      style={{
-        gap: 8,
-        height: 26,
-        padding: "0 2px",
-        border: "none",
-        background: "transparent",
-        color: disabled ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.9)",
-        fontSize: 13,
-        cursor: disabled ? "default" : "pointer",
-      }}
     >
-      {icon && <Icon name={icon} style={{ fontSize: 14 }} />}
-      {label}
+      <span className="tray-tool-button__icon" aria-hidden="true">
+        <Icon name={icon} />
+      </span>
+      <span>{label}</span>
     </button>
   );
 }
 
-function Divider() {
-  return <div style={{ height: 1, background: "rgba(255,255,255,0.1)" }} />;
-}
-
 function statusText(
+  kind: TrayStatusKind,
   status: SessionStateEvent["status"],
-  isPaused: boolean,
-  settings: SettingsSnapshot,
 ): string {
-  if (isPaused) return I18N.tray.paused;
-
-  switch (status.kind) {
-    case "idle":
-      return activeServiceProfile(settings)?.credentialState !== "present"
-        ? I18N.tray.setupRequired
-        : I18N.tray.ready;
+  switch (kind) {
+    case "ready":
+      return I18N.tray.ready;
+    case "setupRequired":
+      return I18N.tray.setupRequired;
     case "connecting":
       return I18N.tray.connecting;
     case "listening":
       return I18N.tray.listening;
+    case "paused":
+      return I18N.tray.paused;
     case "stopping":
       return I18N.tray.stopping;
     case "error":
-      return status.message;
+      return status.kind === "error"
+        ? status.message
+        : I18N.settings.profileActionFailed;
   }
 }
 
-function statusColor(
-  status: SessionStateEvent["status"],
-  isPaused: boolean,
-): string {
-  if (isPaused) return ORANGE;
-  switch (status.kind) {
-    case "listening":
-      return GREEN;
-    case "error":
-      return RED;
-    default:
-      return SECONDARY;
+function sessionActionLabel(action: TraySessionAction): string {
+  switch (action) {
+    case "start":
+      return I18N.settings.start;
+    case "configure":
+      return I18N.settings.configureService;
+    case "pause":
+      return I18N.overlay.pause;
+    case "resume":
+      return I18N.overlay.resume;
+    case "stop":
+      return I18N.settings.stop;
+    case "connecting":
+      return I18N.tray.connecting;
+    case "stopping":
+      return I18N.tray.stopping;
   }
+}
+
+function sessionActionIcon(action: TraySessionAction): IconName {
+  switch (action) {
+    case "start":
+      return "play";
+    case "configure":
+      return "key";
+    case "pause":
+      return "pause";
+    case "resume":
+      return "play";
+    case "stop":
+      return "stop";
+    case "connecting":
+    case "stopping":
+      return "waves";
+  }
+}
+
+function translationSummary(settings: SettingsSnapshot) {
+  if (!targetLanguageTranslatesAudio(settings.targetLanguage)) {
+    return I18N.tray.originalOnly;
+  }
+  const target = TARGET_LANGUAGE_DISPLAY_NAMES[settings.targetLanguage];
+  const mode =
+    TRANSLATION_MODE_DISPLAY_NAMES[
+      effectiveTranslationModeForSettings(settings)
+    ];
+  return `${I18N.settings.translateTo} ${target} · ${mode}`;
 }

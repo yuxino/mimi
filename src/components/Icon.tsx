@@ -15,7 +15,6 @@ import {
   Pause,
   Play,
   Plus,
-  Quote,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -44,7 +43,6 @@ export type IconName =
   | "checkmark"
   | "checkmark-circle"
   | "captions-bubble"
-  | "text-quote"
   | "key"
   | "exclamation-triangle"
   | "app-window"
@@ -68,7 +66,6 @@ const ICONS: Record<IconName, LucideIcon> = {
   checkmark: Check,
   "checkmark-circle": CircleCheck,
   "captions-bubble": Captions,
-  "text-quote": Quote,
   key: Key,
   "exclamation-triangle": AlertTriangle,
   "app-window": AppWindow,

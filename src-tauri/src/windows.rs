@@ -859,8 +859,8 @@ fn language_popover_y(anchor_y: f64, menu_height: f64, screen: (f64, f64)) -> f6
     }
 }
 
-/// Tray popup panel: a small frameless always-on-top window shown under the
-/// tray icon, mirroring the SwiftUI MenuBarExtra window style.
+/// Tray popup panel: a compact frameless always-on-top control surface shown
+/// under the tray icon on both desktop platforms.
 pub struct TrayPanelManager;
 
 impl TrayPanelManager {
@@ -871,7 +871,7 @@ impl TrayPanelManager {
         let builder =
             WebviewWindowBuilder::new(app, "tray-panel", WebviewUrl::App("index.html".into()))
                 .title(dev_title("mimi"))
-                .inner_size(290.0, 470.0)
+                .inner_size(320.0, 410.0)
                 .resizable(false)
                 .transparent(true)
                 .decorations(false)
@@ -960,9 +960,9 @@ pub fn ensure_settings_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window("settings") else {
         let builder =
             WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html".into()))
-                .title(dev_title("mimi 设置"))
-                .inner_size(900.0, 760.0)
-                .min_inner_size(560.0, 620.0)
+                .title(dev_title("mimi"))
+                .inner_size(760.0, 720.0)
+                .min_inner_size(520.0, 560.0)
                 .resizable(true)
                 .center()
                 .visible(true);

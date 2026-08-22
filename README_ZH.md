@@ -30,7 +30,7 @@
 
 - **实时字幕** — 浏览器、播放器、游戏、会议和桌面应用都能用。
 - **实时翻译** — 极速、低延迟、高质量三种模式。
-- **多服务配置** — 保存多个服务档案，切换时无需反复填写凭证。
+- **多服务配置** — 为不同服务商保存多套配置，切换时无需反复填写凭证。
 - **字幕浮窗** — 支持移动、缩放、收起和锁定穿透。
 - **多语言** — 识别中文、日语、英语和韩语。
 - **隐私** — 不使用麦克风，不需要 mimi 账号，不保存音频和字幕历史。
@@ -42,7 +42,7 @@
 2. 打开「服务配置」并保存 API Key。默认仍使用阿里云百炼，也支持 OpenAI Realtime。
 3. 播放内容，点击 **开始**。
 
-每个服务档案的 API Key 都独立保存在系统钥匙串中（macOS 钥匙串 / Windows 凭据管理器），设置页不会把已保存的 Key 读回显示。已有阿里云配置会自动迁移为默认档案。服务商调用可能产生费用。
+每个服务配置的 API Key 都独立保存在操作系统的安全凭据存储中（macOS 钥匙串 / Windows 凭据管理器），设置页不会把已保存的 Key 读回显示。阿里云百炼共享 API 只需 API Key，无需 Workspace ID。已有阿里云设置会自动迁移为默认服务配置。服务商调用可能产生费用。
 
 [创建阿里云 API Key](https://help.aliyun.com/zh/model-studio/get-api-key) · [创建 OpenAI API Key](https://platform.openai.com/api-keys)
 
@@ -74,9 +74,9 @@ Windows 打包请在 Windows 机器上执行（Rust 依赖的 C 代码无法从 
 
 ### macOS 开发说明
 
-- macOS 开发请始终通过 `./scripts/dev-app.sh` 启动。它会生成并校验真正的 `.app`，安装到固定位置，并拒绝不稳定的临时签名，让「屏幕与系统音频录制」和钥匙串授权在重新构建后仍归属于同一个应用。
+- macOS 开发请始终通过 `./scripts/dev-app.sh` 启动。它会生成并校验真正的 `.app`，安装到固定位置，并拒绝不稳定的临时签名，让「屏幕与系统音频录制」和安全凭据存储权限在重新构建后仍归属于同一个应用。
 - 启动器会通过 `scripts/codesign-identity.sh` 选择稳定的 `mimi Local Development` 身份。不要在 macOS 上使用任何 `tauri dev` 命令或直接运行裸二进制；临时签名每次构建都可能被系统当成新应用，从而重复请求授权。
-- 开发版使用独立的应用标识、设置目录和凭证命名空间，不会读取或修改已安装正式版的服务档案与 API Key。
+- 开发版使用独立的应用标识、设置目录和凭证命名空间，不会读取或修改已安装正式版的服务配置与 API Key。
 
 ## 测试
 
@@ -85,7 +85,7 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust 单元测试（协议�
 npm run test                                      # 前端 vitest
 ```
 
-macOS 的 UI 冒烟请运行 `./scripts/dev-app.sh --ui-only`；UI 测试模式不会访问真实凭证、服务商网络或系统音频采集。端到端服务验证再使用普通命令和本机钥匙串凭证。
+macOS 的 UI 冒烟请运行 `./scripts/dev-app.sh --ui-only`；UI 测试模式不会访问真实凭证、服务商网络或系统音频采集。端到端服务验证再使用普通命令和本机安全凭据存储中的凭证。
 
 更多内容见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)。
 

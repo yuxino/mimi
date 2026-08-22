@@ -180,9 +180,6 @@ h1 em, h2 em { color: var(--mint); font-style: normal; }
 .privacy-copy p { margin-bottom: 1.7rem; color: #697487; font-size: 0.95rem; line-height: 1.8; }
 .settings-card { position: relative; padding: 0.85rem 0.85rem 1.35rem; border: 1px solid rgba(74, 86, 113, 0.16); border-radius: 1rem; background: #eef0f4; box-shadow: 1.3rem 1.3rem 0 rgba(165, 184, 255, 0.15); transform: rotate(2deg); }
 .settings-card-top { display: flex; align-items: center; justify-content: space-between; padding: 0 0.35rem 0.7rem; color: #7d8490; font-size: 0.66rem; font-weight: 600; }
-.settings-lights { display: flex; gap: 0.25rem; }
-.settings-lights i { width: 0.42rem; height: 0.42rem; border-radius: 50%; background: #c5c9d0; }
-.settings-lights i:first-child { background: #ef9b9b; }
 .settings-card img { display: block; width: 100%; border-radius: 0.45rem; }
 .settings-caption { position: absolute; right: -0.8rem; bottom: -0.7rem; padding: 0.62rem 0.78rem; border: 1px solid rgba(112, 229, 192, 0.45); border-radius: 999px; color: #3b8d77; background: #e3f8f1; font-size: 0.65rem; font-weight: 700; transform: rotate(-4deg); }
 
