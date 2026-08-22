@@ -17,7 +17,7 @@ body,
 
 /* Settings window gets an opaque background instead. */
 body.settings-body {
-  background: #101314;
+  background: #0b0b0b;
 }
 
 /* Overlay collapse/expand cross-fade, synchronized with native geometry. */
@@ -100,7 +100,7 @@ button:focus-visible,
 select:focus-visible,
 input:focus-visible,
 [role="switch"]:focus-visible {
-  outline: 2px solid rgba(122, 168, 255, 0.85);
+  outline: 2px solid currentColor;
   outline-offset: 2px;
 }
 
