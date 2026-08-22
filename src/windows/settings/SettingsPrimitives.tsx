@@ -3,30 +3,19 @@ import { Icon, type IconName } from "../../components/Icon";
 
 export function SettingsSection({
   id,
-  icon,
   title,
-  description,
-  action,
   children,
 }: {
   id: string;
-  icon: IconName;
   title: string;
-  description: string;
-  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section id={id} className="settings-card" aria-labelledby={`${id}-title`}>
       <header className="settings-card__header">
-        <span className="settings-card__icon" aria-hidden="true">
-          <Icon name={icon} />
-        </span>
         <span className="settings-card__heading">
           <h2 id={`${id}-title`}>{title}</h2>
-          <p>{description}</p>
         </span>
-        {action && <span className="settings-card__action">{action}</span>}
       </header>
       <div className="settings-card__body">{children}</div>
     </section>

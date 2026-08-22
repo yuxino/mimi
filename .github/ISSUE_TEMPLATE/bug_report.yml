@@ -6,13 +6,22 @@ body:
   - type: markdown
     attributes:
       value: |
-        请勿粘贴 Workspace ID、API Key 或包含凭证的截图。
-        Never include a Workspace ID, API key, or credential-bearing screenshot.
-  - type: input
-    id: macos
+        请勿粘贴 API Key 或包含凭证的截图。
+        Never include an API key or credential-bearing screenshot.
+  - type: dropdown
+    id: platform
     attributes:
-      label: macOS version
-      placeholder: macOS 15.5
+      label: 平台 / Platform
+      options:
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: 系统版本 / OS version
+      placeholder: 例如 macOS 15.5 或 Windows 11 24H2 / e.g. macOS 15.5 or Windows 11 24H2
     validations:
       required: true
   - type: textarea
@@ -38,4 +47,3 @@ body:
     id: context
     attributes:
       label: 其他信息 / Additional context
-
