@@ -40,21 +40,6 @@ impl fmt::Debug for LiveTranslationConfiguration {
 }
 
 impl LiveTranslationConfiguration {
-    pub fn new(
-        api_key: impl Into<String>,
-        source_language: SourceLanguage,
-        target_language: TargetLanguage,
-        translation_mode: TranslationMode,
-    ) -> Self {
-        Self::for_provider(
-            ProviderKind::AlibabaCloud,
-            api_key,
-            source_language,
-            target_language,
-            translation_mode,
-        )
-    }
-
     pub fn for_provider(
         provider: ProviderKind,
         api_key: impl Into<String>,
@@ -132,7 +117,8 @@ mod tests {
     use super::*;
 
     fn config(api_key: &str, source_language: SourceLanguage) -> LiveTranslationConfiguration {
-        LiveTranslationConfiguration::new(
+        LiveTranslationConfiguration::for_provider(
+            ProviderKind::AlibabaCloud,
             api_key,
             source_language,
             TargetLanguage::SimplifiedChinese,
@@ -151,7 +137,8 @@ mod tests {
 
     #[test]
     fn turbo_mode_stays_turbo_even_with_automatic_source() {
-        let configuration = LiveTranslationConfiguration::new(
+        let configuration = LiveTranslationConfiguration::for_provider(
+            ProviderKind::AlibabaCloud,
             "sk-test",
             SourceLanguage::Automatic,
             TargetLanguage::SimplifiedChinese,
@@ -165,7 +152,8 @@ mod tests {
 
     #[test]
     fn original_subtitles_preserve_the_strongest_recognition_backend() {
-        let configuration = LiveTranslationConfiguration::new(
+        let configuration = LiveTranslationConfiguration::for_provider(
+            ProviderKind::AlibabaCloud,
             "secret",
             SourceLanguage::Japanese,
             TargetLanguage::Original,
@@ -179,7 +167,8 @@ mod tests {
 
     #[test]
     fn configuration_preserves_an_explicit_translation_mode() {
-        let configuration = LiveTranslationConfiguration::new(
+        let configuration = LiveTranslationConfiguration::for_provider(
+            ProviderKind::AlibabaCloud,
             "sk-test",
             SourceLanguage::Japanese,
             TargetLanguage::English,
@@ -215,14 +204,6 @@ mod tests {
         let validated = configuration.validated().unwrap();
         assert_eq!(validated.api_key, "sk-test");
         assert_eq!(validated.source_language, SourceLanguage::Korean);
-    }
-
-    #[test]
-    fn legacy_constructor_keeps_alibaba_as_the_default() {
-        assert_eq!(
-            config("sk-test", SourceLanguage::Automatic).provider,
-            ProviderKind::AlibabaCloud
-        );
     }
 
     #[test]

@@ -1,7 +1,6 @@
 //! Splits a cumulative ASR draft into complete sentences so subtitles are never
 //! committed mid-sentence, and so a later server final cannot duplicate text
-//! that was already committed. Ported 1:1 from
-//! `Sources/MimiCore/ASRDraftCommitter.swift`.
+//! that was already committed.
 
 const SENTENCE_DELIMITERS: [char; 7] = ['。', '！', '？', '.', '!', '?', '\n'];
 
@@ -207,8 +206,8 @@ impl ASRDraftCommitter {
         0
     }
 
-    /// Text is meaningful when it contains at least one character that is not
-    /// whitespace and not punctuation (mirrors the Swift `isMeaningful`).
+    /// Text is meaningful when it contains a non-whitespace, non-punctuation
+    /// character.
     fn is_meaningful(text: &str) -> bool {
         text.chars()
             .any(|c| !c.is_whitespace() && !is_punctuation(c))
@@ -216,9 +215,8 @@ impl ASRDraftCommitter {
 }
 
 fn is_punctuation(c: char) -> bool {
-    // Swift's CharacterSet.punctuationCharacters includes Unicode punctuation
-    // categories plus symbols; `is_ascii_punctuation` alone would miss CJK
-    // punctuation, so include all Unicode punctuation categories.
+    // ASCII classification alone misses CJK punctuation, so include the
+    // relevant Unicode punctuation and symbol categories.
     !c.is_alphanumeric() && !c.is_whitespace() && !c.is_control()
         || c.is_ascii_punctuation()
         || matches!(

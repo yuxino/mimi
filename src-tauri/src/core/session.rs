@@ -191,13 +191,8 @@ mod tests {
         assert_eq!(controller.state.subtitles.history.len(), 1);
         assert!(controller.state.subtitles.translation.is_final);
         assert_eq!(
-            controller
-                .state
-                .detected_language
-                .as_ref()
-                .unwrap()
-                .display_name(),
-            "English"
+            controller.state.detected_language.as_ref().unwrap().code,
+            "en"
         );
     }
 
@@ -209,13 +204,8 @@ mod tests {
             language: Some("ja".into()),
         });
         assert_eq!(
-            controller
-                .state
-                .detected_language
-                .as_ref()
-                .unwrap()
-                .display_name(),
-            "日本語"
+            controller.state.detected_language.as_ref().unwrap().code,
+            "ja"
         );
 
         controller.begin_connecting();

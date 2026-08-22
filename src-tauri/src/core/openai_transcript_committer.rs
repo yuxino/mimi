@@ -183,12 +183,12 @@ impl OpenAITranscriptPairCommitter {
     }
 
     #[cfg(test)]
-    pub fn pending_source_character_count(&self) -> usize {
+    fn pending_source_character_count(&self) -> usize {
         self.source.character_count()
     }
 
     #[cfg(test)]
-    pub fn pending_translation_character_count(&self) -> usize {
+    fn pending_translation_character_count(&self) -> usize {
         self.translation.character_count()
     }
 

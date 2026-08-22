@@ -1,7 +1,6 @@
 //! High-quality translation pipeline: Audio 3.0 recognition + Qwen-MT
-//! translation with draft stabilization, preview preemption, translation
-//! memory, and provisional-commit replacement. Ported 1:1 from
-//! `Sources/MimiCore/HighQualityTranslationClient.swift`.
+//! translation with draft stabilization, translation memory, queue bounds,
+//! and provisional-commit replacement.
 
 use crate::clients::audio3_client::Audio3ASRClient;
 use crate::clients::qwen_mt_client::QwenMTClient;

@@ -14,9 +14,8 @@ interface DragHandleProps {
 
 /**
  * The drag handle, mirroring `WindowDragArea`: a primary-button press drags
- * the overlay window (via `startDragging`, which works regardless of which
- * child element the press lands on), and a double-click collapses/expands it.
- * The hover pill matches the Swift original (accent 78% / white 28%).
+ * the overlay window (via `startDragging`, regardless of which child receives
+ * the press), and a double-click collapses or expands it.
  */
 export function DragHandle({
   onToggleCollapsed,
@@ -30,9 +29,8 @@ export function DragHandle({
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     if (event.detail === 2) {
-      // Second press of a double-click: toggle instead of dragging, exactly
-      // like the Swift `mouseDown` `clickCount == 2` branch. This also
-      // covers the plain-vite preview, where `startDragging` is a no-op.
+      // The second press toggles instead of dragging. This also covers the
+      // plain-Vite preview, where `startDragging` is a no-op.
       onToggleCollapsed();
       return;
     }

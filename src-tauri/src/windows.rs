@@ -1,6 +1,4 @@
-//! Overlay and tray-panel window management, ported from
-//! `Sources/MimiApp/OverlayWindowController.swift` and the menu-bar popover
-//! behavior in `MimiApp.swift`.
+//! Overlay, popover, settings, and tray-panel window management.
 //!
 //! # Overlay geometry state machine
 //!
@@ -95,9 +93,8 @@ impl SubtitleOverlayMetrics {
 }
 
 /// The overlay's visual state. The language/mode menu lives in its own
-/// window (see [`LanguagePopoverManager`], mirroring the Swift NSPopover), so
-/// the overlay window has no menu-related state and its height is never
-/// affected by the menu.
+/// window (see [`LanguagePopoverManager`]), so the overlay has no menu-related
+/// state and its height is never affected by the menu.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OverlayMode {
     Expanded,
@@ -268,12 +265,6 @@ impl OverlayWindowManager {
         }
     }
 
-    pub fn hide(app: &AppHandle) {
-        if let Some(window) = app.get_webview_window("overlay") {
-            let _ = window.hide();
-        }
-    }
-
     /// Locks the overlay: the window ignores mouse events so clicks pass
     /// through to whatever plays underneath.
     pub fn update_locked(app: &AppHandle, locked: bool) {
@@ -308,8 +299,8 @@ impl OverlayWindowManager {
     }
 
     /// Collapses to 280×54 or expands to the remembered frame. The size
-    /// change is animated (≈180 ms easeInOut, matching the Swift transition),
-    /// and on expand the frame is constrained back onto the visible screen.
+    /// change uses the shared 180 ms ease-in-out timing, and expansion clamps
+    /// the remembered frame back onto the visible screen.
     pub fn set_collapsed(
         app: &AppHandle,
         state: &Arc<std::sync::Mutex<OverlayState>>,
@@ -502,29 +493,6 @@ impl OverlayWindowManager {
         persist_user_frame(settings, &state.user_frame);
         tracing::info!("resize end");
     }
-
-    /// Legacy size setter (kept for the IPC contract; the Tauri frontend
-    /// resizes through `resize_start/move/end` instead).
-    pub fn set_size(
-        app: &AppHandle,
-        state: &Arc<std::sync::Mutex<OverlayState>>,
-        width: f64,
-        height: f64,
-    ) {
-        let mut state = state.lock().unwrap();
-        if state.mode != OverlayMode::Expanded {
-            return;
-        }
-        state.user_frame.width = width.clamp(
-            SubtitleOverlayMetrics::MINIMUM_WIDTH,
-            SubtitleOverlayMetrics::MAXIMUM_WIDTH,
-        );
-        state.user_frame.height = height.clamp(
-            SubtitleOverlayMetrics::MINIMUM_HEIGHT,
-            SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
-        );
-        Self::apply(app, &state, false);
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -612,8 +580,7 @@ fn clamp_user_frame_to_screen(app: &AppHandle, frame: &mut OverlayFrame) {
     frame.y = frame.y.clamp(0.0, (screen_h - frame.height).max(0.0));
 }
 
-/// Animated size transition (≈180 ms easeInOut, matching the Swift overlay
-/// transition), then a final settle pass.
+/// Animated 180 ms ease-in-out size transition, followed by a settle pass.
 fn animate_resize(
     window: &tauri::WebviewWindow,
     scale: f64,
@@ -647,7 +614,7 @@ fn animate_resize(
     });
 }
 
-/// Cubic ease-in-out, matching the Swift `easeInOut(duration: 0.18)` curve.
+/// Cubic ease-in-out used by the native geometry transition.
 fn ease_in_out(t: f64) -> f64 {
     if t < 0.5 {
         2.0 * t * t
@@ -678,7 +645,7 @@ fn default_overlay_origin(
         }
         return (saved.x, saved.y);
     }
-    // Bottom-center of the primary monitor, matching the Swift default.
+    // Default to the bottom-center of the primary monitor.
     if let Some(monitor) = app.primary_monitor().ok().flatten() {
         let scale = monitor.scale_factor().max(1.0);
         let size = monitor.size();
@@ -692,10 +659,8 @@ fn default_overlay_origin(
     (0.0, 0.0)
 }
 
-/// The language/mode picker: a separate frameless window shown under the
-/// overlay's language capsule, mirroring the Swift `NSPopover`. Because the
-/// menu lives in its own window, the overlay's size is never affected by
-/// opening or using the menu.
+/// A frameless language/mode picker anchored under the overlay capsule. Its
+/// separate window keeps menu interaction out of overlay geometry state.
 pub struct LanguagePopoverManager;
 
 /// Bumped on every show/hide decision so a pending delayed hide (scheduled

@@ -1,8 +1,6 @@
-//! Live-translate and realtime-ASR WebSocket protocols, ported 1:1 from
-//! `Sources/MimiCore/LiveTranslateProtocol.swift` and
-//! `Sources/MimiCore/RealtimeASRProtocol.swift`. Both speak to DashScope's
-//! unified realtime endpoint, authenticated with a Bearer API key only — no
-//! workspace id in the URL.
+//! Live-translate and realtime-ASR WebSocket protocols for DashScope's shared
+//! endpoint. Authentication uses a Bearer API key; the URL has no Workspace
+//! ID component.
 
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use base64::Engine;

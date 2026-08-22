@@ -234,10 +234,6 @@
   min-height: 36px;
 }
 
-.settings-row--start {
-  align-items: start;
-}
-
 .settings-row__copy {
   display: flex;
   min-width: 0;

@@ -643,18 +643,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core-audio"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7555f54c562401cdd80ae0d795311f5d88a2440c2917071d750728165c8b051a"
-dependencies = [
- "core-audio-types",
- "core-foundation",
- "libc",
- "objc2-core-audio",
-]
-
-[[package]]
 name = "core-audio-types"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2501,12 +2489,9 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "mimi"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
- "anyhow",
  "base64 0.23.1",
- "block2",
- "core-audio",
  "core-graphics2",
  "core-media",
  "cpal",
@@ -2516,7 +2501,6 @@ dependencies = [
  "objc2",
  "objc2-core-audio-types",
  "objc2-foundation",
- "regex",
  "reqwest 0.12.28",
  "rubato",
  "screen-capture-kit",
@@ -2811,7 +2795,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1eebcea8b0dbff5f7c8504f3107c68fc061a3eb44932051c8cf8a68d969c3b2"
 dependencies = [
  "dispatch2",
- "libc",
  "objc2",
  "objc2-core-audio-types",
  "objc2-core-foundation",

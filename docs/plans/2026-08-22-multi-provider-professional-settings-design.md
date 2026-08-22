@@ -85,6 +85,14 @@ for session construction, validates provider capabilities, and builds the
 matching client. Frontend start requests never carry credentials or provider
 configuration.
 
+Frontend bootstrap installs the settings and session event listeners before it
+requests the initial snapshots. Events that arrive while either snapshot is in
+flight are buffered and take precedence over the older response. If any
+listener or snapshot fails, every partially installed listener is removed and
+initialization remains retryable. Profile-command responses and queued settings
+saves are generation-guarded so a newer event can never be overwritten by an
+older response.
+
 Alibaba keeps its 16 kHz mono PCM pipeline. OpenAI Realtime uses 24 kHz mono
 PCM, so audio capture exposes the provider-requested format and performs bounded
 resampling before network transmission. The OpenAI adapter:
@@ -100,34 +108,11 @@ resampling before network transmission. The OpenAI adapter:
 
 ## Settings experience
 
-The settings window becomes a responsive control surface instead of a long form.
-Its default size is 900×760 with a 560×620 minimum. At 720 points and above it
-uses a restrained two-column layout; below that it becomes one scrollable column.
-
-1. A compact session hero shows readiness, the active provider/profile, and the
-   primary Start/Stop action.
-2. Subtitle preferences group source language, target language, translation
-   mode, typography, and overlay behavior. Controls reflect the active provider's
-   capabilities and never silently accept unsupported values.
-3. Service profiles have a scannable list and a focused editor. Users can add,
-   rename, select, and delete profiles, and replace or remove a credential
-   without ever reading it back.
-4. Credential state is communicated with icon, text, and detail—not color alone.
-   Missing fields focus the relevant control; unavailable secure storage is not
-   mislabeled as a missing key.
-5. Mutating controls are disabled while a session is active and re-check session
-   state when an action executes, including confirmation dialogs.
-6. Each window installs settings/session listeners before requesting its boot
-   snapshots. Events received while those snapshots are in flight are buffered
-   and take precedence, so opening a window cannot roll back a concurrent tray,
-   shortcut, or profile change. Partial initialization is cleaned up and
-   retried; until then credential readiness remains unavailable rather than
-   optimistically configured.
-
-The visual language is native and quiet: semantic surfaces, clear type hierarchy,
-subtle borders/material, one calm teal accent, consistent spacing, visible keyboard
-focus, and reduced-motion support. New strings are added in Simplified Chinese,
-English, and Japanese with identical key sets.
+The provider capability, credential-state, session-mutation, and snapshot-ordering
+rules above remain current. The original two-column settings layout and session
+hero were superseded by
+`2026-08-23-simplified-settings-and-tray-design.md`; that record is the authority
+for the current settings and tray information architecture.
 
 ## Migration and compatibility
 

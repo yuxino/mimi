@@ -19,10 +19,12 @@ pub mod unsupported;
 pub enum SystemAudioCaptureError {
     #[error("System audio capture is already running.")]
     AlreadyRunning,
+    #[cfg(target_os = "macos")]
     #[error("mimi could not find a display to use for system audio capture.")]
     NoDisplay,
     #[error("The system returned an unsupported audio format.")]
     UnsupportedAudioFormat,
+    #[cfg(target_os = "windows")]
     #[error("No default playback device is available for system audio capture.")]
     NoPlaybackDevice,
     #[error("{0}")]

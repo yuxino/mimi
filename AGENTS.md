@@ -21,7 +21,8 @@ Preserve these product constraints:
 - `src-tauri/src/{commands,windows,lib}.rs`: IPC commands, overlay/tray-panel window management, tray/shortcut wiring.
 - `src/`: React frontend — `src/windows/{overlay,tray-panel,settings}/` contain the three product surfaces; `src/lib/{ipc,store,types,i18n}.ts` define the IPC contract.
 - `mimi-web/`: the product website (marketing site, not the app).
-- `docs/plans/`: accepted design notes and implementation plans.
+- `docs/plans/`: current accepted design records; completed checklists and
+  superseded designs stay in Git history.
 - `scripts/check.sh`: canonical automated test and strict-build entry point.
 - `scripts/package-app.sh`: release build via `tauri build`, re-signed with the stable local identity.
 - `scripts/codesign-identity.sh`: picks the code-signing identity for local builds (`MIMI_CODESIGN_IDENTITY` → `mimi Local Development` → ad-hoc). Stable identity keeps Screen Recording / keychain grants valid across rebuilds.
