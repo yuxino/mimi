@@ -6,7 +6,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   SessionStateEvent,
   ServiceProvider,
@@ -142,8 +142,12 @@ export function appQuit(): Promise<void> {
   return invoke("app_quit");
 }
 
-export function appShowSettings(): Promise<void> {
-  return invoke("app_show_settings");
+export type SettingsNavigationTarget = "service";
+
+export function appShowSettings(
+  target?: SettingsNavigationTarget,
+): Promise<void> {
+  return invoke("app_show_settings", { target: target ?? null });
 }
 
 // ---------------------------------------------------------------------------
@@ -164,4 +168,20 @@ export function listenSettingsChanged(
   return listen<SettingsSnapshot>("settings-changed", (event) =>
     handler(event.payload),
   );
+}
+
+/** Receives an explicit category intent when another app window opens the
+ * settings window for a specific task. */
+export function listenSettingsNavigation(
+  handler: (target: SettingsNavigationTarget) => void,
+): Promise<UnlistenFn> {
+  return listen<SettingsNavigationTarget>("settings-navigate", (event) =>
+    handler(event.payload),
+  );
+}
+
+/** Completes the navigation handshake after SettingsView has installed its
+ * listener. This matters only when the native window had to be recreated. */
+export function announceSettingsNavigationReady(): Promise<void> {
+  return emit("settings-navigation-ready");
 }

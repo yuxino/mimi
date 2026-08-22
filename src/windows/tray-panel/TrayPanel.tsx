@@ -101,7 +101,7 @@ export function TrayPanel() {
         performAction(action, start);
         break;
       case "configure":
-        performAction(action, showSettings);
+        performAction(action, () => showSettings("service"));
         break;
       case "pause":
       case "resume":

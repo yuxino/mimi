@@ -8,7 +8,16 @@ use crate::settings_store::{CredentialState, SettingsStore};
 use crate::windows::{OverlayWindowManager, TrayPanelManager};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Listener, Manager, State};
+
+const SETTINGS_NAVIGATION_EVENT: &str = "settings-navigate";
+const SETTINGS_NAVIGATION_READY_EVENT: &str = "settings-navigation-ready";
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SettingsNavigationTarget {
+    Service,
+}
 
 pub struct AppState {
     pub settings: Arc<SettingsStore>,
@@ -165,6 +174,15 @@ mod tests {
             payload.profiles[1].credential_state,
             CredentialState::Missing
         );
+    }
+
+    #[test]
+    fn settings_navigation_target_accepts_only_known_sections() {
+        assert_eq!(
+            serde_json::from_str::<SettingsNavigationTarget>(r#""service""#).unwrap(),
+            SettingsNavigationTarget::Service
+        );
+        assert!(serde_json::from_str::<SettingsNavigationTarget>(r#""general""#).is_err());
     }
 }
 
@@ -560,14 +578,44 @@ pub fn tray_panel_hide(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn emit_settings_navigation(app: &AppHandle, target: SettingsNavigationTarget) {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.emit(SETTINGS_NAVIGATION_EVENT, target);
+    }
+}
+
 #[tauri::command]
-pub fn app_show_settings(app: AppHandle) -> Result<(), String> {
+pub fn app_show_settings(
+    app: AppHandle,
+    target: Option<SettingsNavigationTarget>,
+) -> Result<(), String> {
     // Close the tray panel first: it is always-on-top, so the settings
     // window would otherwise open behind it and the click would look like a
     // no-op. Same for the language popover, if open.
     TrayPanelManager::hide(&app);
     crate::windows::LanguagePopoverManager::hide(&app);
+
+    // The settings window normally exists for the whole app lifetime and is
+    // merely hidden on close. If its webview crashed, however, recreating it
+    // and emitting immediately would race the frontend listener. In that
+    // recovery path, wait for SettingsView to announce that its navigation
+    // listener is installed before delivering the one-shot intent.
+    let settings_window_exists = app.get_webview_window("settings").is_some();
+    if !settings_window_exists {
+        if let Some(target) = target {
+            let ready_app = app.clone();
+            app.once(SETTINGS_NAVIGATION_READY_EVENT, move |_| {
+                emit_settings_navigation(&ready_app, target);
+            });
+        }
+    }
+
     crate::windows::ensure_settings_window(&app);
+    if settings_window_exists {
+        if let Some(target) = target {
+            emit_settings_navigation(&app, target);
+        }
+    }
     Ok(())
 }
 

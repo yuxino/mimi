@@ -17,13 +17,7 @@ import {
 
 type Feedback = { tone: "success" | "error" | "info"; message: string };
 type PendingAction =
-  | "create"
-  | "rename"
-  | "select"
-  | "delete"
-  | "save-key"
-  | "delete-key"
-  | null;
+  "create" | "rename" | "select" | "delete" | "save-key" | "delete-key" | null;
 
 export function ServiceProfiles({
   settings,
@@ -244,7 +238,9 @@ export function ServiceProfiles({
         <summary>
           <span className="profile-management__summary-copy">
             <strong>{I18N.settings.manageServiceProfiles}</strong>
-            <small>{I18N.settings.profileCount(settings.profiles.length)}</small>
+            <small>
+              {I18N.settings.profileCount(settings.profiles.length)}
+            </small>
           </span>
           <Icon name="chevron-down" />
         </summary>
@@ -300,7 +296,9 @@ export function ServiceProfiles({
                   <ProviderMark provider={selectedProfile.provider} />
                   <span>
                     <strong>{selectedProfile.name}</strong>
-                    <small>{providerDisplayName(selectedProfile.provider)}</small>
+                    <small>
+                      {providerDisplayName(selectedProfile.provider)}
+                    </small>
                   </span>
                   {selectedProfile.id === settings.activeProfileId && (
                     <span className="profile-active-badge">
@@ -361,9 +359,7 @@ export function ServiceProfiles({
                     onSave={(replacement) =>
                       handleSaveCredential(selectedProfile.id, replacement)
                     }
-                    onDelete={() =>
-                      handleDeleteCredential(selectedProfile.id)
-                    }
+                    onDelete={() => handleDeleteCredential(selectedProfile.id)}
                   />
                 )}
 
@@ -610,6 +606,8 @@ function ProfileListItem({
       <span
         className="credential-dot"
         data-state={profile.credentialState}
+        role="img"
+        aria-label={credentialStateText(profile.credentialState)}
         title={credentialStateText(profile.credentialState)}
       />
       {active && <span className="profile-list-item__active" />}

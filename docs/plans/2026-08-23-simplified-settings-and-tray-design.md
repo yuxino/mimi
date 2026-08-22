@@ -17,11 +17,14 @@ primary start, pause, and stop actions.
 ## Product direction
 
 Use one quiet, platform-neutral visual language on macOS and Windows. Native
-window chrome remains owned by the operating system; the web UI uses neutral
-controls, system typography, shared spacing, and the Mimi teal accent rather
-than imitating one platform.
+window chrome remains owned by the operating system; the web UI uses system
+typography, shared spacing, and a monochrome graphite palette rather than
+imitating one platform. Selection and hierarchy come from contrast, borders,
+weight, and spacing—not a brand tint. App-owned semantic states use icons, copy,
+shape, and border weight instead of hue.
 
-Settings is for configuration:
+Settings is for configuration. A category rail shows one group at a time so the
+window reads like a focused utility instead of one long administration form:
 
 1. **Subtitles** contains recognition language, translation target and mode,
    subtitle size, and overlay position lock.
@@ -30,9 +33,12 @@ Settings is for configuration:
    configurations is available through an initially collapsed management area.
 3. **General** contains interface language.
 
-The status/start surface, repeated provider descriptions, mode badge, and
-visible profile editor are removed. Session control belongs to the tray;
-multi-profile support remains available without being the default reading path.
+The active category is expressed with a high-contrast monochrome treatment. A
+missing or unavailable credential opens the Translation service category by
+default; otherwise Subtitles is the default. The status/start surface, repeated
+provider descriptions, mode badge, and visible profile editor are removed.
+Session control belongs to the tray; multi-profile support remains available
+without being the default reading path.
 
 The tray is for frequent actions:
 
@@ -52,9 +58,21 @@ macOS reads `NSLocale`; Windows uses the platform globalization API through a
 target-only `windows-sys` binding, which adds no runtime service or new package
 outside the Windows build.
 
+The custom tray uses the same monochrome tokens as Settings. Its primary action
+is a solid high-contrast black/white button; profile marks, quick-setting icons,
+switches, status dots, and focus rings stay grayscale. It has no teal glow,
+colored gradient, or decorative color wash. App-owned error and warning states
+also stay monochrome, using icons, copy, border weight, and contrast instead of
+hue. Operating-system window chrome and forced-colors mode remain under system
+control.
+
 ## Interaction and safety
 
 - Profile and credential mutations stay disabled while a session is active.
+- The tray's **Configure service** action carries an explicit service-category
+  navigation intent. An existing hidden Settings window handles it directly;
+  a recreated window installs its listener and announces readiness before the
+  native shell delivers the one-shot intent.
 - Saved API keys are never read back into frontend state. A replacement draft
   is cleared before the write-only IPC request begins, including on failure.
 - Missing and unavailable credential states remain distinct and visible.
@@ -67,11 +85,11 @@ outside the Windows build.
 
 ## Responsive behavior
 
-The settings content is a single column capped around 720 logical pixels. The
-window remains resizable and usable down to 520 logical pixels without a
-second layout model. The tray is a fixed-width 320 logical pixel surface with
-height matched to its content, avoiding transparent dead areas and clipped
-shadows.
+The settings content uses a compact category rail beside one content panel. At
+narrow widths the rail becomes a three-item horizontal tab strip, preserving
+the same information architecture down to the 520 logical-pixel minimum. The
+tray is a fixed-width 320 logical pixel surface with height matched to its
+content, avoiding transparent dead areas and clipped shadows.
 
 ## Verification
 
