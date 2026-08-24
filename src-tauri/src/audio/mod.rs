@@ -31,12 +31,16 @@ pub enum SystemAudioCaptureError {
     #[cfg(target_os = "windows")]
     #[error("No default playback device is available for system audio capture.")]
     NoPlaybackDevice,
+    #[cfg(target_os = "macos")]
     #[error("System audio capture permission was denied.")]
     PermissionDenied,
+    #[cfg(target_os = "macos")]
     #[error("System audio capture setup timed out.")]
     StartTimedOut,
+    #[cfg(target_os = "macos")]
     #[error("System audio capture start was cancelled.")]
     StartCancelled,
+    #[cfg(target_os = "macos")]
     #[error("The previous system audio capture is still stopping.")]
     PreviousCaptureStopping,
     #[error("System audio capture could not be started.")]
