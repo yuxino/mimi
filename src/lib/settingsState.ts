@@ -105,6 +105,10 @@ export function mergeSettingsSnapshot(
     targetLanguage: draft.targetLanguage ?? current.targetLanguage,
     translationMode: draft.translationMode ?? current.translationMode,
     fontSize: draft.fontSize ?? current.fontSize,
+    subtitleAlignment: draft.subtitleAlignment ?? current.subtitleAlignment,
+    subtitleBlendsWithBackground:
+      draft.subtitleBlendsWithBackground ??
+      current.subtitleBlendsWithBackground,
     isOverlayLocked: draft.isOverlayLocked ?? current.isOverlayLocked,
     uiLanguage: draft.uiLanguage ?? current.uiLanguage,
   };

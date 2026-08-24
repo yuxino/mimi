@@ -1,5 +1,7 @@
 import { memo, useEffect, useRef } from "react";
 import { hexToRgba } from "../../lib/types";
+import type { SubtitleAlignment } from "../../lib/types";
+import { rowHorizontalPadding } from "./alignment";
 import type { SubtitleRow } from "./overlayModel";
 
 const ACCENT = "#7AA8FF";
@@ -9,6 +11,8 @@ const MONO_FONT =
 interface TimelineProps {
   rows: SubtitleRow[];
   fontSize: number;
+  alignment: SubtitleAlignment;
+  blendsWithBackground?: boolean;
   /** True when the trailing row(s) are the live draft preview. Draft rows
    * (id prefix `draft-`) render dimmed with a trailing ellipsis so the
    * in-progress line does not dominate the stable history above it; history
@@ -22,6 +26,8 @@ interface TimelineProps {
 export const Timeline = memo(function Timeline({
   rows,
   fontSize,
+  alignment,
+  blendsWithBackground = false,
   draft = false,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,11 +68,18 @@ export const Timeline = memo(function Timeline({
         return (
           <div
             key={row.id}
-            className="flex items-baseline"
+            className="relative"
             style={{
-              gap: 8,
-              paddingLeft: 18,
-              paddingRight: 18,
+              paddingLeft: rowHorizontalPadding(
+                alignment,
+                "left",
+                blendsWithBackground,
+              ),
+              paddingRight: rowHorizontalPadding(
+                alignment,
+                "right",
+                blendsWithBackground,
+              ),
               paddingTop: isLast ? 7 : 5,
               paddingBottom: isLast ? 7 : 5,
               // New rows settle in with a brief rise-and-fade (CSS animation
@@ -75,11 +88,13 @@ export const Timeline = memo(function Timeline({
               animation: "subtitle-row-enter 240ms ease-out",
             }}
           >
-            {row.createdAt !== null && !isDraftRow ? (
+            {!blendsWithBackground && row.createdAt !== null && !isDraftRow ? (
               <span
                 style={{
+                  position: "absolute",
+                  left: 18,
+                  top: isLast ? 12 : 10,
                   width: 31,
-                  flexShrink: 0,
                   textAlign: "right",
                   fontSize: 9,
                   fontWeight: 500,
@@ -90,12 +105,11 @@ export const Timeline = memo(function Timeline({
               >
                 {formatTimestamp(row.createdAt)}
               </span>
-            ) : (
-              <span style={{ width: 31, height: 1, flexShrink: 0 }} />
-            )}
+            ) : null}
             <span
-              className="min-w-0 flex-1 text-left"
+              className="block min-w-0"
               style={{
+                textAlign: alignment,
                 fontSize: rowFontSize(index, rows.length, fontSize),
                 fontWeight: isLast ? 500 : 400,
                 color: isDraftRow
@@ -103,6 +117,9 @@ export const Timeline = memo(function Timeline({
                   : `rgba(255,255,255,${rowOpacity(distance)})`,
                 lineHeight: 1.45,
                 overflowWrap: "break-word",
+                textShadow: blendsWithBackground
+                  ? "0 2px 5px rgba(0,0,0,0.98), 0 0 2px rgba(0,0,0,0.95), 0 0 12px rgba(0,0,0,0.72)"
+                  : undefined,
               }}
             >
               {row.text}

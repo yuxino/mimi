@@ -40,6 +40,15 @@ pub const MAXIMUM_PROFILE_COUNT: usize = 20;
 pub const FONT_SIZE_RANGE: std::ops::RangeInclusive<f64> = 14.0..=20.0;
 pub const DEFAULT_FONT_SIZE: f64 = 18.0;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SubtitleAlignment {
+    Left,
+    #[default]
+    Center,
+    Right,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct OverlayFrame {
     pub x: f64,
@@ -55,6 +64,8 @@ pub struct Preferences {
     pub target_language: TargetLanguage,
     pub translation_mode: TranslationMode,
     pub font_size: f64,
+    pub subtitle_alignment: SubtitleAlignment,
+    pub subtitle_blends_with_background: bool,
     pub overlay_locked: bool,
     pub overlay_frame: Option<OverlayFrame>,
     pub frame_layout_version: u64,
@@ -70,6 +81,8 @@ impl Default for Preferences {
             target_language: TargetLanguage::SimplifiedChinese,
             translation_mode: TranslationMode::LowLatency,
             font_size: DEFAULT_FONT_SIZE,
+            subtitle_alignment: SubtitleAlignment::Center,
+            subtitle_blends_with_background: false,
             overlay_locked: false,
             overlay_frame: None,
             frame_layout_version: 0,
@@ -1544,6 +1557,14 @@ mod tests {
         assert_eq!(store.preferences(), before);
 
         let _ = std::fs::remove_file(directory);
+    }
+
+    #[test]
+    fn legacy_preferences_default_to_centered_card_presentation() {
+        let preferences: Preferences = serde_json::from_str("{}").unwrap();
+
+        assert_eq!(preferences.subtitle_alignment, SubtitleAlignment::Center);
+        assert!(!preferences.subtitle_blends_with_background);
     }
 
     #[test]

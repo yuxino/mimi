@@ -60,18 +60,23 @@ export interface SettingsSnapshot {
   translationMode: TranslationMode;
   /** 14..20 */
   fontSize: number;
+  subtitleAlignment: SubtitleAlignment;
+  subtitleBlendsWithBackground: boolean;
   isOverlayLocked: boolean;
   /** UI language override; `null` or `system` follows the system language. */
   uiLanguage: UiLanguage | null;
 }
 
 export type UiLanguage = "system" | "zh" | "en" | "ja";
+export type SubtitleAlignment = "left" | "center" | "right";
 
 export interface SettingsDraft {
   sourceLanguage?: SourceLanguage;
   targetLanguage?: TargetLanguage;
   translationMode?: TranslationMode;
   fontSize?: number;
+  subtitleAlignment?: SubtitleAlignment;
+  subtitleBlendsWithBackground?: boolean;
   isOverlayLocked?: boolean;
   uiLanguage?: UiLanguage;
 }

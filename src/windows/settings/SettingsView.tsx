@@ -21,6 +21,7 @@ import {
   type SessionStateEvent,
   type SettingsSnapshot,
   type SourceLanguage,
+  type SubtitleAlignment,
   type TargetLanguage,
   type TranslationMode,
 } from "../../lib/types";
@@ -294,6 +295,33 @@ export function SettingsView() {
 
                   <div className="settings-divider" />
 
+                  <SettingsRow label={I18N.settings.subtitleAlignment}>
+                    <SubtitleAlignmentControl
+                      value={settings.subtitleAlignment}
+                      onChange={(subtitleAlignment) =>
+                        void saveSettings({ subtitleAlignment })
+                      }
+                    />
+                  </SettingsRow>
+
+                  <div className="settings-divider" />
+
+                  <SettingsRow
+                    label={I18N.settings.blendBackground}
+                    description={I18N.settings.blendBackgroundHelp}
+                    align="start"
+                  >
+                    <Switch
+                      checked={settings.subtitleBlendsWithBackground}
+                      aria-label={I18N.settings.blendBackground}
+                      onChange={(subtitleBlendsWithBackground) =>
+                        void saveSettings({ subtitleBlendsWithBackground })
+                      }
+                    />
+                  </SettingsRow>
+
+                  <div className="settings-divider" />
+
                   <SettingsRow
                     label={I18N.settings.lockPosition}
                     description={I18N.settings.lockHelp}
@@ -365,6 +393,48 @@ export function SettingsView() {
         </div>
       </div>
     </main>
+  );
+}
+
+const SUBTITLE_ALIGNMENTS: readonly SubtitleAlignment[] = [
+  "left",
+  "center",
+  "right",
+];
+
+function SubtitleAlignmentControl({
+  value,
+  onChange,
+}: {
+  value: SubtitleAlignment;
+  onChange: (alignment: SubtitleAlignment) => void;
+}) {
+  const labels: Record<SubtitleAlignment, string> = {
+    left: I18N.settings.alignLeft,
+    center: I18N.settings.alignCenter,
+    right: I18N.settings.alignRight,
+  };
+
+  return (
+    <div
+      className="subtitle-alignment-control"
+      role="group"
+      aria-label={I18N.settings.subtitleAlignment}
+    >
+      {SUBTITLE_ALIGNMENTS.map((alignment) => (
+        <button
+          key={alignment}
+          type="button"
+          data-selected={value === alignment}
+          aria-label={labels[alignment]}
+          aria-pressed={value === alignment}
+          title={labels[alignment]}
+          onClick={() => onChange(alignment)}
+        >
+          <Icon name={`align-${alignment}`} />
+        </button>
+      ))}
+    </div>
   );
 }
 

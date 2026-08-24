@@ -29,6 +29,8 @@ const BASE_SETTINGS: SettingsSnapshot = {
   targetLanguage: "zh",
   translationMode: "highQuality",
   fontSize: 18,
+  subtitleAlignment: "center",
+  subtitleBlendsWithBackground: false,
   isOverlayLocked: false,
   uiLanguage: null,
 };

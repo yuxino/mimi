@@ -20,7 +20,7 @@ Git history, not on the active documentation path.
 - `2026-08-23-alibaba-pipeline-design.md` — current Alibaba modes, subtitle
   commit rules, translation context, and recovery behavior.
 - `2026-08-23-overlay-behavior-design.md` — overlay state, history, controls,
-  geometry, accessibility, and animation.
+  geometry, cross-space visibility, presentation, accessibility, and animation.
 - `2026-08-14-tauri-dev-dock-icon-design.md` — why development builds require
   the custom-protocol feature for stable bundle behavior.
 

@@ -16,6 +16,7 @@ import {
   type SessionStateEvent,
   type SettingsSnapshot,
   type SourceLanguage,
+  type SubtitleAlignment,
 } from "../../lib/types";
 import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
 import {
@@ -34,6 +35,8 @@ const TRAY_WINDOW_PADDING = 6;
 type PendingAction =
   | TraySessionAction
   | "language"
+  | "alignment"
+  | "blend"
   | "lock"
   | "show"
   | "clear"
@@ -54,6 +57,7 @@ export function TrayPanel() {
   const stop = useStore((state) => state.stop);
   const togglePaused = useStore((state) => state.togglePaused);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
+  const saveSettings = useStore((state) => state.saveSettings);
   const setOverlayLocked = useStore((state) => state.setOverlayLocked);
   const showOverlay = useStore((state) => state.showOverlay);
   const clearSubtitles = useStore((state) => state.clearSubtitles);
@@ -257,6 +261,55 @@ export function TrayPanel() {
 
         <span className="tray-card__divider" />
 
+        <div className="tray-setting-row tray-setting-row--alignment">
+          <span className="tray-setting-row__icon" aria-hidden="true">
+            <Icon name="align-center" />
+          </span>
+          <span className="tray-setting-row__copy">
+            <span>{I18N.tray.subtitleAlignment}</span>
+          </span>
+          <TrayAlignmentControl
+            value={settings.subtitleAlignment}
+            disabled={anyActionPending}
+            onChange={(subtitleAlignment) =>
+              performAction("alignment", () =>
+                saveSettings({ subtitleAlignment }),
+              )
+            }
+          />
+        </div>
+
+        <span className="tray-card__divider" />
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.subtitleBlendsWithBackground}
+          aria-label={I18N.tray.blendBackground}
+          disabled={anyActionPending}
+          className="tray-setting-row tray-setting-row--toggle"
+          onClick={() =>
+            performAction("blend", () =>
+              saveSettings({
+                subtitleBlendsWithBackground:
+                  !settings.subtitleBlendsWithBackground,
+              }),
+            )
+          }
+        >
+          <span className="tray-setting-row__icon" aria-hidden="true">
+            <Icon name="blend" />
+          </span>
+          <span className="tray-setting-row__copy">
+            <span>{I18N.tray.blendBackground}</span>
+          </span>
+          <span className="tray-switch" aria-hidden="true">
+            <span />
+          </span>
+        </button>
+
+        <span className="tray-card__divider" />
+
         <button
           type="button"
           role="switch"
@@ -330,6 +383,51 @@ export function TrayPanel() {
 
   return (
     <div className={isTauri ? "tray-shell" : "tray-preview"}>{panel}</div>
+  );
+}
+
+const SUBTITLE_ALIGNMENTS: readonly SubtitleAlignment[] = [
+  "left",
+  "center",
+  "right",
+];
+
+function TrayAlignmentControl({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: SubtitleAlignment;
+  disabled: boolean;
+  onChange: (alignment: SubtitleAlignment) => void;
+}) {
+  const labels: Record<SubtitleAlignment, string> = {
+    left: I18N.tray.alignLeft,
+    center: I18N.tray.alignCenter,
+    right: I18N.tray.alignRight,
+  };
+
+  return (
+    <span
+      className="tray-alignment-control"
+      role="group"
+      aria-label={I18N.tray.subtitleAlignment}
+    >
+      {SUBTITLE_ALIGNMENTS.map((alignment) => (
+        <button
+          key={alignment}
+          type="button"
+          disabled={disabled}
+          data-selected={value === alignment}
+          aria-label={labels[alignment]}
+          aria-pressed={value === alignment}
+          title={labels[alignment]}
+          onClick={() => onChange(alignment)}
+        >
+          <Icon name={`align-${alignment}`} />
+        </button>
+      ))}
+    </span>
   );
 }
 

@@ -66,6 +66,11 @@ pub fn run() {
                 overlay: Arc::clone(&overlay),
             });
             windows::OverlayWindowManager::ensure_overlay(&app_handle, &overlay);
+            let preferences = settings.preferences();
+            windows::OverlayWindowManager::update_locked(
+                &app_handle,
+                preferences.overlay_locked || preferences.subtitle_blends_with_background,
+            );
             windows::TrayPanelManager::ensure(&app_handle);
             windows::LanguagePopoverManager::ensure(&app_handle);
 

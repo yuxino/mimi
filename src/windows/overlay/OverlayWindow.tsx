@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { I18N } from "../../lib/i18n";
 import { isTauri } from "../../lib/ipc";
 import { useStore } from "../../lib/store";
@@ -51,6 +51,8 @@ export function OverlayWindow() {
   );
 
   const collapsed = session.isOverlayCollapsed;
+  const blendsWithBackground = settings.subtitleBlendsWithBackground;
+  const presentationCollapsed = collapsed && !blendsWithBackground;
   const phase = computeActivityPhase(session, settings);
   const detectedLanguage = session.detectedLanguage;
   const isWaiting = isWaitingForFinalTranslation(
@@ -114,6 +116,12 @@ export function OverlayWindow() {
     void setOverlayCollapsed(!collapsed);
   };
 
+  useEffect(() => {
+    if (blendsWithBackground && collapsed) {
+      void setOverlayCollapsed(false);
+    }
+  }, [blendsWithBackground, collapsed, setOverlayCollapsed]);
+
   const handleResize = (width: number, height: number) => {
     setOverlaySize({ width, height });
   };
@@ -122,16 +130,18 @@ export function OverlayWindow() {
     <>
       <div className="h-full w-full" style={{ padding: 6 }}>
         <div
-          key={collapsed ? "collapsed" : "expanded"}
+          key={presentationCollapsed ? "collapsed" : "expanded"}
           className={
-            collapsed ? "overlay-swap-collapsed" : "overlay-swap-expanded"
+            presentationCollapsed
+              ? "overlay-swap-collapsed"
+              : "overlay-swap-expanded"
           }
           style={{ height: "100%", width: "100%" }}
         >
-          {collapsed ? renderCompact() : renderExpanded()}
+          {presentationCollapsed ? renderCompact() : renderExpanded()}
         </div>
       </div>
-      {!settings.isOverlayLocked && !collapsed && (
+      {!settings.isOverlayLocked && !presentationCollapsed && !blendsWithBackground && (
         <ResizeHandles disabled={false} onResize={handleResize} />
       )}
     </>
@@ -154,6 +164,25 @@ export function OverlayWindow() {
   );
 
   function renderExpanded() {
+    if (blendsWithBackground) {
+      return (
+        <div
+          className="relative flex h-full w-full overflow-hidden"
+          data-presentation="background-blend"
+        >
+          {allRows.length > 0 && (
+            <Timeline
+              rows={allRows}
+              fontSize={settings.fontSize}
+              alignment={settings.subtitleAlignment}
+              blendsWithBackground
+              draft={draftText !== ""}
+            />
+          )}
+        </div>
+      );
+    }
+
     const hoverHighlight = isHovering && !settings.isOverlayLocked;
     const borderColor = hoverHighlight
       ? hexToRgba(ACCENT, 0.34)
@@ -306,7 +335,7 @@ export function OverlayWindow() {
                   color: emptyStateIsError(session)
                     ? "rgba(255,69,58,0.9)"
                     : "rgba(255,255,255,0.5)",
-                  textAlign: "center",
+                  textAlign: settings.subtitleAlignment,
                   padding: "0 24px",
                 }}
               >
@@ -317,6 +346,7 @@ export function OverlayWindow() {
             <Timeline
               rows={allRows}
               fontSize={settings.fontSize}
+              alignment={settings.subtitleAlignment}
               draft={draftText !== ""}
             />
           )}

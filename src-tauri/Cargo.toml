@@ -37,6 +37,7 @@ screen-capture-kit = "0.7.1"
 core-media = "0.8"
 core-graphics2 = { version = "0.6", features = ["display"] }
 objc2 = { version = "0.6", features = ["exception"] }
+objc2-app-kit = { version = "0.3", features = ["NSWindow"] }
 objc2-core-audio-types = { version = "0.3", features = ["objc2"] }
 objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSError", "NSObject", "NSBundle"] }
 dispatch2 = "0.3"

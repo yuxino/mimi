@@ -231,13 +231,17 @@ impl OverlayWindowManager {
                 .transparent(true)
                 .decorations(false)
                 .always_on_top(true)
+                .visible_on_all_workspaces(true)
                 .skip_taskbar(true)
                 .shadow(false)
                 .resizable(true)
                 .visible(false);
 
         match builder.build() {
-            Ok(_) => pipeline_log!("overlay window created"),
+            Ok(window) => {
+                configure_overlay_window(&window);
+                pipeline_log!("overlay window created");
+            }
             Err(error) => pipeline_log!("overlay window failed error={}", error),
         }
     }
@@ -251,6 +255,7 @@ impl OverlayWindowManager {
         // already-visible window re-activates it and steals focus, which
         // closed the language popover on every subtitle update.
         if is_active && !visible {
+            configure_overlay_window(&window);
             let _ = window.show();
         } else if !is_active && visible {
             let _ = window.hide();
@@ -261,6 +266,7 @@ impl OverlayWindowManager {
 
     pub fn show(app: &AppHandle) {
         if let Some(window) = app.get_webview_window("overlay") {
+            configure_overlay_window(&window);
             let _ = window.show();
         }
     }
@@ -492,6 +498,29 @@ impl OverlayWindowManager {
         sync_user_frame_from_window(app, &mut state);
         persist_user_frame(settings, &state.user_frame);
         tracing::info!("resize end");
+    }
+}
+
+/// Reasserts presentation-level window behavior whenever the overlay is
+/// created or explicitly shown. macOS needs `FullScreenAuxiliary` in addition
+/// to Tauri's all-workspaces flag to accompany another app's full-screen
+/// window instead of remaining on the previous Space.
+fn configure_overlay_window(window: &tauri::WebviewWindow) {
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_visible_on_all_workspaces(true);
+
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+        let Ok(pointer) = window.ns_window() else {
+            return;
+        };
+        let ns_window: &NSWindow = &*pointer.cast();
+        let behavior = ns_window.collectionBehavior()
+            | NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::FullScreenAuxiliary;
+        ns_window.setCollectionBehavior(behavior);
     }
 }
 

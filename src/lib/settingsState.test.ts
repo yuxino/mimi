@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SettingsSnapshot } from "./types";
 import {
   initializeSnapshotStreams,
+  mergeSettingsSnapshot,
   SettingsSaveCoordinator,
   SnapshotResponseGate,
 } from "./settingsState";
@@ -20,9 +21,25 @@ const SETTINGS: SettingsSnapshot = {
   targetLanguage: "zh",
   translationMode: "lowLatency",
   fontSize: 18,
+  subtitleAlignment: "center",
+  subtitleBlendsWithBackground: false,
   isOverlayLocked: false,
   uiLanguage: null,
 };
+
+describe("mergeSettingsSnapshot", () => {
+  it("merges runtime-safe subtitle presentation preferences", () => {
+    expect(
+      mergeSettingsSnapshot(SETTINGS, {
+        subtitleAlignment: "right",
+        subtitleBlendsWithBackground: true,
+      }),
+    ).toMatchObject({
+      subtitleAlignment: "right",
+      subtitleBlendsWithBackground: true,
+    });
+  });
+});
 
 describe("SettingsSaveCoordinator", () => {
   it("rolls the latest optimistic draft back when persistence fails", async () => {

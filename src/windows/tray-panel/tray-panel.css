@@ -280,6 +280,7 @@
 }
 
 .tray-setting-row--language,
+.tray-setting-row--alignment,
 .tray-setting-row--toggle {
   display: grid;
   grid-template-columns: 27px minmax(0, 1fr) auto;
@@ -287,6 +288,10 @@
   gap: 8px;
   min-height: 52px;
   padding: 7px 10px;
+}
+
+.tray-setting-row--alignment {
+  display: grid;
 }
 
 .tray-setting-row--toggle {
@@ -400,6 +405,44 @@
 .tray-select-wrap option {
   color: var(--tray-text);
   background: #171717;
+}
+
+.tray-alignment-control {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 28px);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--tray-border);
+  border-radius: 8px;
+  background: var(--tray-surface-hover);
+}
+
+.tray-alignment-control button {
+  display: grid;
+  width: 28px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: var(--tray-text-faint);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tray-alignment-control button:hover:not(:disabled) {
+  color: var(--tray-text);
+  background: var(--tray-surface-pressed);
+}
+
+.tray-alignment-control button[data-selected="true"] {
+  color: var(--tray-primary-text);
+  background: var(--tray-primary-bg);
+}
+
+.tray-alignment-control button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .tray-switch {

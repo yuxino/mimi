@@ -1,7 +1,11 @@
 import type { CSSProperties } from "react";
 import {
   AlertTriangle,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   AppWindow,
+  Blend,
   Captions,
   CircleCheck,
   Check,
@@ -30,6 +34,10 @@ import {
  */
 
 export type IconName =
+  | "align-left"
+  | "align-center"
+  | "align-right"
+  | "blend"
   | "pause"
   | "play"
   | "stop"
@@ -53,6 +61,10 @@ export type IconName =
   | "waves";
 
 const ICONS: Record<IconName, LucideIcon> = {
+  "align-left": AlignLeft,
+  "align-center": AlignCenter,
+  "align-right": AlignRight,
+  blend: Blend,
   pause: Pause,
   play: Play,
   stop: Square,

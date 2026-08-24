@@ -372,6 +372,37 @@
   text-align: right;
 }
 
+.subtitle-alignment-control {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 38px);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--settings-border);
+  border-radius: 10px;
+  background: var(--settings-control);
+}
+
+.subtitle-alignment-control button {
+  display: grid;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  color: var(--settings-text-faint);
+  background: transparent;
+  cursor: pointer;
+}
+
+.subtitle-alignment-control button:hover {
+  color: var(--settings-text);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.subtitle-alignment-control button[data-selected="true"] {
+  color: var(--settings-canvas);
+  background: var(--settings-text);
+}
+
 .settings-button {
   display: inline-flex;
   min-height: 34px;

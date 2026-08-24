@@ -41,10 +41,30 @@ screen clamping, click-through lock state, and popover anchoring. Geometry write
 are versioned and atomic. The overlay stays partially reachable when screens or
 work areas change.
 
+The native window remains above ordinary windows, joins every desktop space,
+and is an auxiliary full-screen window on macOS so subtitles remain visible
+over full-screen media. These behaviors are reasserted when an existing overlay
+is shown.
+
 The drag handle and resize regions provide visible hover/focus feedback. Locking
 enables click-through without hiding subtitles. Animation is brief and uses the
 same 180 ms ease-in-out timing in native geometry and React content; reduced
 motion replaces it with immediate state changes.
+
+## Presentation
+
+Subtitle alignment is a persisted visual preference with left, center, and
+right options. It affects text layout only and remains safe to change while a
+translation session is active. The settings window exposes the complete
+preference and the tray panel provides the same three-way quick control.
+
+Background-blending presentation is also a persisted, runtime-safe visual
+preference. In this mode the expanded overlay renders subtitle text directly on
+the transparent window with a restrained readability shadow. It removes the
+card, status chrome, timestamps, buttons, drag affordance, and resize handles;
+the transparent window is click-through, and the tray panel and settings window
+remain the escape route. No subtitle text or audio is persisted by this
+presentation mode.
 
 ## Verification
 

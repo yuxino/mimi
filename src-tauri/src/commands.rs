@@ -4,7 +4,7 @@
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
 use crate::core::provider::{ProviderKind, ServiceProfile};
 use crate::session_manager::{SessionManager, SessionStateEvent};
-use crate::settings_store::{CredentialState, SettingsStore};
+use crate::settings_store::{CredentialState, SettingsStore, SubtitleAlignment};
 use crate::windows::{OverlayWindowManager, TrayPanelManager};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -65,6 +65,8 @@ pub struct SettingsSnapshotPayload {
     pub target_language: TargetLanguage,
     pub translation_mode: TranslationMode,
     pub font_size: f64,
+    pub subtitle_alignment: SubtitleAlignment,
+    pub subtitle_blends_with_background: bool,
     #[serde(rename = "isOverlayLocked")]
     pub is_overlay_locked: bool,
     #[serde(rename = "uiLanguage")]
@@ -122,6 +124,8 @@ mod tests {
             target_language: TargetLanguage::SimplifiedChinese,
             translation_mode: TranslationMode::HighQuality,
             font_size: 18.0,
+            subtitle_alignment: SubtitleAlignment::Center,
+            subtitle_blends_with_background: false,
             is_overlay_locked: false,
             ui_language: None,
         };
@@ -129,6 +133,8 @@ mod tests {
         assert_eq!(json["activeProfileId"], "alibaba-default");
         assert_eq!(json["profiles"][0]["provider"], "alibabaCloud");
         assert_eq!(json["profiles"][0]["credentialState"], "present");
+        assert_eq!(json["subtitleAlignment"], "center");
+        assert_eq!(json["subtitleBlendsWithBackground"], false);
         assert!(json.get("apiKey").is_none());
         assert!(json.get("hasAPIKey").is_none());
         assert!(!json.to_string().contains("secret"));
@@ -150,6 +156,8 @@ mod tests {
 
         let visual = SettingsDraft {
             font_size: Some(19.0),
+            subtitle_alignment: Some(SubtitleAlignment::Right),
+            subtitle_blends_with_background: Some(true),
             is_overlay_locked: Some(true),
             ui_language: Some("ja".into()),
             ..SettingsDraft::default()
@@ -203,6 +211,8 @@ impl SettingsSnapshotPayload {
                     target_language: prefs.target_language,
                     translation_mode: prefs.translation_mode,
                     font_size: prefs.font_size,
+                    subtitle_alignment: prefs.subtitle_alignment,
+                    subtitle_blends_with_background: prefs.subtitle_blends_with_background,
                     is_overlay_locked: prefs.overlay_locked,
                     ui_language: prefs.ui_language,
                 }
@@ -223,6 +233,8 @@ impl SettingsSnapshotPayload {
             target_language: prefs.target_language,
             translation_mode: prefs.translation_mode,
             font_size: prefs.font_size,
+            subtitle_alignment: prefs.subtitle_alignment,
+            subtitle_blends_with_background: prefs.subtitle_blends_with_background,
             is_overlay_locked: prefs.overlay_locked,
             ui_language: prefs.ui_language,
         })
@@ -236,6 +248,8 @@ pub struct SettingsDraft {
     pub target_language: Option<TargetLanguage>,
     pub translation_mode: Option<TranslationMode>,
     pub font_size: Option<f64>,
+    pub subtitle_alignment: Option<SubtitleAlignment>,
+    pub subtitle_blends_with_background: Option<bool>,
     pub is_overlay_locked: Option<bool>,
     pub ui_language: Option<String>,
 }
@@ -269,6 +283,8 @@ pub async fn settings_save(
         || draft.target_language.is_some()
         || draft.translation_mode.is_some()
         || draft.font_size.is_some()
+        || draft.subtitle_alignment.is_some()
+        || draft.subtitle_blends_with_background.is_some()
         || draft.is_overlay_locked.is_some()
         || draft.ui_language.is_some();
     if !needs_save {
@@ -290,6 +306,12 @@ pub async fn settings_save(
             if let Some(font_size) = draft.font_size {
                 prefs.font_size = font_size;
             }
+            if let Some(alignment) = draft.subtitle_alignment {
+                prefs.subtitle_alignment = alignment;
+            }
+            if let Some(blends) = draft.subtitle_blends_with_background {
+                prefs.subtitle_blends_with_background = blends;
+            }
             if let Some(locked) = draft.is_overlay_locked {
                 prefs.overlay_locked = locked;
             }
@@ -297,8 +319,12 @@ pub async fn settings_save(
                 prefs.ui_language = Some(language.clone());
             }
         })?;
-    if let Some(locked) = draft.is_overlay_locked {
-        OverlayWindowManager::update_locked(&app, locked);
+    if draft.is_overlay_locked.is_some() || draft.subtitle_blends_with_background.is_some() {
+        let preferences = state.settings.preferences();
+        OverlayWindowManager::update_locked(
+            &app,
+            preferences.overlay_locked || preferences.subtitle_blends_with_background,
+        );
     }
     if changes_ui_language {
         crate::refresh_native_tray_language(&app);
@@ -487,7 +513,11 @@ pub fn overlay_set_locked(
     state
         .settings
         .save_preferences(|prefs| prefs.overlay_locked = locked)?;
-    OverlayWindowManager::update_locked(&app, locked);
+    let preferences = state.settings.preferences();
+    OverlayWindowManager::update_locked(
+        &app,
+        locked || preferences.subtitle_blends_with_background,
+    );
     let _ = app.emit(
         "settings-changed",
         SettingsSnapshotPayload::from_store(&state.settings),
