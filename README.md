@@ -53,7 +53,7 @@ Each service configuration's API key is stored separately in the operating syste
 
 ### Platform notes
 
-- **macOS 13 or later**: allow Screen & System Audio Recording once; later updates keep the permission. mimi captures system audio only, never the screen, and excludes its own sound.
+- **macOS 13 or later**: if the first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. From v1.3.1, updates using the same release identity normally keep Screen & System Audio Recording access; upgrading from an older version may require one more approval. mimi captures system audio only, never the screen, and excludes its own sound.
 - **Windows**: captures the default playback device's full mix through WASAPI loopback — no permissions needed; mimi plays no audio, so there is no echo.
 
 ## Build from source

@@ -8,8 +8,8 @@ Git history, not on the active documentation path.
 
 - `2026-07-22-stable-local-signing-design.md` — stable development identity,
   canonical install path, and privacy-permission continuity.
-- `2026-08-24-macos-release-identity-design.md` — Developer ID identity,
-  privacy metadata, notarization, and fail-closed formal publication.
+- `2026-08-24-macos-release-identity-design.md` — stable self-signed GitHub
+  release identity, privacy metadata, and fail-closed publication.
 - `2026-08-15-dashscope-unified-endpoint-design.md` — Alibaba shared endpoints
   and the API-key-only configuration contract.
 - `2026-08-15-session-start-main-thread-blocking-design.md` — async IPC and

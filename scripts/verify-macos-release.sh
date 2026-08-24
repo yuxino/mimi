@@ -15,21 +15,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   exit 1
 }
 
-"$SCRIPT_DIR/verify-macos-app.sh" --release "$APP"
+EXPECTED_CERT_SHA1="${MIMI_EXPECTED_CERT_SHA1:-}"
+[[ "$EXPECTED_CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]] || {
+  echo "MIMI_EXPECTED_CERT_SHA1 must be a 40-character certificate fingerprint." >&2
+  exit 1
+}
+EXPECTED_CERT_SHA1="$(printf '%s' "$EXPECTED_CERT_SHA1" | tr '[:upper:]' '[:lower:]')"
+
+"$SCRIPT_DIR/verify-macos-app.sh" --github-release "$APP"
 
 codesign --verify --strict "$DMG"
 DMG_SIGNATURE="$(codesign --display --verbose=4 "$DMG" 2>&1)"
-grep -Eq '^Authority=Developer ID Application: ' <<<"$DMG_SIGNATURE" || {
-  echo "The DMG is not signed with Developer ID Application." >&2
+if grep -Fq "Signature=adhoc" <<<"$DMG_SIGNATURE"; then
+  echo "The DMG has an ad-hoc signature." >&2
+  exit 1
+fi
+DMG_REQUIREMENT="$(
+  codesign --display --requirements - "$DMG" 2>&1 \
+    | sed -n 's/^designated => //p'
+)"
+[[ "$DMG_REQUIREMENT" == *" and certificate root = H\"$EXPECTED_CERT_SHA1\"" ]] || {
+  echo "The DMG does not use the pinned GitHub release identity." >&2
   exit 1
 }
-grep -Fq "TeamIdentifier=${MIMI_EXPECTED_TEAM_ID:-missing}" <<<"$DMG_SIGNATURE" || {
-  echo "The DMG is not signed by the expected Apple team." >&2
-  exit 1
-}
-
-xcrun stapler validate "$DMG"
-spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG"
+codesign --verify --strict -R="certificate root = H\"$EXPECTED_CERT_SHA1\"" "$DMG"
 
 MOUNT_DIR="$(mktemp -d "${TMPDIR%/}/mimi-release-dmg.XXXXXX")"
 cleanup_mount() {
@@ -39,12 +48,20 @@ cleanup_mount() {
 trap cleanup_mount EXIT
 
 hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT_DIR" >/dev/null
-EMBEDDED_APP="$(find "$MOUNT_DIR" -maxdepth 2 -name '*.app' -type d -print -quit)"
-[[ -n "$EMBEDDED_APP" ]] || {
-  echo "The DMG does not contain an app bundle." >&2
+EMBEDDED_APPS=()
+while IFS= read -r -d '' candidate; do
+  EMBEDDED_APPS+=("$candidate")
+done < <(find "$MOUNT_DIR" -maxdepth 2 -name '*.app' -type d -print0)
+[[ "${#EMBEDDED_APPS[@]}" == "1" ]] || {
+  echo "The DMG must contain exactly one app bundle." >&2
   exit 1
 }
-"$SCRIPT_DIR/verify-macos-app.sh" --release "$EMBEDDED_APP"
+EMBEDDED_APP="${EMBEDDED_APPS[0]}"
+[[ "$(basename "$EMBEDDED_APP")" == "mimi.app" && -d "$EMBEDDED_APP" && ! -L "$EMBEDDED_APP" ]] || {
+  echo "The DMG contains an unexpected app bundle." >&2
+  exit 1
+}
+"$SCRIPT_DIR/verify-macos-app.sh" --github-release "$EMBEDDED_APP"
 
 designated_requirement() {
   codesign --display --requirements - "$1" 2>&1 \
@@ -81,4 +98,4 @@ EMBEDDED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionStrin
 cleanup_mount
 trap - EXIT
 
-echo "Verified signed and notarized macOS release: $DMG"
+echo "Verified stable-identity macOS GitHub release: $DMG"

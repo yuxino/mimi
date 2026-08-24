@@ -23,13 +23,13 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.os == 'macos-latest' && '13.0' || '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           workspaces: src-tauri
 
@@ -45,9 +45,9 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -87,37 +87,41 @@ jobs:
       APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
     needs: [rust, frontend]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           workspaces: src-tauri
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
         with:
           args: ${{ matrix.args }}
 
       - name: Verify macOS branch bundle
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          app_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print -quit)"
-          if [[ -z "$app_path" ]]; then
-            echo "Expected a macOS app bundle." >&2
+          app_paths=()
+          while IFS= read -r -d '' candidate; do
+            app_paths+=("$candidate")
+          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print0)
+          if [[ "${#app_paths[@]}" != "1" ]]; then
+            echo "Expected exactly one macOS app bundle; found ${#app_paths[@]}." >&2
             exit 1
           fi
+          app_path="${app_paths[0]}"
           ./scripts/verify-macos-app.sh "$app_path"
 
       - name: Upload bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mimi-${{ matrix.os }}
           path: |
@@ -131,7 +135,9 @@ jobs:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       - name: Verify tag and package versions
         env:
@@ -148,111 +154,193 @@ jobs:
               throw new Error(`release versions disagree: tag=${process.env.RELEASE_TAG}, package=${pkg}, tauri=${tauri}, cargo=${cargo}`);
             }
           '
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release tags must point to a commit on main." >&2
+            exit 1
+          fi
 
-  # macOS publication is fail-closed: the final DMG is not uploaded to a
-  # public release until Developer ID signing, notarization, stapling, usage
-  # descriptions, and the designated requirement have all been verified.
+  # GitHub macOS releases use one persistent self-signed identity. It does not
+  # bypass Gatekeeper, but it keeps privacy and keychain grants attached to the
+  # same app across updates. The certificate is pinned in source and its private
+  # key exists only in the protected github-release environment.
   release-macos:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-latest
+    environment: github-release
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
+      MIMI_RELEASE_CERT_SHA256: "25c45861a0f4455fd6ac6161ae3e65035c83b7447e2b2092d93eae26b548d9e6"
     needs: [rust, frontend, release-preflight]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           workspaces: src-tauri
 
       - run: npm ci
 
-      - name: Require Apple release credentials
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Remove stale macOS package outputs
+        shell: bash
         run: |
-          missing=()
-          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
-            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
-          done
-          if (( ${#missing[@]} )); then
-            echo "Missing required macOS release secrets: ${missing[*]}" >&2
+          rm -rf "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos"
+          rm -rf "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg"
+
+      - name: Import persistent GitHub release identity
+        env:
+          MACOS_RELEASE_CERTIFICATE: ${{ secrets.MACOS_RELEASE_CERTIFICATE }}
+          MACOS_RELEASE_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_RELEASE_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$MACOS_RELEASE_CERTIFICATE" || -z "$MACOS_RELEASE_CERTIFICATE_PASSWORD" ]]; then
+            echo "Missing the persistent macOS GitHub release identity." >&2
             exit 1
           fi
 
-      - name: Import Developer ID certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          certificate_path="$RUNNER_TEMP/mimi-developer-id.p12"
-          keychain_path="$RUNNER_TEMP/mimi-signing.keychain-db"
+          umask 077
+          certificate_path="$RUNNER_TEMP/mimi-github-release.p12"
+          certificate_bundle="$RUNNER_TEMP/mimi-github-release-certificates.pem"
+          certificate_pem="$RUNNER_TEMP/mimi-github-release.pem"
+          keychain_path="$RUNNER_TEMP/mimi-github-release.keychain-db"
           keychain_password="$(openssl rand -hex 32)"
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          printf '%s' "$MACOS_RELEASE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          openssl pkcs12 \
+            -in "$certificate_path" \
+            -nokeys \
+            -passin env:MACOS_RELEASE_CERTIFICATE_PASSWORD \
+            -out "$certificate_bundle"
+          certificate_count="$(awk '/BEGIN CERTIFICATE/{count++} END{print count+0}' "$certificate_bundle")"
+          if [[ "$certificate_count" != "1" ]]; then
+            echo "The release identity must contain exactly one certificate." >&2
+            exit 1
+          fi
+          openssl x509 -in "$certificate_bundle" -out "$certificate_pem"
+
+          actual_sha256="$(
+            openssl x509 -in "$certificate_pem" -noout -fingerprint -sha256 \
+              | sed 's/.*=//;s/://g' \
+              | tr '[:upper:]' '[:lower:]'
+          )"
+          if [[ "$actual_sha256" != "$MIMI_RELEASE_CERT_SHA256" ]]; then
+            echo "The macOS release certificate does not match the pinned identity." >&2
+            exit 1
+          fi
+
           security create-keychain -p "$keychain_password" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$keychain_password" "$keychain_path"
-          security import "$certificate_path" -k "$keychain_path" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$MACOS_RELEASE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          rm -f "$certificate_path"
+          sudo -n security add-trusted-cert \
+            -d \
+            -r trustRoot \
+            -p codeSign \
+            -k /Library/Keychains/System.keychain \
+            "$certificate_pem"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
           security list-keychains -d user -s "$keychain_path" login.keychain-db
           security default-keychain -d user -s "$keychain_path"
-          signing_identity="$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
-          if [[ -z "$signing_identity" ]]; then
-            echo "The certificate does not contain a Developer ID Application identity." >&2
+
+          certificate_sha1="$(
+            openssl x509 -in "$certificate_pem" -noout -fingerprint -sha1 \
+              | sed 's/.*=//;s/://g' \
+              | tr '[:lower:]' '[:upper:]'
+          )"
+          if ! security find-identity -v -p codesigning "$keychain_path" | grep -Fq "$certificate_sha1"; then
+            echo "The certificate is not a valid code-signing identity." >&2
             exit 1
           fi
-          echo "APPLE_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
+          {
+            echo "APPLE_SIGNING_IDENTITY=$certificate_sha1"
+            echo "MIMI_EXPECTED_CERT_SHA1=$(printf '%s' "$certificate_sha1" | tr '[:upper:]' '[:lower:]')"
+            echo "MIMI_SIGNING_KEYCHAIN=$keychain_path"
+          } >> "$GITHUB_ENV"
 
-      - name: Build, sign, and notarize macOS release
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Build signed macOS GitHub package
         run: npm run tauri build
 
-      - name: Sign, notarize, and staple final disk image
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Sign final disk image
+        shell: bash
         run: |
-          dmg_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print -quit)"
-          if [[ -z "$dmg_path" ]]; then
-            echo "Expected a macOS DMG artifact." >&2
+          set -euo pipefail
+          dmg_paths=()
+          while IFS= read -r -d '' candidate; do
+            dmg_paths+=("$candidate")
+          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print0)
+          if [[ "${#dmg_paths[@]}" != "1" ]]; then
+            echo "Expected exactly one macOS DMG artifact; found ${#dmg_paths[@]}." >&2
             exit 1
           fi
-          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$dmg_path"
-          xcrun notarytool submit "$dmg_path" --wait --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID"
-          xcrun stapler staple "$dmg_path"
+          dmg_path="${dmg_paths[0]}"
+          codesign \
+            --force \
+            --timestamp=none \
+            --keychain "$MIMI_SIGNING_KEYCHAIN" \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$dmg_path"
 
-      - name: Verify macOS release identity and permission metadata
-        env:
-          MIMI_EXPECTED_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Verify and stage the macOS release asset
+        shell: bash
         run: |
-          app_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print -quit)"
-          dmg_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print -quit)"
-          if [[ -z "$app_path" || -z "$dmg_path" ]]; then
-            echo "Expected macOS app and DMG artifacts." >&2
+          set -euo pipefail
+          app_paths=()
+          while IFS= read -r -d '' candidate; do
+            app_paths+=("$candidate")
+          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print0)
+          dmg_paths=()
+          while IFS= read -r -d '' candidate; do
+            dmg_paths+=("$candidate")
+          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print0)
+          if [[ "${#app_paths[@]}" != "1" || "${#dmg_paths[@]}" != "1" ]]; then
+            echo "Expected exactly one macOS app and one DMG artifact." >&2
             exit 1
           fi
+          app_path="${app_paths[0]}"
+          dmg_path="${dmg_paths[0]}"
           ./scripts/verify-macos-release.sh "$app_path" "$dmg_path"
+          staging_dir="$RUNNER_TEMP/mimi-release-assets"
+          mkdir -p "$staging_dir"
+          cp "$dmg_path" "$staging_dir/"
 
-      - name: Stage macOS release asset
-        uses: actions/upload-artifact@v4
+      - name: Remove temporary signing material
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          cleanup_failed=0
+          security default-keychain -d user -s login.keychain-db >/dev/null 2>&1 || cleanup_failed=1
+          security list-keychains -d user -s login.keychain-db >/dev/null 2>&1 || cleanup_failed=1
+          if [[ -f "$RUNNER_TEMP/mimi-github-release.pem" ]]; then
+            sudo -n security remove-trusted-cert -d "$RUNNER_TEMP/mimi-github-release.pem" >/dev/null 2>&1 || cleanup_failed=1
+          fi
+          if [[ -f "$RUNNER_TEMP/mimi-github-release.keychain-db" ]]; then
+            security delete-keychain "$RUNNER_TEMP/mimi-github-release.keychain-db" >/dev/null 2>&1 || cleanup_failed=1
+          fi
+          rm -f \
+            "$RUNNER_TEMP/mimi-github-release.p12" \
+            "$RUNNER_TEMP/mimi-github-release-certificates.pem" \
+            "$RUNNER_TEMP/mimi-github-release.pem"
+          if [[ -e "$RUNNER_TEMP/mimi-github-release.p12" || -e "$RUNNER_TEMP/mimi-github-release.keychain-db" ]]; then
+            cleanup_failed=1
+          fi
+          exit "$cleanup_failed"
+
+      - name: Upload verified macOS release asset
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mimi-release-macos
-          path: src-tauri/target/release/bundle/dmg/*.dmg
+          path: ${{ runner.temp }}/mimi-release-assets/*.dmg
           if-no-files-found: error
 
   release-windows:
@@ -260,34 +348,68 @@ jobs:
     runs-on: windows-latest
     needs: [rust, frontend, release-preflight]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           workspaces: src-tauri
 
       - run: npm ci
+
+      - name: Remove stale Windows package outputs
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE/src-tauri/target/release/bundle/msi" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE/src-tauri/target/release/bundle/nsis" -ErrorAction SilentlyContinue
+
       - run: npm run tauri build
 
-      - name: Stage Windows release assets
-        uses: actions/upload-artifact@v4
+      - name: Verify and stage Windows release assets
+        shell: pwsh
+        run: |
+          $version = (Get-Content "$env:GITHUB_WORKSPACE/package.json" | ConvertFrom-Json).version
+          $bundleDir = "$env:GITHUB_WORKSPACE/src-tauri/target/release/bundle"
+          $expectedPaths = @(
+            "$bundleDir/msi/mimi_${version}_x64_en-US.msi",
+            "$bundleDir/nsis/mimi_${version}_x64-setup.exe"
+          )
+          $actualPaths = @(
+            Get-ChildItem $bundleDir -Recurse -File |
+              Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*-setup.exe' } |
+              ForEach-Object { $_.FullName }
+          )
+          if ($actualPaths.Count -ne 2) {
+            throw "Expected exactly one MSI and one setup EXE; found $($actualPaths.Count) package files."
+          }
+          foreach ($expectedPath in $expectedPaths) {
+            if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) {
+              throw "Missing expected Windows package: $expectedPath"
+            }
+          }
+          if (Compare-Object ($actualPaths | Sort-Object) ($expectedPaths | Sort-Object)) {
+            throw "Windows package output contains an unexpected installer."
+          }
+          $stagingDir = "$env:RUNNER_TEMP/mimi-release-assets"
+          New-Item -ItemType Directory -Force $stagingDir | Out-Null
+          Copy-Item -LiteralPath $expectedPaths -Destination $stagingDir
+
+      - name: Upload verified Windows release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mimi-release-windows
-          path: |
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.exe
+          path: ${{ runner.temp }}/mimi-release-assets/*
           if-no-files-found: error
 
   # This is the only job with release authority. It runs only after both
-  # platform builds and the macOS identity/notarization checks have passed, so
-  # a malformed privacy identity can never become a public formal release.
+  # platform builds and the pinned macOS identity checks have passed, so a
+  # malformed or one-off privacy identity cannot become a public release.
   publish-release:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
@@ -296,7 +418,7 @@ jobs:
       actions: read
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: mimi-release-*
           path: release-assets
@@ -308,9 +430,35 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mapfile -d '' assets < <(find release-assets -type f -print0)
-          if (( ${#assets[@]} == 0 )); then
-            echo "No verified release assets were downloaded." >&2
+          version="${GITHUB_REF_NAME#v}"
+          expected_names=(
+            "mimi_${version}_aarch64.dmg"
+            "mimi_${version}_x64-setup.exe"
+            "mimi_${version}_x64_en-US.msi"
+          )
+          mapfile -t actual_names < <(printf '%s\n' "${assets[@]##*/}" | sort)
+          mapfile -t expected_names < <(printf '%s\n' "${expected_names[@]}" | sort)
+          if [[ "${actual_names[*]}" != "${expected_names[*]}" ]]; then
+            echo "Downloaded artifacts do not exactly match the expected release assets." >&2
+            printf 'expected: %s\n' "${expected_names[*]}" >&2
+            printf 'actual: %s\n' "${actual_names[*]}" >&2
             exit 1
+          fi
+
+          remote_commit="$(gh api "repos/$GH_REPO/commits/$GITHUB_REF_NAME" --jq '.sha')"
+          if [[ "$remote_commit" != "$GITHUB_SHA" ]]; then
+            echo "The release tag no longer points to this workflow commit." >&2
+            exit 1
+          fi
+
+          latest_tag="$(gh api "repos/$GH_REPO/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+          if [[ -n "$latest_tag" ]]; then
+            latest_version="${latest_tag#v}"
+            highest_version="$(printf '%s\n' "$latest_version" "$version" | sort -V | tail -1)"
+            if [[ "$highest_version" != "$version" || "$latest_version" == "$version" ]]; then
+              echo "Refusing to publish $version as Latest over existing release $latest_version." >&2
+              exit 1
+            fi
           fi
 
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
@@ -334,4 +482,20 @@ jobs:
             exit 1
           fi
 
-          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "Developer ID signed and notarized package for macOS, plus the Windows installer. macOS users upgrading from v1.3.0 may need to approve system-audio capture and Keychain access one final time because the older package did not have a stable code identity." --draft=false
+          for asset in "${assets[@]}"; do
+            asset_name="${asset##*/}"
+            local_digest="sha256:$(sha256sum "$asset" | cut -d ' ' -f 1)"
+            remote_digest="$(gh api "repos/$GH_REPO/releases/tags/$GITHUB_REF_NAME" --jq ".assets[] | select(.name == \"$asset_name\") | .digest")"
+            if [[ "$remote_digest" != "$local_digest" ]]; then
+              echo "The uploaded digest does not match $asset_name." >&2
+              exit 1
+            fi
+          done
+
+          remote_commit="$(gh api "repos/$GH_REPO/commits/$GITHUB_REF_NAME" --jq '.sha')"
+          if [[ "$remote_commit" != "$GITHUB_SHA" ]]; then
+            echo "The release tag moved while assets were uploading." >&2
+            exit 1
+          fi
+
+          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "GitHub packages for macOS (Apple Silicon) and Windows. On first launch, macOS may require Open Anyway in System Settings → Privacy & Security. Users upgrading from v1.3.0 may need to approve system-audio capture and Keychain access one final time; later releases keep the same app identity." --draft=false --latest

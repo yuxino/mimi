@@ -2,13 +2,13 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [--release] /absolute/path/to/mimi.app" >&2
+  echo "Usage: $0 [--github-release] /absolute/path/to/mimi.app" >&2
   exit 2
 }
 
-RELEASE=0
-if [[ "${1:-}" == "--release" ]]; then
-  RELEASE=1
+GITHUB_RELEASE=0
+if [[ "${1:-}" == "--github-release" ]]; then
+  GITHUB_RELEASE=1
   shift
 fi
 [[ $# -eq 1 ]] || usage
@@ -52,50 +52,33 @@ AUDIO_USAGE="$(read_plist NSAudioCaptureUsageDescription)"
 
 codesign --verify --deep --strict "$APP"
 
-if [[ "$RELEASE" == "1" ]]; then
-  EXPECTED_TEAM_ID="${MIMI_EXPECTED_TEAM_ID:-}"
-  [[ -n "$EXPECTED_TEAM_ID" ]] || {
-    echo "MIMI_EXPECTED_TEAM_ID is required for formal release verification." >&2
+if [[ "$GITHUB_RELEASE" == "1" ]]; then
+  EXPECTED_CERT_SHA1="${MIMI_EXPECTED_CERT_SHA1:-}"
+  [[ "$EXPECTED_CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]] || {
+    echo "MIMI_EXPECTED_CERT_SHA1 must be a 40-character certificate fingerprint." >&2
     exit 1
   }
+  EXPECTED_CERT_SHA1="$(printf '%s' "$EXPECTED_CERT_SHA1" | tr '[:upper:]' '[:lower:]')"
   SIGNATURE_DETAILS="$(codesign --display --verbose=4 "$APP" 2>&1)"
-  REQUIREMENT="$(codesign --display --requirements - "$APP" 2>&1)"
+  REQUIREMENT="$(
+    codesign --display --requirements - "$APP" 2>&1 \
+      | sed -n 's/^designated => //p'
+  )"
+  EXPECTED_REQUIREMENT="identifier \"app.yuxino.mimi\" and certificate root = H\"$EXPECTED_CERT_SHA1\""
 
   grep -Fq "Identifier=app.yuxino.mimi" <<<"$SIGNATURE_DETAILS" || {
     echo "The signing identifier is not app.yuxino.mimi." >&2
     exit 1
   }
-  grep -Eq '^Authority=Developer ID Application: ' <<<"$SIGNATURE_DETAILS" || {
-    echo "A Developer ID Application signature is required." >&2
-    exit 1
-  }
-  grep -Fq "TeamIdentifier=$EXPECTED_TEAM_ID" <<<"$SIGNATURE_DETAILS" || {
-    echo "The app is not signed by the expected Apple team." >&2
-    exit 1
-  }
   if grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS"; then
-    echo "Ad-hoc signatures are forbidden for formal macOS releases." >&2
+    echo "Ad-hoc signatures are forbidden for GitHub releases." >&2
     exit 1
   fi
-  if grep -Fq "designated => cdhash" <<<"$REQUIREMENT"; then
-    echo "The designated requirement is tied to one binary build." >&2
-    exit 1
-  fi
-  grep -Fq 'identifier "app.yuxino.mimi"' <<<"$REQUIREMENT" || {
-    echo "The designated requirement does not bind the bundle identifier." >&2
+  [[ "$REQUIREMENT" == "$EXPECTED_REQUIREMENT" ]] || {
+    echo "The app does not use the pinned GitHub release identity." >&2
     exit 1
   }
-  grep -Fq 'anchor apple generic' <<<"$REQUIREMENT" || {
-    echo "The designated requirement is not anchored to Apple." >&2
-    exit 1
-  }
-  grep -Eq "certificate leaf\\[subject\\.OU\\] = \"?${EXPECTED_TEAM_ID}\"?" <<<"$REQUIREMENT" || {
-    echo "The designated requirement does not bind the expected Apple team." >&2
-    exit 1
-  }
-
-  xcrun stapler validate "$APP"
-  spctl --assess --type execute --verbose=4 "$APP"
+  codesign --verify --deep --strict -R="$EXPECTED_REQUIREMENT" "$APP"
 fi
 
 echo "Verified macOS app: $APP"

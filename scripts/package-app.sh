@@ -10,7 +10,7 @@ set -euo pipefail
 # .app or .dmg. This is essential: re-signing only the loose .app afterwards
 # leaves the copy already embedded in the DMG with its original identity.
 # Local builds prefer the stable "mimi Local Development" identity. Public
-# releases are produced only by CI with Developer ID signing and notarization.
+# GitHub releases use a separate persistent self-signed identity in CI.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
