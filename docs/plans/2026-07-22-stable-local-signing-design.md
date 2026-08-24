@@ -13,7 +13,7 @@ mimi 需要 ScreenCaptureKit 的屏幕与系统音频录制权限。临时签名
 方案已落地：
 
 - `scripts/codesign-identity.sh`：按 `MIMI_CODESIGN_IDENTITY` → `mimi Local Development` → ad-hoc `-` 的顺序选择身份。
-- `scripts/package-app.sh`：`tauri build` 后用所选身份重签 `.app` 并通过 `codesign --verify --deep --strict`（`.dmg` 不重签，正式分发需要 Developer ID + 公证，超出本机开发范围）。
+- `scripts/package-app.sh`：在 `tauri build` 前把所选身份交给 Tauri，使 `.app` 与随后创建的 `.dmg` 使用同一个本机身份；构建后通过 `codesign --verify --deep --strict`。正式分发另由 Developer ID 与公证流水线负责。
 - `src-tauri/tauri.dev.conf.json`：为开发构建提供独立 product name 与 identifier；设置目录和开发钥匙串 service 不与正式版共享。
 - `scripts/dev-app.sh`：只接受稳定身份；把 dev 配置注入带 `tauri/custom-protocol` 的真实 `.app`，严格验签后通过同卷 staging + 回滚安装到固定路径，并用实际 executable path 验证唯一启动进程。安装期间用 `lockf` 阻止并发替换，恢复失败时保留备份。
 - 开发启动前会拒绝仍在运行的其他 mimi 正式版或开发版，避免旧副本继续占用全局快捷键并以另一身份触发权限请求。

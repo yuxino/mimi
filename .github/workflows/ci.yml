@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mimi-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
 jobs:
   rust:
     strategy:
@@ -78,6 +82,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.os == 'macos-latest' && '13.0' || '' }}
+      # Branch artifacts are never formal releases, but the outer app bundle
+      # must still be completely signed so packaging defects are observable.
+      APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
     needs: [rust, frontend]
     steps:
       - uses: actions/checkout@v4
@@ -98,6 +105,16 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         with:
           args: ${{ matrix.args }}
+
+      - name: Verify macOS branch bundle
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          app_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print -quit)"
+          if [[ -z "$app_path" ]]; then
+            echo "Expected a macOS app bundle." >&2
+            exit 1
+          fi
+          ./scripts/verify-macos-app.sh "$app_path"
 
       - name: Upload bundles
         uses: actions/upload-artifact@v4
@@ -110,25 +127,37 @@ jobs:
             src-tauri/target/release/bundle/**/*.exe
           if-no-files-found: error
 
-  # A tag is the only event that receives a contents:write token. Separating
-  # publication from ordinary bundle checks prevents pull-request code from
-  # inheriting release authority.
-  release:
+  release-preflight:
     if: ${{ github.ref_type == 'tag' }}
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            args: ""
-          - os: windows-latest
-            args: ""
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag and package versions
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const pkg = require("./package.json").version;
+            const tauri = require("./src-tauri/tauri.conf.json").version;
+            const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8")
+              .match(/^version = "([^"]+)"/m)?.[1];
+            const expected = `v${pkg}`;
+            if (process.env.RELEASE_TAG !== expected || tauri !== pkg || cargo !== pkg) {
+              throw new Error(`release versions disagree: tag=${process.env.RELEASE_TAG}, package=${pkg}, tauri=${tauri}, cargo=${cargo}`);
+            }
+          '
+
+  # macOS publication is fail-closed: the final DMG is not uploaded to a
+  # public release until Developer ID signing, notarization, stapling, usage
+  # descriptions, and the designated requirement have all been verified.
+  release-macos:
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: macos-latest
     env:
-      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.os == 'macos-latest' && '13.0' || '' }}
-    needs: [rust, frontend]
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
+    needs: [rust, frontend, release-preflight]
     steps:
       - uses: actions/checkout@v4
 
@@ -145,13 +174,164 @@ jobs:
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Require Apple release credentials
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=()
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
+          done
+          if (( ${#missing[@]} )); then
+            echo "Missing required macOS release secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          certificate_path="$RUNNER_TEMP/mimi-developer-id.p12"
+          keychain_path="$RUNNER_TEMP/mimi-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" login.keychain-db
+          security default-keychain -d user -s "$keychain_path"
+          signing_identity="$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+          if [[ -z "$signing_identity" ]]; then
+            echo "The certificate does not contain a Developer ID Application identity." >&2
+            exit 1
+          fi
+          echo "APPLE_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
+
+      - name: Build, sign, and notarize macOS release
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run tauri build
+
+      - name: Sign, notarize, and staple final disk image
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          dmg_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print -quit)"
+          if [[ -z "$dmg_path" ]]; then
+            echo "Expected a macOS DMG artifact." >&2
+            exit 1
+          fi
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$dmg_path"
+          xcrun notarytool submit "$dmg_path" --wait --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID"
+          xcrun stapler staple "$dmg_path"
+
+      - name: Verify macOS release identity and permission metadata
+        env:
+          MIMI_EXPECTED_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          app_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print -quit)"
+          dmg_path="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print -quit)"
+          if [[ -z "$app_path" || -z "$dmg_path" ]]; then
+            echo "Expected macOS app and DMG artifacts." >&2
+            exit 1
+          fi
+          ./scripts/verify-macos-release.sh "$app_path" "$dmg_path"
+
+      - name: Stage macOS release asset
+        uses: actions/upload-artifact@v4
         with:
-          args: ${{ matrix.args }}
-          tagName: ${{ github.ref_name }}
-          releaseName: "mimi ${{ github.ref_name }}"
-          releaseBody: "See the assets below for installers (macOS .dmg, Windows .msi/.exe)."
-          releaseDraft: false
-          prerelease: false
+          name: mimi-release-macos
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  release-windows:
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: windows-latest
+    needs: [rust, frontend, release-preflight]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+      - run: npm run tauri build
+
+      - name: Stage Windows release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: mimi-release-windows
+          path: |
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+          if-no-files-found: error
+
+  # This is the only job with release authority. It runs only after both
+  # platform builds and the macOS identity/notarization checks have passed, so
+  # a malformed privacy identity can never become a public formal release.
+  publish-release:
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    needs: [release-macos, release-windows]
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mimi-release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish verified installers
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mapfile -d '' assets < <(find release-assets -type f -print0)
+          if (( ${#assets[@]} == 0 )); then
+            echo "No verified release assets were downloaded." >&2
+            exit 1
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')"
+            if [[ "$is_draft" != "true" ]]; then
+              echo "Refusing to replace assets on an already-published release." >&2
+              exit 1
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "mimi $GITHUB_REF_NAME" --notes "Release assets are still being verified."
+          fi
+
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+
+          mapfile -t expected_names < <(printf '%s\n' "${assets[@]##*/}" | sort)
+          mapfile -t published_names < <(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | sort)
+          if [[ "${expected_names[*]}" != "${published_names[*]}" ]]; then
+            echo "Draft release assets do not exactly match the verified build outputs." >&2
+            printf 'expected: %s\n' "${expected_names[*]}" >&2
+            printf 'actual: %s\n' "${published_names[*]}" >&2
+            exit 1
+          fi
+
+          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "Developer ID signed and notarized package for macOS, plus the Windows installer. macOS users upgrading from v1.3.0 may need to approve system-audio capture and Keychain access one final time because the older package did not have a stable code identity." --draft=false

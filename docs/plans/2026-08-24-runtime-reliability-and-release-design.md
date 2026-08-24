@@ -107,8 +107,9 @@ height stays measured so moving it to a larger display restores the full panel.
 - WebView devtools are an opt-in feature of the stable development bundle and
   are absent from formal release builds.
 - Ordinary CI and pull-request bundle jobs have read-only repository access;
-  only a `v*` tag publication job receives `contents: write` and a release
-  token.
+  tag builds stage private artifacts, and only the final publication job
+  receives `contents: write` after macOS Developer ID, notarization, privacy
+  metadata, and Gatekeeper checks have passed.
 - The Rust library emits only the desktop `rlib`; the release profile uses LTO,
   one codegen unit, size optimization, panic abort, and symbol stripping.
 
