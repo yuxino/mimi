@@ -3,14 +3,13 @@
 use crate::clients::high_quality_client::HighQualityTranslationClient;
 use crate::clients::live_translate_client::{LiveTranslateClient, LiveTranslateClientError};
 use crate::clients::openai_realtime_client::{OpenAIRealtimeClient, OpenAIRealtimeClientError};
+use crate::clients::provider_events::ProviderEventSender;
 use crate::core::configuration::LiveTranslationConfiguration;
 use crate::core::models::TranslationMode;
-use crate::core::protocols::live_translate::LiveTranslateServerEvent;
 use crate::core::protocols::qwen_mt::{QwenMTClientError, QwenMTModel};
 use crate::core::provider::ProviderKind;
 use std::collections::BTreeMap;
 use std::time::Duration;
-use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub enum TranslationClient {
@@ -22,7 +21,7 @@ pub enum TranslationClient {
 impl TranslationClient {
     pub fn new(
         configuration: &LiveTranslationConfiguration,
-        events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
+        events: ProviderEventSender,
     ) -> Result<Self, TranslationClientError> {
         if configuration.provider == ProviderKind::OpenAIRealtime {
             return OpenAIRealtimeClient::new(
@@ -141,6 +140,19 @@ pub enum ConnectError {
     OpenAI(#[from] OpenAIRealtimeClientError),
 }
 
+impl ConnectError {
+    /// Content-free provider label for diagnostics. The wrapped error remains
+    /// available for user-facing status, but is never written verbatim to
+    /// pipeline logs.
+    pub fn diagnostic_label(&self) -> &'static str {
+        match self {
+            Self::Live(_) => "provider.live_translate",
+            Self::MT(_) => "provider.alibaba_high_quality",
+            Self::OpenAI(_) => "provider.openai_realtime",
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum TranslationClientError {
     #[error("{0}")]
@@ -151,9 +163,20 @@ pub enum TranslationClientError {
     OpenAI(#[from] OpenAIRealtimeClientError),
 }
 
+impl TranslationClientError {
+    pub fn diagnostic_label(&self) -> &'static str {
+        match self {
+            Self::Live(_) => "configuration.live_translate",
+            Self::MT(_) => "configuration.alibaba_high_quality",
+            Self::OpenAI(_) => "configuration.openai_realtime",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::clients::provider_events::provider_event_channel;
     use crate::core::models::{SourceLanguage, TargetLanguage};
 
     #[test]
@@ -165,7 +188,7 @@ mod tests {
             TargetLanguage::English,
             TranslationMode::Turbo,
         );
-        let (events, _receiver) = mpsc::unbounded_channel();
+        let (events, _receiver) = provider_event_channel();
         assert!(matches!(
             TranslationClient::new(&configuration, events).unwrap(),
             TranslationClient::OpenAIRealtime(_)
@@ -181,7 +204,7 @@ mod tests {
             TargetLanguage::SimplifiedChinese,
             TranslationMode::LowLatency,
         );
-        let (events, _receiver) = mpsc::unbounded_channel();
+        let (events, _receiver) = provider_event_channel();
         assert!(matches!(
             TranslationClient::new(&configuration, events).unwrap(),
             TranslationClient::LowLatency(_)

@@ -30,16 +30,24 @@ history without changing listening status. It is available from the overlay and
 tray panel and does not require confirmation because it deletes no persisted
 content.
 
-The language picker is a separate window anchored to the overlay capsule, so it
-never changes overlay geometry. Options come from the active provider's
-capabilities; unsupported or transition-state mutations are disabled.
+The existing language-picker WebView is an owned/child `overlay-control` window
+with two modes. Island is a compact always-available status/language capsule;
+Panel expands in place for provider-supported language/mode choices, subtitle
+background visibility, and the settings entry. It never changes subtitle-canvas
+geometry and does not add another WebView. Paused sessions may change language
+or mode; connecting and stopping mutations remain disabled. Language and mode
+buttons form two-column, one-click grids; an unpaired final option spans the
+full row so the panel stays compact without hiding choices in submenus. If the
+available work area is shorter than the panel, the control content scrolls
+inside the clamped native window instead of making its lower actions unreachable.
 
 ## Geometry and interaction
 
-Native code owns the overlay frame, collapse/expand transitions, resize bounds,
-screen clamping, click-through lock state, and popover anchoring. Geometry writes
-are versioned and atomic. The overlay stays partially reachable when screens or
-work areas change.
+Native code owns the overlay frame, control-window mode, collapse/expand
+transitions, resize bounds, work-area clamping, click-through lock state, and
+control anchoring. Geometry writes are versioned and atomic. Layout uses each
+monitor's work-area origin as well as its size, including left/above monitors
+with negative coordinates.
 
 The native window remains above ordinary windows, joins every desktop space,
 and is an auxiliary full-screen window on macOS so subtitles remain visible
@@ -59,12 +67,14 @@ translation session is active. The settings window exposes the complete
 preference and the tray panel provides the same three-way quick control.
 
 Background-blending presentation is also a persisted, runtime-safe visual
-preference. In this mode the expanded overlay renders subtitle text directly on
-the transparent window with a restrained readability shadow. It removes the
-card, status chrome, timestamps, buttons, drag affordance, and resize handles;
-the transparent window is click-through, and the tray panel and settings window
-remain the escape route. No subtitle text or audio is persisted by this
-presentation mode.
+preference. In this mode native state forces the overlay expanded and renders
+subtitle text directly on the transparent window with a restrained readability
+shadow. The subtitle canvas removes its card, status chrome, timestamps,
+buttons, drag affordance, and resize handles and becomes click-through. The
+separate control island stays interactive and exposes an explicit “show subtitle
+background” action, so the user always has an on-subtitle escape route in
+addition to the tray panel and settings window. No subtitle text or audio is
+persisted by this presentation mode.
 
 ## Verification
 

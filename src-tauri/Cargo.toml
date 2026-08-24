@@ -8,13 +8,21 @@ rust-version = "1.85"
 
 [lib]
 name = "mimi_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# mimi ships desktop binaries only. The staticlib/cdylib outputs are for
+# Tauri mobile targets and add hundreds of megabytes to local build caches.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+default = []
+# The stable development bundle is compiled in release mode, so expose the
+# WebView inspector only when the launcher opts into this local-only feature.
+devtools = ["tauri/devtools"]
+
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api", "devtools"] }
+tauri = { version = "2", default-features = false, features = ["wry", "compression", "common-controls-v6", "tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
@@ -23,7 +31,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots", "url"] }
 futures-util = { version = "0.3", features = ["sink"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "stream"] }
 base64 = "0.23"
 uuid = { version = "1", features = ["v4"] }
 keyring = "4"
@@ -47,3 +55,13 @@ cpal = "0.18"
 windows-sys = { version = "0.61", features = ["Win32_Globalization"] }
 
 [dev-dependencies]
+
+# Keep the shipped desktop binary compact without changing the debug/test
+# profiles used during development. These are the stable-Rust settings
+# recommended by Tauri for production bundles.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

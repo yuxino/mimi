@@ -15,6 +15,10 @@ pub mod windows;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub mod unsupported;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SystemAudioCaptureError {
     #[error("System audio capture is already running.")]
@@ -27,8 +31,85 @@ pub enum SystemAudioCaptureError {
     #[cfg(target_os = "windows")]
     #[error("No default playback device is available for system audio capture.")]
     NoPlaybackDevice,
-    #[error("{0}")]
-    Other(String),
+    #[error("System audio capture permission was denied.")]
+    PermissionDenied,
+    #[error("System audio capture setup timed out.")]
+    StartTimedOut,
+    #[error("System audio capture start was cancelled.")]
+    StartCancelled,
+    #[error("The previous system audio capture is still stopping.")]
+    PreviousCaptureStopping,
+    #[error("System audio capture could not be started.")]
+    NativeStartFailed,
+    #[error("System audio capture could not process the device audio format.")]
+    AudioProcessingFailed,
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[error("System audio capture is not supported on this platform.")]
+    UnsupportedPlatform,
+}
+
+/// Fatal failures reported after a native capture session has started.
+///
+/// The variants deliberately contain no platform or provider free text so the
+/// same value is safe to use for both recovery decisions and diagnostics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum SystemAudioCaptureFailure {
+    #[error("System audio capture stopped unexpectedly.")]
+    NativeStopped,
+    #[error("System audio capture could not process the device audio format.")]
+    AudioProcessingFailed,
+    #[error("Audio streaming fell behind. mimi is reconnecting.")]
+    Backpressure,
+}
+
+impl SystemAudioCaptureFailure {
+    pub fn diagnostic_label(self) -> &'static str {
+        match self {
+            Self::NativeStopped => "capture.native_stopped",
+            Self::AudioProcessingFailed => "capture.audio_processing_failed",
+            Self::Backpressure => "capture.backpressure",
+        }
+    }
+}
+
+/// Cloneable, non-blocking, exactly-once failure reporter for native audio
+/// callbacks. The bounded channel holds one fatal failure because a capture
+/// generation is torn down after the first one.
+#[derive(Clone)]
+pub struct CaptureFailureSender {
+    tx: mpsc::Sender<SystemAudioCaptureFailure>,
+    reported: Arc<AtomicBool>,
+}
+
+impl CaptureFailureSender {
+    pub fn channel() -> (Self, mpsc::Receiver<SystemAudioCaptureFailure>) {
+        let (tx, rx) = mpsc::channel(1);
+        (
+            Self {
+                tx,
+                reported: Arc::new(AtomicBool::new(false)),
+            },
+            rx,
+        )
+    }
+
+    /// Reports the first fatal failure without ever blocking the native audio
+    /// callback. Returns true only for the caller that claimed the report.
+    pub fn report(&self, failure: SystemAudioCaptureFailure) -> bool {
+        if self
+            .reported
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return false;
+        }
+        let _ = self.tx.try_send(failure);
+        true
+    }
+
+    pub fn has_reported(&self) -> bool {
+        self.reported.load(Ordering::SeqCst)
+    }
 }
 
 /// Provider-requested wire format. Both supported backends capture system
@@ -70,8 +151,8 @@ impl SystemAudioCapture {
                 move |task: Box<dyn FnOnce() + Send>| {
                     // A dropped dispatch silently leaves the capture running;
                     // surface the failure instead of ignoring it.
-                    if let Err(error) = app.run_on_main_thread(task) {
-                        tracing::error!("main-thread dispatch failed error={error}");
+                    if app.run_on_main_thread(task).is_err() {
+                        tracing::error!("main-thread dispatch failed label=tauri_dispatch_failed");
                     }
                 },
             ))
@@ -110,5 +191,19 @@ mod format_tests {
             24_000
         );
         assert!(AudioCaptureFormat::pcm16_mono(48_000).is_err());
+    }
+
+    #[tokio::test]
+    async fn capture_failure_sender_is_bounded_and_reports_once() {
+        let (sender, mut receiver) = CaptureFailureSender::channel();
+
+        assert!(sender.report(SystemAudioCaptureFailure::NativeStopped));
+        assert!(!sender.report(SystemAudioCaptureFailure::Backpressure));
+        assert!(sender.has_reported());
+        assert_eq!(
+            receiver.recv().await,
+            Some(SystemAudioCaptureFailure::NativeStopped)
+        );
+        assert!(receiver.try_recv().is_err());
     }
 }

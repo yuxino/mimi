@@ -78,11 +78,6 @@ impl SubtitleReducer {
                 self.snapshot.translation = SubtitleLine::new(translation.clone(), true);
                 self.append_history_if_possible(source, translation);
             }
-            SubtitleEvent::RevokeLastConfirmed => {
-                if !self.snapshot.history.is_empty() {
-                    self.snapshot.history.pop();
-                }
-            }
             SubtitleEvent::Clear => {
                 self.snapshot = SubtitleSnapshot::empty();
                 self.pending_final_sources.clear();
@@ -287,27 +282,6 @@ mod tests {
         reducer.apply(SubtitleEvent::TranslationFinal("你好。".into()));
         reducer.apply(SubtitleEvent::TranslationFinal("你好。".into()));
         assert_eq!(reducer.snapshot.history.len(), 1);
-    }
-
-    #[test]
-    fn revoking_removes_only_the_last_confirmed_pair() {
-        let mut reducer = SubtitleReducer::default();
-        reducer.apply(SubtitleEvent::SourceFinal("First.".into()));
-        reducer.apply(SubtitleEvent::TranslationFinal("第一句。".into()));
-        reducer.apply(SubtitleEvent::SourceFinal("Second.".into()));
-        reducer.apply(SubtitleEvent::TranslationFinal("第二句。".into()));
-
-        reducer.apply(SubtitleEvent::RevokeLastConfirmed);
-
-        assert_eq!(reducer.snapshot.history.len(), 1);
-        assert_eq!(reducer.snapshot.history[0].translation, "第一句。");
-    }
-
-    #[test]
-    fn revoking_an_empty_history_is_a_no_op() {
-        let mut reducer = SubtitleReducer::default();
-        reducer.apply(SubtitleEvent::RevokeLastConfirmed);
-        assert!(reducer.snapshot.history.is_empty());
     }
 
     #[test]

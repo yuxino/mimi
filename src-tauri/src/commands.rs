@@ -5,7 +5,9 @@ use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
 use crate::core::provider::{ProviderKind, ServiceProfile};
 use crate::session_manager::{SessionManager, SessionStateEvent};
 use crate::settings_store::{CredentialState, SettingsStore, SubtitleAlignment};
-use crate::windows::{OverlayWindowManager, TrayPanelManager};
+use crate::windows::{
+    OverlayControlMode, OverlayControlWindowManager, OverlayWindowManager, TrayPanelManager,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Listener, Manager, State};
@@ -76,6 +78,13 @@ pub struct SettingsSnapshotPayload {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_blend_forces_expanded_overlay() {
+        assert!(!normalize_overlay_collapsed(true, true));
+        assert!(!normalize_overlay_collapsed(false, true));
+        assert!(normalize_overlay_collapsed(true, false));
+    }
 
     struct PartiallyUnavailableSecretStore;
 
@@ -274,6 +283,7 @@ pub async fn settings_save(
         || draft.target_language.is_some()
         || draft.translation_mode.is_some();
     let changes_ui_language = draft.ui_language.is_some();
+    let enables_background_blend = draft.subtitle_blends_with_background == Some(true);
     let _lifecycle = state
         .session
         .settings_mutation_guard(changes_listening_settings)
@@ -319,10 +329,20 @@ pub async fn settings_save(
                 prefs.ui_language = Some(language.clone());
             }
         })?;
+    // Background blending has no meaningful collapsed presentation. Enforce
+    // this natively so the invariant also holds while the WebView is hidden
+    // or reloading; do not rely on a React effect to repair geometry later.
+    if enables_background_blend && state.session.is_overlay_collapsed() {
+        state.session.set_overlay_collapsed(false);
+        OverlayWindowManager::set_collapsed(&app, &state.overlay, false);
+        state.session.publish_state();
+    }
     if draft.is_overlay_locked.is_some() || draft.subtitle_blends_with_background.is_some() {
         let preferences = state.settings.preferences();
-        OverlayWindowManager::update_locked(
+        OverlayWindowManager::sync_presentation(
             &app,
+            state.session.is_active(),
+            state.session.is_overlay_collapsed(),
             preferences.overlay_locked || preferences.subtitle_blends_with_background,
         );
     }
@@ -492,16 +512,26 @@ pub fn overlay_set_collapsed(
     state: State<'_, AppState>,
     collapsed: bool,
 ) -> Result<(), String> {
+    let preferences = state.settings.preferences();
+    let collapsed =
+        normalize_overlay_collapsed(collapsed, preferences.subtitle_blends_with_background);
     state.session.set_overlay_collapsed(collapsed);
     OverlayWindowManager::set_collapsed(&app, &state.overlay, collapsed);
-    // The language/mode menu cannot stay anchored to a capsule that is no
-    // longer visible.
-    crate::windows::LanguagePopoverManager::hide(&app);
+    OverlayWindowManager::sync_presentation(
+        &app,
+        state.session.is_active(),
+        collapsed,
+        preferences.overlay_locked || preferences.subtitle_blends_with_background,
+    );
     // The frontend's collapse UI state only updates through the
     // session-state event; without this the overlay renders the wrong
     // layout after collapsing/expanding.
     state.session.publish_state();
     Ok(())
+}
+
+fn normalize_overlay_collapsed(requested: bool, background_blend: bool) -> bool {
+    requested && !background_blend
 }
 
 #[tauri::command]
@@ -514,8 +544,10 @@ pub fn overlay_set_locked(
         .settings
         .save_preferences(|prefs| prefs.overlay_locked = locked)?;
     let preferences = state.settings.preferences();
-    OverlayWindowManager::update_locked(
+    OverlayWindowManager::sync_presentation(
         &app,
+        state.session.is_active(),
+        state.session.is_overlay_collapsed(),
         locked || preferences.subtitle_blends_with_background,
     );
     let _ = app.emit(
@@ -528,39 +560,52 @@ pub fn overlay_set_locked(
 #[tauri::command]
 pub fn overlay_show(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     if state.session.is_active() {
-        OverlayWindowManager::show(&app);
+        let preferences = state.settings.preferences();
+        OverlayWindowManager::sync_presentation(
+            &app,
+            true,
+            state.session.is_overlay_collapsed(),
+            preferences.overlay_locked || preferences.subtitle_blends_with_background,
+        );
     }
     Ok(())
 }
 
-/// Toggles the language/mode popover window, anchored under the overlay's
-/// language capsule (the anchor is derived from the overlay window's own
-/// position). The overlay window itself is never resized for the menu.
-/// Opening refreshes the popover's snapshots so its checkmarks always match
-/// the current state, even if its webview missed events while hidden.
+/// Toggles the child overlay control between its compact island and expanded
+/// panel. The legacy command name remains part of the IPC contract.
 #[tauri::command]
 pub fn overlay_popover_toggle(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let was_visible = app
-        .get_webview_window("language-popover")
-        .and_then(|window| window.is_visible().ok())
-        .unwrap_or(false);
-    crate::windows::LanguagePopoverManager::toggle(&app);
-    if !was_visible {
-        state.session.publish_settings();
-        state.session.publish_state();
-    }
+    OverlayControlWindowManager::toggle_panel(&app);
+    // Refresh snapshots after a hidden/reloaded WebView so its checkmarks and
+    // lifecycle guards never depend solely on an older broadcast.
+    state.session.publish_settings();
+    state.session.publish_state();
     Ok(())
 }
 
-/// Hides the language/mode popover window (no-op when already hidden).
+/// Returns the expanded panel to its compact island. The legacy command name
+/// is kept for backwards-compatible frontend bundles.
 #[tauri::command]
 pub fn overlay_popover_hide(app: AppHandle) -> Result<(), String> {
-    crate::windows::LanguagePopoverManager::hide(&app);
+    OverlayControlWindowManager::dismiss_panel(&app);
+    Ok(())
+}
+
+/// Current native mode for initial control-window hydration after a reload.
+#[tauri::command]
+pub fn overlay_control_state(app: AppHandle) -> Result<OverlayControlMode, String> {
+    Ok(OverlayControlWindowManager::mode(&app))
+}
+
+/// Applies a tightly-fitted panel height measured by the control WebView.
+#[tauri::command]
+pub fn overlay_control_set_panel_height(app: AppHandle, height: f64) -> Result<(), String> {
+    OverlayControlWindowManager::set_panel_height(&app, height);
     Ok(())
 }
 
 /// The current session state snapshot, for windows that boot after the last
-/// broadcast (e.g. the language popover). Async: cloning the full controller
+/// broadcast (e.g. the overlay control). Async: cloning the full controller
 /// state (subtitle history included) must not run on the main thread.
 #[tauri::command]
 pub async fn session_get_state(state: State<'_, AppState>) -> Result<SessionStateEvent, String> {
@@ -621,9 +666,9 @@ pub fn app_show_settings(
 ) -> Result<(), String> {
     // Close the tray panel first: it is always-on-top, so the settings
     // window would otherwise open behind it and the click would look like a
-    // no-op. Same for the language popover, if open.
+    // no-op. Collapse the overlay control panel for the same reason.
     TrayPanelManager::hide(&app);
-    crate::windows::LanguagePopoverManager::hide(&app);
+    OverlayControlWindowManager::dismiss_panel(&app);
 
     // The settings window normally exists for the whole app lifetime and is
     // merely hidden on close. If its webview crashed, however, recreating it

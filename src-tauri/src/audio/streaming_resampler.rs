@@ -37,7 +37,7 @@ impl StreamingPcm16Resampler {
                     1,
                     FixedSync::Input,
                 )
-                .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?,
+                .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed)?,
             )
         };
         Ok(Self {
@@ -87,10 +87,10 @@ impl StreamingPcm16Resampler {
             let chunk: Vec<f32> = self.pending_mono.drain(..RESAMPLE_CHUNK_FRAMES).collect();
             let channels = [chunk];
             let input = SequentialSliceOfVecs::new(&channels, 1, RESAMPLE_CHUNK_FRAMES)
-                .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?;
+                .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed)?;
             let output = resampler
                 .process(&input, None)
-                .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?
+                .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed)?
                 .take_data();
             let pcm = PCM16Encoder::encode(&[output]);
             if !pcm.is_empty() {

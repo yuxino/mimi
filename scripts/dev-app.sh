@@ -285,9 +285,11 @@ fi
 cd "$PROJECT_DIR"
 export CARGO_HOME="${CARGO_HOME:-$PROJECT_DIR/.cargo-home}"
 export npm_config_cache="${npm_config_cache:-$PROJECT_DIR/.npm-cache}"
+export MACOSX_DEPLOYMENT_TARGET="13.0"
 
 npm run build
-TAURI_CONFIG="$(<"$DEV_TAURI_CONFIG")" cargo build --release --features tauri/custom-protocol \
+TAURI_CONFIG="$(<"$DEV_TAURI_CONFIG")" cargo build --release \
+  --features tauri/custom-protocol,devtools \
   --manifest-path src-tauri/Cargo.toml
 
 rm -rf "$BUILD_APP"
@@ -322,7 +324,7 @@ cat > "$BUILD_APP/Contents/Info.plist" <<'PLIST'
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.utilities</string>
   <key>LSMinimumSystemVersion</key>
-  <string>10.15</string>
+  <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSScreenCaptureUsageDescription</key>

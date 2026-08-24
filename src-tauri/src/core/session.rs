@@ -125,10 +125,6 @@ impl TranslationSessionController {
                         translation,
                     });
             }
-            LiveTranslateServerEvent::SubtitleRevoked => {
-                self.subtitle_reducer
-                    .apply(crate::core::models::SubtitleEvent::RevokeLastConfirmed);
-            }
             LiveTranslateServerEvent::SessionFinished => self.did_stop(),
             LiveTranslateServerEvent::Error { message, .. } => self.did_fail(message),
             LiveTranslateServerEvent::Ignored { .. } => return,
@@ -364,59 +360,6 @@ mod tests {
     }
 
     #[test]
-    fn subtitle_revocation_removes_the_last_history_pair() {
-        let mut controller = TranslationSessionController::default();
-        controller.did_connect();
-        controller.handle(LiveTranslateServerEvent::SourceFinal {
-            text: "Hello.".into(),
-            language: Some("en".into()),
-        });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal("你好。".into()));
-
-        controller.handle(LiveTranslateServerEvent::SubtitleRevoked);
-
-        assert!(controller.state.subtitles.history.is_empty());
-    }
-
-    #[test]
-    fn translated_mode_replaces_the_provisional_line_when_the_final_translation_completes() {
-        let mut controller = TranslationSessionController::default();
-        controller.did_connect();
-
-        // The local commit lands first and its translation completes, showing a
-        // provisional history entry.
-        controller.handle(LiveTranslateServerEvent::SourceFinal {
-            text: "こんにちは。今日は天気がいいですね。".into(),
-            language: Some("ja".into()),
-        });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal(
-            "你好。今天天气很好。".into(),
-        ));
-        assert_eq!(controller.state.subtitles.history.len(), 1);
-
-        // The server final supersedes that local commit: revoke, then commit
-        // the authoritative source and its freshly completed translation.
-        controller.handle(LiveTranslateServerEvent::SubtitleRevoked);
-        controller.handle(LiveTranslateServerEvent::SourceFinal {
-            text: "こんにちは。今日は天気がいいですね。明日も晴れるといいです。".into(),
-            language: Some("ja".into()),
-        });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal(
-            "你好。今天天气很好。希望明天也放晴。".into(),
-        ));
-
-        assert_eq!(controller.state.subtitles.history.len(), 1);
-        assert_eq!(
-            controller.state.subtitles.history[0].source,
-            "こんにちは。今日は天気がいいですね。明日も晴れるといいです。"
-        );
-        assert_eq!(
-            controller.state.subtitles.history[0].translation,
-            "你好。今天天气很好。希望明天也放晴。"
-        );
-    }
-
-    #[test]
     fn atomic_pair_updates_history_and_detected_language_together() {
         let mut controller = TranslationSessionController::default();
         controller.did_connect();
@@ -436,40 +379,6 @@ mod tests {
                 .as_ref()
                 .map(|value| value.code.as_str()),
             Some("en")
-        );
-    }
-
-    #[test]
-    fn original_mode_replaces_the_provisional_line_when_the_final_translation_completes() {
-        let mut controller = TranslationSessionController::default();
-        controller.did_connect();
-
-        controller.handle(LiveTranslateServerEvent::SourceFinal {
-            text: "こんにちは。今日は天気がいいですね。".into(),
-            language: Some("ja".into()),
-        });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal(
-            "こんにちは。今日は天気がいいですね。".into(),
-        ));
-        assert_eq!(controller.state.subtitles.history.len(), 1);
-
-        controller.handle(LiveTranslateServerEvent::SubtitleRevoked);
-        controller.handle(LiveTranslateServerEvent::SourceFinal {
-            text: "こんにちは。今日は天気がいいですね。明日も晴れるといいです。".into(),
-            language: Some("ja".into()),
-        });
-        controller.handle(LiveTranslateServerEvent::TranslationFinal(
-            "こんにちは。今日は天気がいいですね。明日も晴れるといいです。".into(),
-        ));
-
-        assert_eq!(controller.state.subtitles.history.len(), 1);
-        assert_eq!(
-            controller.state.subtitles.history[0].source,
-            "こんにちは。今日は天気がいいですね。明日も晴れるといいです。"
-        );
-        assert_eq!(
-            controller.state.subtitles.history[0].translation,
-            "こんにちは。今日は天気がいいですね。明日も晴れるといいです。"
         );
     }
 }

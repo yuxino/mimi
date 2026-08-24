@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings-window",
+  "description": "The settings window may manage preferences, profiles, write-only credentials, and navigation.",
+  "windows": ["settings"],
+  "permissions": [
+    "core:event:allow-emit",
+    "app-settings"
+  ]
+}

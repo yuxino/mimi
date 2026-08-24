@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay-window",
+  "description": "The subtitle canvas may drag and resize itself, control its session view, and open settings.",
+  "windows": ["overlay"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "app-overlay"
+  ]
+}

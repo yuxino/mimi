@@ -14,6 +14,9 @@ Git history, not on the active documentation path.
   ScreenCaptureKit startup boundaries.
 - `2026-08-22-multi-provider-professional-settings-design.md` — provider
   profiles, credential isolation, migration, and runtime ownership.
+- `2026-08-24-runtime-reliability-and-release-design.md` — bounded streaming
+  topology, generation ownership, recovery, control-island ownership, and the
+  native/WebView release baseline.
 
 ## Runtime behavior
 

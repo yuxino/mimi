@@ -5,7 +5,6 @@ import { useStore } from "../../lib/store";
 import { OVERLAY_ACTIVITY_PHASES, hexToRgba } from "../../lib/types";
 import { ControlButton } from "./ControlButton";
 import { DragHandle } from "./DragHandle";
-import { LanguagePickerPopover } from "./LanguagePickerPopover";
 import { PulseRing } from "./PulseRing";
 import { ResizeHandles } from "./ResizeHandles";
 import { Timeline } from "./Timeline";
@@ -17,8 +16,6 @@ import {
   emptyStateIsError,
   emptyStateText,
   hasSubtitleContent,
-  isWaitingForFinalTranslation,
-  languageStatus,
   subtitleSegmentLength,
   visibleDraft,
 } from "./overlayModel";
@@ -31,23 +28,19 @@ export function OverlayWindow() {
   const settings = useStore((state) => state.settings);
   const togglePaused = useStore((state) => state.togglePaused);
   const clearSubtitles = useStore((state) => state.clearSubtitles);
-  const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
-  const switchTranslationMode = useStore(
-    (state) => state.switchTranslationMode,
-  );
   const setOverlayCollapsed = useStore((state) => state.setOverlayCollapsed);
   const showSettings = useStore((state) => state.showSettings);
 
   const [isHovering, setIsHovering] = useState(false);
   const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
-  // Keep the drag handle clear of the language capsule (which can be ~310px
-  // wide in English) and the control buttons (~150px) when the window is
-  // narrow. The handle itself stays horizontally centered in the window.
+  // Keep the drag handle clear of the child control island and the action
+  // buttons when the window is narrow. The handle itself stays horizontally
+  // centered in the subtitle window.
   const windowWidth =
     typeof window !== "undefined" ? window.innerWidth : overlaySize.width;
   const dragHandleWidth = Math.max(
     48,
-    Math.min(120, windowWidth - 336 - (session.isActive ? 156 : 0)),
+    Math.min(120, windowWidth - 260 - (session.isActive ? 156 : 0)),
   );
 
   const collapsed = session.isOverlayCollapsed;
@@ -55,11 +48,6 @@ export function OverlayWindow() {
   const presentationCollapsed = collapsed && !blendsWithBackground;
   const phase = computeActivityPhase(session, settings);
   const detectedLanguage = session.detectedLanguage;
-  const isWaiting = isWaitingForFinalTranslation(
-    settings,
-    detectedLanguage,
-    session.isTranslationPending,
-  );
   const segmentLength = subtitleSegmentLength(
     settings.targetLanguage,
     detectedLanguage,
@@ -104,7 +92,6 @@ export function OverlayWindow() {
       })),
     ];
   }, [rows, draftText, segmentLength]);
-  const status = languageStatus(settings, detectedLanguage);
   const hasContent = hasSubtitleContent(session.subtitles);
 
   const phaseLabel = OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel;
@@ -245,30 +232,6 @@ export function OverlayWindow() {
               />
             </div>
           </div>
-
-          {/* Keep quick language and mode switching available before listening. */}
-          {status !== null && (
-            <div className="absolute" style={{ top: 10, left: 12 }}>
-              <LanguagePickerPopover
-                phase={phase}
-                isHovering={isHovering}
-                isPaused={session.isPaused}
-                isChangingSession={
-                  session.status.kind === "connecting" ||
-                  session.status.kind === "stopping"
-                }
-                isWaitingForFinalTranslation={isWaiting}
-                settings={settings}
-                detectedLanguage={detectedLanguage}
-                onSwitchSourceLanguage={(language) =>
-                  void switchSourceLanguage(language)
-                }
-                onSwitchTranslationMode={(mode) =>
-                  void switchTranslationMode(mode)
-                }
-              />
-            </div>
-          )}
 
           {session.isActive && !settings.isOverlayLocked && (
             <div

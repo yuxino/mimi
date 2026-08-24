@@ -4,19 +4,19 @@
 //! stereo f32) is resampled to the provider rate, mixed to mono, and
 //! quantized to PCM16.
 
+use crate::audio::send_pipeline::{AudioIngress, AudioIngressError};
 use crate::audio::streaming_resampler::StreamingPcm16Resampler;
-use crate::audio::{AudioCaptureFormat, SystemAudioCaptureError};
+use crate::audio::{
+    AudioCaptureFormat, CaptureFailureSender, SystemAudioCaptureError, SystemAudioCaptureFailure,
+};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct WindowsSystemAudioCapture {
     stream: Arc<Mutex<Option<cpal::Stream>>>,
     active: Arc<AtomicBool>,
-    audio_tx: Arc<Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>>,
-    error_tx: Arc<Mutex<Option<mpsc::UnboundedSender<String>>>>,
 }
 
 impl WindowsSystemAudioCapture {
@@ -24,15 +24,13 @@ impl WindowsSystemAudioCapture {
         Self {
             stream: Arc::new(Mutex::new(None)),
             active: Arc::new(AtomicBool::new(false)),
-            audio_tx: Arc::new(Mutex::new(None)),
-            error_tx: Arc::new(Mutex::new(None)),
         }
     }
 
     pub async fn start(
         &self,
-        audio_tx: mpsc::UnboundedSender<Vec<u8>>,
-        error_tx: mpsc::UnboundedSender<String>,
+        audio_ingress: AudioIngress,
+        failure_tx: CaptureFailureSender,
         format: AudioCaptureFormat,
     ) -> Result<(), SystemAudioCaptureError> {
         if self.stream.lock().unwrap().is_some() {
@@ -49,7 +47,7 @@ impl WindowsSystemAudioCapture {
         // there is no echo).
         let input_config = output_device
             .default_input_config()
-            .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?;
+            .map_err(|_| SystemAudioCaptureError::NativeStartFailed)?;
         let sample_format = input_config.sample_format();
         let channel_count = input_config.channels() as usize;
         // cpal 0.18: `SampleRate` is a `u32` type alias (not a tuple struct).
@@ -59,13 +57,13 @@ impl WindowsSystemAudioCapture {
             StreamingPcm16Resampler::new(sample_rate, format.sample_rate_hz, channel_count)?;
         let resampler = Arc::new(Mutex::new(resampler));
         let active = self.active.clone();
-        active.store(true, Ordering::SeqCst);
 
         let stream = match sample_format {
             cpal::SampleFormat::F32 => {
                 let resampler_for_cb = resampler.clone();
-                let audio_tx_for_cb = audio_tx.clone();
-                let error_tx_for_cb = error_tx.clone();
+                let audio_ingress_for_cb = audio_ingress.clone();
+                let failure_tx_for_cb = failure_tx.clone();
+                let failure_tx_for_error = failure_tx.clone();
                 let active_for_cb = active.clone();
                 output_device
                     .build_input_stream(
@@ -74,20 +72,25 @@ impl WindowsSystemAudioCapture {
                             if !active_for_cb.load(Ordering::SeqCst) {
                                 return;
                             }
-                            process_frames_f32(data, &resampler_for_cb, &audio_tx_for_cb);
+                            process_frames_f32(
+                                data,
+                                &resampler_for_cb,
+                                &audio_ingress_for_cb,
+                                &failure_tx_for_cb,
+                            );
                         },
-                        move |error| {
-                            let _ = error_tx_for_cb
-                                .send(format!("System audio capture stopped: {error}"));
+                        move |_error| {
+                            failure_tx_for_error.report(SystemAudioCaptureFailure::NativeStopped);
                         },
                         None,
                     )
-                    .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?
+                    .map_err(|_| SystemAudioCaptureError::NativeStartFailed)?
             }
             cpal::SampleFormat::I16 => {
                 let resampler_for_cb = resampler.clone();
-                let audio_tx_for_cb = audio_tx.clone();
-                let error_tx_for_cb = error_tx.clone();
+                let audio_ingress_for_cb = audio_ingress.clone();
+                let failure_tx_for_cb = failure_tx.clone();
+                let failure_tx_for_error = failure_tx.clone();
                 let active_for_cb = active.clone();
                 output_device
                     .build_input_stream(
@@ -100,28 +103,28 @@ impl WindowsSystemAudioCapture {
                                 .iter()
                                 .map(|sample| *sample as f32 / 32_768.0)
                                 .collect();
-                            process_frames_f32(&frames, &resampler_for_cb, &audio_tx_for_cb);
+                            process_frames_f32(
+                                &frames,
+                                &resampler_for_cb,
+                                &audio_ingress_for_cb,
+                                &failure_tx_for_cb,
+                            );
                         },
-                        move |error| {
-                            let _ = error_tx_for_cb
-                                .send(format!("System audio capture stopped: {error}"));
+                        move |_error| {
+                            failure_tx_for_error.report(SystemAudioCaptureFailure::NativeStopped);
                         },
                         None,
                     )
-                    .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?
+                    .map_err(|_| SystemAudioCaptureError::NativeStartFailed)?
             }
-            other => {
-                return Err(SystemAudioCaptureError::Other(format!(
-                    "unsupported sample format: {other:?}"
-                )));
-            }
+            _ => return Err(SystemAudioCaptureError::UnsupportedAudioFormat),
         };
 
-        stream
-            .play()
-            .map_err(|error| SystemAudioCaptureError::Other(error.to_string()))?;
-        *self.audio_tx.lock().unwrap() = Some(audio_tx);
-        *self.error_tx.lock().unwrap() = Some(error_tx);
+        active.store(true, Ordering::SeqCst);
+        if stream.play().is_err() {
+            active.store(false, Ordering::SeqCst);
+            return Err(SystemAudioCaptureError::NativeStartFailed);
+        }
         *self.stream.lock().unwrap() = Some(stream);
         Ok(())
     }
@@ -131,8 +134,6 @@ impl WindowsSystemAudioCapture {
         if let Some(stream) = self.stream.lock().unwrap().take() {
             drop(stream);
         }
-        let _ = self.audio_tx.lock().unwrap().take();
-        let _ = self.error_tx.lock().unwrap().take();
     }
 }
 
@@ -147,13 +148,28 @@ impl Default for WindowsSystemAudioCapture {
 fn process_frames_f32(
     data: &[f32],
     resampler: &Arc<Mutex<StreamingPcm16Resampler>>,
-    audio_tx: &mpsc::UnboundedSender<Vec<u8>>,
+    audio_ingress: &AudioIngress,
+    failure_tx: &CaptureFailureSender,
 ) {
-    let mut resampler = resampler.lock().unwrap();
+    if failure_tx.has_reported() {
+        return;
+    }
+    let Ok(mut resampler) = resampler.lock() else {
+        failure_tx.report(SystemAudioCaptureFailure::AudioProcessingFailed);
+        return;
+    };
     let Ok(buffers) = resampler.push_interleaved(data) else {
+        failure_tx.report(SystemAudioCaptureFailure::AudioProcessingFailed);
         return;
     };
     for pcm in buffers {
-        let _ = audio_tx.send(pcm);
+        match audio_ingress.try_send(pcm) {
+            Ok(()) => {}
+            Err(AudioIngressError::Backpressure) => {
+                failure_tx.report(SystemAudioCaptureFailure::Backpressure);
+                return;
+            }
+            Err(AudioIngressError::Closed) => return,
+        }
     }
 }

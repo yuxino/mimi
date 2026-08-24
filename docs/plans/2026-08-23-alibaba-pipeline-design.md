@@ -29,23 +29,29 @@ accepted by the runtime.
 
 ## Durable subtitle rules
 
-Audio 3.0 drafts are replaceable previews. `ASRDraftCommitter` commits complete
-sentences at punctuation boundaries and retains an incomplete tail. A bounded
-maximum-wait path commits long uninterrupted speech so subtitles continue to
-flow.
+Audio 3.0 drafts are replaceable previews. Stable punctuation and the bounded
+maximum-wait path may request a translated preview so long uninterrupted speech
+continues to flow, but that work is latest-only: it emits `SourceDraft` and
+`TranslationDraft`, never advances durable history or translation memory.
 
 Server finals remain authoritative:
 
-- an exact duplicate is ignored;
-- a final that structurally covers the last provisional chunk replaces it;
-- overlapping suffixes are stripped before a new chunk is appended; and
-- revoke and replacement events are applied together so history does not blink
-  or duplicate.
+- overlap against already confirmed server output is removed without treating
+  a later repeated utterance as a global duplicate;
+- arrival invalidates any older stable/maximum-wait preview; and
+- source and translation are committed together as one atomic
+  `SubtitleFinalPair`, so history never observes a half-pair.
 
-The final-translation queue preserves server finals and session-finish work.
-When backlog grows, replaceable stable-draft work may be coalesced or shed, but
-confirmed provider output is not discarded. Draft and pending buffers stay
-bounded.
+The serial final-translation queue contains only authoritative server finals
+and an explicit session-finish fallback. It has a hard capacity and maximum
+request age. Crossing either bound emits one content-free recoverable overload
+error; the session generation is rebuilt instead of discarding confirmed
+provider output or growing memory without limit. The final lane has strict
+presentation priority: while a final is active or queued, new ASR drafts keep
+accumulating in the committer but cannot start a competing preview. Once the
+final lane is empty, timers resume from the latest pending draft. Preview work
+therefore can neither delay a server final nor interleave translation drafts
+from two utterances.
 
 ## Translation quality
 
@@ -54,10 +60,10 @@ They preserve particles, vocalizations, tone, deliberate repetition, and
 explicit dialogue, and they require translation-only output. Do not casually
 rewrite these strings.
 
-High-quality finals use recent source/translation pairs as bounded translation
-memory. For automatic recognition, a detected source language is pinned when
-available. Memory is context only: remembered lines must not be repeated in the
-new output.
+High-quality server finals use recent source/translation pairs as bounded
+translation memory. Preview translations never enter memory. For automatic
+recognition, a detected source language is pinned when available. Memory is
+context only: remembered lines must not be repeated in the new output.
 
 ## Lifecycle and recovery
 

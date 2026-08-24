@@ -115,17 +115,25 @@ export function overlayShow(): Promise<void> {
   return invoke("overlay_show");
 }
 
-/** Toggles the language/mode popover window, anchored under the overlay's
- * language capsule (the anchor is derived from the overlay window's own
- * position backend-side). The overlay window itself is never resized for the
- * menu. */
+export type OverlayControlMode = "hidden" | "island" | "panel";
+
+/** Toggles the child overlay control between its compact island and panel.
+ * The native command keeps its established name for backwards compatibility. */
 export function overlayPopoverToggle(): Promise<void> {
   return invoke("overlay_popover_toggle");
 }
 
-/** Hides the language/mode popover window. */
+/** Returns the expanded child control to its compact island. */
 export function overlayPopoverHide(): Promise<void> {
   return invoke("overlay_popover_hide");
+}
+
+export function overlayControlGetState(): Promise<OverlayControlMode> {
+  return invoke<OverlayControlMode>("overlay_control_state");
+}
+
+export function overlayControlSetPanelHeight(height: number): Promise<void> {
+  return invoke("overlay_control_set_panel_height", { height });
 }
 
 /** Fetches the current session state snapshot (for windows that boot after
@@ -166,6 +174,14 @@ export function listenSettingsChanged(
   handler: (settings: SettingsSnapshot) => void,
 ): Promise<UnlistenFn> {
   return listen<SettingsSnapshot>("settings-changed", (event) =>
+    handler(event.payload),
+  );
+}
+
+export function listenOverlayControlMode(
+  handler: (mode: OverlayControlMode) => void,
+): Promise<UnlistenFn> {
+  return listen<OverlayControlMode>("overlay-control-mode", (event) =>
     handler(event.payload),
   );
 }

@@ -3,13 +3,30 @@ import react from "@vitejs/plugin-react";
 
 // `process` is provided by Node when Vite loads this config; the ambient
 // declaration keeps the type check self-contained (no @types/node dependency).
-declare const process: { env: Record<string, string | undefined> };
+declare const process: {
+  env: Record<string, string | undefined>;
+  platform: string;
+};
 
 const host = process.env.TAURI_DEV_HOST;
+const tauriPlatform = process.env.TAURI_ENV_PLATFORM;
+const buildPlatform = tauriPlatform ?? process.platform;
+
+// Match the JavaScript output to the native runtime baselines. macOS 13 ships
+// Safari 16; current Tauri Windows builds require WebView2/Chromium 105.
+const buildTarget =
+  buildPlatform === "windows" || buildPlatform === "win32"
+    ? "chrome105"
+    : buildPlatform === "darwin"
+      ? "safari16"
+      : "es2021";
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+  build: {
+    target: buildTarget,
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

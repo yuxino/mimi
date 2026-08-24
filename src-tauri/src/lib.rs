@@ -65,6 +65,8 @@ pub fn run() {
                 session: Arc::clone(&session),
                 overlay: Arc::clone(&overlay),
             });
+            app.manage(windows::OverlayControlState::default());
+            app.manage(windows::OverlayPresentationState::default());
             windows::OverlayWindowManager::ensure_overlay(&app_handle, &overlay);
             let preferences = settings.preferences();
             windows::OverlayWindowManager::update_locked(
@@ -72,7 +74,7 @@ pub fn run() {
                 preferences.overlay_locked || preferences.subtitle_blends_with_background,
             );
             windows::TrayPanelManager::ensure(&app_handle);
-            windows::LanguagePopoverManager::ensure(&app_handle);
+            windows::OverlayControlWindowManager::ensure(&app_handle);
 
             setup_tray(&app_handle)?;
             setup_global_shortcut(&app_handle, Arc::clone(&session))?;
@@ -94,7 +96,7 @@ pub fn run() {
             let app = window.app_handle();
             match event {
                 // The overlay geometry manager folds the final frame in after
-                // a debounce; transient states (popover enlargement, collapse
+                // a debounce; transient states (control panel, collapse
                 // animation steps) are never persisted.
                 WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == "overlay" => {
                     if let Some(state) = app.try_state::<AppState>() {
@@ -104,20 +106,26 @@ pub fn run() {
                             &state.settings,
                         );
                     }
-                    // Keep the open language/mode menu glued to the capsule.
-                    windows::LanguagePopoverManager::follow_overlay(app);
+                    // Keep the child control island/panel glued to the
+                    // subtitle canvas (Windows owned windows do not move
+                    // automatically with their owner).
+                    windows::OverlayControlWindowManager::follow_overlay(app);
                 }
                 WindowEvent::Focused(false) if window.label() == "tray-panel" => {
                     windows::TrayPanelManager::hide(app);
                 }
-                // The language/mode menu closes when focus moves elsewhere.
-                // Delayed hiding lets a capsule click that stole focus reopen
-                // or toggle the menu without a hide/show flicker.
-                WindowEvent::Focused(false) if window.label() == "language-popover" => {
-                    windows::LanguagePopoverManager::schedule_hide(app);
+                // An expanded control panel returns to its compact island on
+                // focus loss. The island itself remains available even while
+                // the subtitle canvas is click-through.
+                WindowEvent::Focused(false) if window.label() == "overlay-control" => {
+                    windows::OverlayControlWindowManager::schedule_dismiss(app);
+                }
+                WindowEvent::Focused(true) if window.label() == "overlay-control" => {
+                    windows::OverlayControlWindowManager::cancel_scheduled_dismiss(app);
                 }
                 WindowEvent::CloseRequested { api, .. }
                     if window.label() == "overlay"
+                        || window.label() == "overlay-control"
                         || window.label() == "tray-panel"
                         || window.label() == "settings" =>
                 {
@@ -151,6 +159,8 @@ pub fn run() {
             commands::overlay_show,
             commands::overlay_popover_toggle,
             commands::overlay_popover_hide,
+            commands::overlay_control_state,
+            commands::overlay_control_set_panel_height,
             commands::session_get_state,
             commands::resize_start,
             commands::resize_move,
@@ -316,9 +326,10 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
     // Dev builds expose a manual "open inspector" action instead of opening
     // the WebView devtools automatically, so the user decides when to look.
-    let toggle_devtools = windows::is_dev_build()
-        .then(|| MenuItemBuilder::with_id("toggle-devtools", labels.toggle_devtools).build(app))
-        .transpose()?;
+    let toggle_devtools = (cfg!(any(debug_assertions, feature = "devtools"))
+        && windows::is_dev_build())
+    .then(|| MenuItemBuilder::with_id("toggle-devtools", labels.toggle_devtools).build(app))
+    .transpose()?;
     if let Some(item) = &toggle_devtools {
         menu_builder = menu_builder.item(item);
     }
@@ -362,8 +373,11 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                     // Manual inspector toggle (dev builds only). Open the
                     // overlay's WebView devtools so the user decides when to
                     // inspect, instead of auto-opening at startup.
-                    if let Some(window) = app.get_webview_window("overlay") {
-                        window.open_devtools();
+                    #[cfg(any(debug_assertions, feature = "devtools"))]
+                    {
+                        if let Some(window) = app.get_webview_window("overlay") {
+                            window.open_devtools();
+                        }
                     }
                 }
                 "settings" => {

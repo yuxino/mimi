@@ -34,10 +34,15 @@
 
 1. **删除孤儿 UI probe**（lib.rs 的 3s eval 块 + `ui_probe_report` 命令 + invoke_handler 注册）。
 2. **重 I/O 命令转 async**：`settings_get` / `settings_save` / `session_get_state` 改为 `pub async fn`。Tauri 对 async 命令走 `respond_async` → `async_runtime::spawn`，在 tokio 线程池执行，不再占用主线程。`AppState` 全为 `Arc`（Send+Sync），安全。
-3. **capture 启动不再主线程等待**：`start_capture` 的 completion 错误改走既有的 `error_tx` 异步通道（`capture_error_channel` → `handle_capture_failure` → 停止/恢复），主线程只发起请求立即返回。
+3. **capture 启动异步等待真实 completion**：主线程只创建并发起
+   `SCStream::start_capture`，completion 通过 oneshot 回到 Tokio；
+   `capture.start()` 异步等待该结果后才让会话进入 Listening。这样既不
+   阻塞主线程，也不会在 ScreenCaptureKit 实际失败前错误宣称已经开始
+   监听。等待有有限超时，并受当前会话 generation 约束。
 
 ## 保持不变的边界
 
 - `SCStream` 及其 delegate 仍是 main-thread-only，`MainThreadDispatcher` 机制不动；只移除了「主线程同步等待启动完成」这一段。
-- capture 启动失败的语义不变：错误仍会触发会话失败/自动恢复路径。
+- capture 启动失败在连接阶段直接返回 typed error；运行中的 native stop
+  继续走容量为 1 的 typed failure 通道，并按 retryability 决定恢复或终止。
 - 窗口操作类同步命令（`overlay_show`、`resize_*`、`overlay_set_collapsed` 等）保留 sync——它们只是轻量窗口调用，且天然需要主线程。

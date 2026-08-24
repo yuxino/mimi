@@ -11,23 +11,84 @@ use tokio::sync::mpsc;
 
 const QUEUE_CAPACITY: usize = 20;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum AudioPipelineFailure {
+    #[error("The audio transport stopped unexpectedly.")]
+    TransportStopped,
+}
+
+impl AudioPipelineFailure {
+    pub fn diagnostic_label(self) -> &'static str {
+        match self {
+            Self::TransportStopped => "audio_pipeline.transport_stopped",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum AudioIngressError {
+    #[error("The bounded audio queue is full.")]
+    Backpressure,
+    #[error("The audio pipeline is closed.")]
+    Closed,
+}
+
+/// Cloneable, synchronous ingress for native audio callbacks. `try_send`
+/// performs no await and holds no mutex; a full queue rejects the newest
+/// buffer and permanently closes this generation's ingress.
+#[derive(Clone)]
+pub struct AudioIngress {
+    tx: mpsc::Sender<Vec<u8>>,
+    failed: Arc<AtomicBool>,
+    accepting: Arc<AtomicBool>,
+}
+
+impl AudioIngress {
+    pub fn try_send(&self, data: Vec<u8>) -> Result<(), AudioIngressError> {
+        if !self.accepting.load(Ordering::SeqCst) {
+            return Err(AudioIngressError::Closed);
+        }
+        match self.tx.try_send(data) {
+            Ok(()) => Ok(()),
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                self.accepting.store(false, Ordering::SeqCst);
+                if !self.failed.swap(true, Ordering::SeqCst) {
+                    Err(AudioIngressError::Backpressure)
+                } else {
+                    Err(AudioIngressError::Closed)
+                }
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                self.accepting.store(false, Ordering::SeqCst);
+                self.failed.store(true, Ordering::SeqCst);
+                Err(AudioIngressError::Closed)
+            }
+        }
+    }
+}
+
 pub struct AudioSendPipeline {
     tx: Mutex<Option<mpsc::Sender<Vec<u8>>>>,
     failed: Arc<AtomicBool>,
-    accepting: AtomicBool,
-    on_error: Arc<dyn Fn(String) + Send + Sync>,
+    accepting: Arc<AtomicBool>,
     worker: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl AudioSendPipeline {
-    pub fn spawn<F, Fut>(send_audio: F, on_error: impl Fn(String) + Send + Sync + 'static) -> Self
+    pub fn spawn<F, Fut, E>(
+        send_audio: F,
+        on_error: impl Fn(AudioPipelineFailure) + Send + Sync + 'static,
+    ) -> Self
     where
         F: Fn(Vec<u8>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<(), String>> + Send,
+        Fut: Future<Output = Result<(), E>> + Send + 'static,
+        E: Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<Vec<u8>>(QUEUE_CAPACITY);
         let failed = Arc::new(AtomicBool::new(false));
         let failed_worker = failed.clone();
+        let accepting = Arc::new(AtomicBool::new(true));
+        let accepting_worker = Arc::clone(&accepting);
         let on_error = Arc::new(on_error);
         let on_error_worker = on_error.clone();
 
@@ -59,12 +120,11 @@ impl AudioSendPipeline {
                             pipeline_log!("audio send blockedMs={} bytes={}", send_ms, bytes);
                         }
                     }
-                    Err(error) => {
-                        pipeline_log!("audio send failed error={}", error);
+                    Err(_) => {
+                        accepting_worker.store(false, Ordering::SeqCst);
+                        pipeline_log!("audio send failed label=audio_pipeline.transport_stopped");
                         if !failed_worker.swap(true, Ordering::SeqCst) {
-                            on_error_worker(
-                                "Audio streaming fell behind. mimi is reconnecting.".into(),
-                            );
+                            on_error_worker(AudioPipelineFailure::TransportStopped);
                         }
                         return;
                     }
@@ -75,32 +135,17 @@ impl AudioSendPipeline {
         Self {
             tx: Mutex::new(Some(tx)),
             failed,
-            accepting: AtomicBool::new(true),
-            on_error,
+            accepting,
             worker: Mutex::new(Some(worker)),
         }
     }
 
-    /// Enqueues a PCM buffer; when the bounded queue is full, the newest
-    /// buffer is dropped and the pipeline reports the fell-behind error once.
-    pub fn enqueue(&self, data: Vec<u8>) {
-        if !self.accepting.load(Ordering::SeqCst) {
-            return;
-        }
-        let sender = self.tx.lock().unwrap();
-        let Some(sender) = sender.as_ref() else {
-            return;
-        };
-        match sender.try_send(data) {
-            Ok(()) => {}
-            Err(mpsc::error::TrySendError::Full(_)) => {
-                pipeline_log!("audio queue dropped newest buffer");
-                if !self.failed.swap(true, Ordering::SeqCst) {
-                    (self.on_error)("Audio streaming fell behind. mimi is reconnecting.".into());
-                }
-            }
-            Err(mpsc::error::TrySendError::Closed(_)) => {}
-        }
+    pub fn ingress(&self) -> Option<AudioIngress> {
+        self.tx.lock().unwrap().as_ref().map(|tx| AudioIngress {
+            tx: tx.clone(),
+            failed: Arc::clone(&self.failed),
+            accepting: Arc::clone(&self.accepting),
+        })
     }
 
     /// Stops accepting new buffers, closes the channel, and lets the worker
@@ -164,13 +209,15 @@ mod tests {
                 let sent = Arc::clone(&sent_by_worker);
                 async move {
                     sent.fetch_add(1, Ordering::SeqCst);
-                    Ok(())
+                    Ok::<(), ()>(())
                 }
             },
             |_| {},
         );
-        pipeline.enqueue(vec![1, 0]);
-        pipeline.enqueue(vec![2, 0]);
+        let ingress = pipeline.ingress().unwrap();
+        ingress.try_send(vec![1, 0]).unwrap();
+        ingress.try_send(vec![2, 0]).unwrap();
+        drop(ingress);
 
         assert!(pipeline.finish(Duration::from_millis(200)).await);
         assert_eq!(sent.load(Ordering::SeqCst), 2);
@@ -181,11 +228,13 @@ mod tests {
         let pipeline = AudioSendPipeline::spawn(
             |_data| async move {
                 std::future::pending::<()>().await;
-                Ok(())
+                Ok::<(), ()>(())
             },
             |_| {},
         );
-        pipeline.enqueue(vec![1, 0]);
+        let ingress = pipeline.ingress().unwrap();
+        ingress.try_send(vec![1, 0]).unwrap();
+        drop(ingress);
 
         let started = tokio::time::Instant::now();
         assert!(!pipeline.finish(Duration::from_millis(30)).await);
@@ -194,9 +243,53 @@ mod tests {
 
     #[tokio::test]
     async fn graceful_finish_reports_a_cancelled_worker_as_failure() {
-        let pipeline = AudioSendPipeline::spawn(|_data| async move { Ok(()) }, |_| {});
+        let pipeline = AudioSendPipeline::spawn(|_data| async move { Ok::<(), ()>(()) }, |_| {});
         pipeline.worker.lock().unwrap().as_ref().unwrap().abort();
 
         assert!(!pipeline.finish(Duration::from_millis(200)).await);
+    }
+
+    #[tokio::test]
+    async fn native_ingress_is_non_blocking_and_fails_closed_when_full() {
+        let pipeline = AudioSendPipeline::spawn(
+            |_data| async move {
+                std::future::pending::<()>().await;
+                Ok::<(), ()>(())
+            },
+            |_| {},
+        );
+        let ingress = pipeline.ingress().unwrap();
+        assert_eq!(ingress.try_send(vec![0, 0]), Ok(()));
+
+        let mut accepted = 1;
+        while ingress.try_send(vec![0, 0]) == Ok(()) {
+            accepted += 1;
+            assert!(accepted <= QUEUE_CAPACITY + 1);
+        }
+
+        assert!(accepted <= QUEUE_CAPACITY + 1);
+        assert_eq!(ingress.try_send(vec![0, 0]), Err(AudioIngressError::Closed));
+        pipeline.stop();
+    }
+
+    #[tokio::test]
+    async fn queue_backpressure_is_reported_exactly_once_by_ingress() {
+        let pipeline = AudioSendPipeline::spawn(
+            |_data| async move {
+                std::future::pending::<()>().await;
+                Ok::<(), ()>(())
+            },
+            |_| {},
+        );
+        let ingress = pipeline.ingress().unwrap();
+        let mut backpressure_count = 0;
+        for _ in 0..QUEUE_CAPACITY + 4 {
+            if ingress.try_send(vec![0, 0]) == Err(AudioIngressError::Backpressure) {
+                backpressure_count += 1;
+            }
+        }
+
+        assert_eq!(backpressure_count, 1);
+        pipeline.stop();
     }
 }

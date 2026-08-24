@@ -289,9 +289,6 @@ pub enum SubtitleEvent {
         source: String,
         translation: String,
     },
-    /// Removes the last confirmed history pair so a provisional local commit
-    /// can be replaced by the authoritative server final for the same sentence.
-    RevokeLastConfirmed,
     Clear,
 }
 

@@ -1,5 +1,6 @@
 //! OpenAI Realtime Translation WebSocket client.
 
+use crate::clients::provider_events::ProviderEventSender;
 use crate::core::models::TargetLanguage;
 use crate::core::openai_transcript_committer::OpenAITranscriptPairCommitter;
 use crate::core::protocols::live_translate::LiveTranslateServerEvent;
@@ -12,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, watch, Mutex, Notify};
+use tokio::sync::{watch, Mutex, Notify};
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
@@ -71,14 +72,14 @@ pub struct OpenAIRealtimeClient {
     endpoint: url::Url,
     api_key: String,
     target_language: TargetLanguage,
-    events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
+    events: ProviderEventSender,
 }
 
 impl OpenAIRealtimeClient {
     pub fn new(
         api_key: &str,
         target_language: TargetLanguage,
-        events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
+        events: ProviderEventSender,
     ) -> Result<Self, OpenAIRealtimeClientError> {
         let endpoint = OpenAIRealtimeEndpoint::url()
             .map_err(|_| OpenAIRealtimeClientError::TransportFailure)?;
@@ -88,7 +89,7 @@ impl OpenAIRealtimeClient {
     fn with_endpoint(
         api_key: &str,
         target_language: TargetLanguage,
-        events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
+        events: ProviderEventSender,
         endpoint: url::Url,
     ) -> Result<Self, OpenAIRealtimeClientError> {
         let api_key = api_key.trim();
@@ -409,7 +410,7 @@ fn take_padded_audio_message(
 struct ReceiveContext {
     inner: Arc<Inner>,
     stream: futures_util::stream::SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
+    events: ProviderEventSender,
     target_language: TargetLanguage,
     setup_event_id: String,
     setup: watch::Sender<SetupState>,
@@ -590,6 +591,7 @@ fn emit_if_current(context: &ReceiveContext, event: LiveTranslateServerEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::clients::provider_events::{provider_event_channel, ProviderEventReceiver};
     use base64::Engine;
     use futures_util::{SinkExt, StreamExt};
     use tokio::net::TcpListener;
@@ -600,10 +602,7 @@ mod tests {
             ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
             + Send
             + 'static,
-    ) -> (
-        OpenAIRealtimeClient,
-        mpsc::UnboundedReceiver<LiveTranslateServerEvent>,
-    ) {
+    ) -> (OpenAIRealtimeClient, ProviderEventReceiver) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         tokio::spawn(async move {
@@ -611,7 +610,7 @@ mod tests {
             let socket = tokio_tungstenite::accept_async(stream).await.unwrap();
             server(socket).await;
         });
-        let (events, receiver) = mpsc::unbounded_channel();
+        let (events, receiver) = provider_event_channel();
         let endpoint = url::Url::parse(&format!("ws://{address}/realtime")).unwrap();
         let client = OpenAIRealtimeClient::with_endpoint(
             "sk-test-not-real",

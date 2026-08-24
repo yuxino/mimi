@@ -4,8 +4,11 @@
 //! The manager is always shared behind `Arc<SessionManager>`; spawned tasks
 //! hold clones of the same Arc so they observe one piece of session state.
 
-use crate::audio::send_pipeline::AudioSendPipeline;
-use crate::audio::{AudioCaptureFormat, SystemAudioCapture};
+use crate::audio::send_pipeline::{AudioPipelineFailure, AudioSendPipeline};
+use crate::audio::{
+    AudioCaptureFormat, CaptureFailureSender, SystemAudioCapture, SystemAudioCaptureFailure,
+};
+use crate::clients::provider_events::provider_event_channel;
 use crate::clients::translation_client::TranslationClient;
 use crate::core::configuration::LiveTranslationConfiguration;
 use crate::core::models::{SessionStatus, SourceLanguage, TranslationMode};
@@ -21,7 +24,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{mpsc, Mutex as TokioMutex, Notify, OwnedMutexGuard};
+use tokio::sync::{Mutex as TokioMutex, Notify, OwnedMutexGuard};
 use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,6 +56,7 @@ pub struct SessionStateEvent {
 
 const NO_GENERATION: u64 = 0;
 const SESSION_START_CANCELLED: &str = "The session start was superseded by a newer request.";
+const RECOVERY_ATTEMPTS: usize = 4;
 
 struct LifecycleOperationGuard {
     count: Arc<AtomicUsize>,
@@ -257,6 +261,22 @@ fn clear_recovery_atoms(is_recovering: &AtomicBool, retry_generation: &AtomicU64
     is_recovering.store(false, Ordering::SeqCst);
 }
 
+/// Bounded exponential recovery delay with deterministic per-generation
+/// jitter. Determinism keeps lifecycle tests reliable while preventing two
+/// mimi instances from reconnecting in lockstep after a shared outage.
+fn recovery_delay(attempt: usize, generation: u64) -> Duration {
+    if attempt == 0 {
+        return Duration::ZERO;
+    }
+    let exponent = u32::try_from(attempt.saturating_sub(1)).unwrap_or(u32::MAX);
+    let base_ms = 500_u64.saturating_mul(2_u64.saturating_pow(exponent.min(3)));
+    let mixed = generation
+        .wrapping_add((attempt as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+        .wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    let jitter_ms = mixed % (base_ms / 4 + 1);
+    Duration::from_millis(base_ms + jitter_ms)
+}
+
 fn generation_accepts_event(
     active_generation: u64,
     stopping_tail_generation: u64,
@@ -267,6 +287,13 @@ fn generation_accepts_event(
         && (active_generation == generation
             || (stopping_tail_generation == generation
                 && matches!(event, LiveTranslateServerEvent::SubtitleFinalPair { .. })))
+}
+
+fn provider_error_is_retryable(code: &str) -> bool {
+    matches!(
+        code,
+        "transport_error" | "provider_event_backlog_overflow" | "translation_backlog_overflow"
+    )
 }
 
 fn clear_task_slot_if_id(
@@ -441,6 +468,7 @@ pub struct SessionManager {
     /// Clears `is_translation_pending` so the UI does not sit on
     /// "正在翻译" forever; the shown draft/history is untouched.
     translation_timeout_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+    translation_timeout_task_id: Arc<AtomicU64>,
     /// Explicit lifecycle operations and settings mutations share this lock,
     /// eliminating check-then-mutate races around credential/profile reads.
     lifecycle_lock: Arc<TokioMutex<()>>,
@@ -484,6 +512,7 @@ impl SessionManager {
             pump_task: Arc::new(Mutex::new(None)),
             pump_generation: Arc::new(AtomicU64::new(NO_GENERATION)),
             translation_timeout_task: Arc::new(Mutex::new(None)),
+            translation_timeout_task_id: Arc::new(AtomicU64::new(NO_GENERATION)),
             lifecycle_lock: Arc::new(TokioMutex::new(())),
             lifecycle_operations: Arc::new(AtomicUsize::new(0)),
             lifecycle_sequence: Arc::new(AtomicU64::new(0)),
@@ -615,7 +644,7 @@ impl SessionManager {
         let configuration = match self.settings.configuration() {
             Ok(configuration) => configuration,
             Err(error) => {
-                pipeline_log!("session settings failed error={}", error);
+                pipeline_log!("session settings failed label=settings_configuration");
                 if self.invalidate_generation(request_generation) {
                     self.controller.lock().unwrap().did_fail(error.clone());
                     self.publish_state();
@@ -682,7 +711,7 @@ impl SessionManager {
                 .connect_and_listen(configuration.clone(), generation)
                 .await;
             if let Err(error) = result {
-                pipeline_log!("session establish failed error={}", error);
+                pipeline_log!("session establish failed label=provider_or_capture_setup");
                 if !self.is_generation_current(generation) {
                     self.cleanup_generation_without_pump(generation).await;
                     return Err(SESSION_START_CANCELLED.into());
@@ -737,9 +766,14 @@ impl SessionManager {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send>> {
         Box::pin(async move {
             // Create the client and consume its events through this manager.
-            let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-            let new_client = TranslationClient::new(&configuration, event_tx)
-                .map_err(|error| error.to_string())?;
+            let (event_tx, mut event_rx) = provider_event_channel();
+            let new_client = TranslationClient::new(&configuration, event_tx).map_err(|error| {
+                pipeline_log!(
+                    "provider client creation failed label={}",
+                    error.diagnostic_label()
+                );
+                error.to_string()
+            })?;
             self.ensure_generation_current(generation)?;
             self.install_client(generation, new_client)?;
 
@@ -776,13 +810,42 @@ impl SessionManager {
             }
             pipeline_log!("asr websocket connected");
 
-            // Start system-audio capture feeding the bounded send pipeline.
-            let (audio_tx, mut audio_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-            let audio_error_tx = self.capture_error_channel(generation);
+            // Create the sole bounded audio queue before capture starts. The
+            // native callback writes directly to this synchronous ingress;
+            // there is no unbounded bridge ahead of the network sender.
             let audio_format = AudioCaptureFormat::pcm16_mono(
                 configuration.provider.capabilities().input_sample_rate_hz,
             )
             .map_err(|error| error.to_string())?;
+            let send_manager = Arc::clone(&self);
+            let on_error_self = Arc::clone(&self);
+            let pipeline = Arc::new(AudioSendPipeline::spawn(
+                move |data| {
+                    let manager = Arc::clone(&send_manager);
+                    Box::pin(async move {
+                        let client = manager.client_for_generation(generation);
+                        match client {
+                            Some(client) => client.send_audio(&data).await.map_err(|_| ()),
+                            None => Err(()),
+                        }
+                    })
+                },
+                move |failure| {
+                    let manager = Arc::clone(&on_error_self);
+                    tokio::spawn(async move {
+                        manager
+                            .handle_audio_transport_failure(generation, failure)
+                            .await;
+                    });
+                },
+            ));
+            let audio_ingress = pipeline
+                .ingress()
+                .ok_or_else(|| "The bounded audio pipeline is unavailable.".to_string())?;
+            self.ensure_generation_current(generation)?;
+            self.install_pipeline(generation, Arc::clone(&pipeline))?;
+
+            let audio_failure_tx = self.capture_failure_channel(generation);
             self.ensure_generation_current(generation)?;
             self.capture_generation
                 .compare_exchange(
@@ -798,7 +861,7 @@ impl SessionManager {
             match self
                 .run_while_generation_current(
                     generation,
-                    capture.start(audio_tx, audio_error_tx, audio_format),
+                    capture.start(audio_ingress, audio_failure_tx, audio_format),
                 )
                 .await
             {
@@ -822,40 +885,6 @@ impl SessionManager {
                 return Err(error);
             }
             pipeline_log!("audio capture started");
-
-            // The send pipeline serializes PCM buffers onto the socket.
-            let send_manager = Arc::clone(&self);
-            let on_error_self = Arc::clone(&self);
-            let pipeline = Arc::new(AudioSendPipeline::spawn(
-                move |data| {
-                    let manager = Arc::clone(&send_manager);
-                    Box::pin(async move {
-                        let client = manager.client_for_generation(generation);
-                        match client {
-                            Some(client) => {
-                                client.send_audio(&data).await.map_err(|e| e.to_string())
-                            }
-                            None => Err("The live translation session is not connected.".into()),
-                        }
-                    })
-                },
-                move |message| {
-                    let manager = Arc::clone(&on_error_self);
-                    tokio::spawn(async move {
-                        manager
-                            .handle_audio_transport_failure(generation, message)
-                            .await;
-                    });
-                },
-            ));
-            self.ensure_generation_current(generation)?;
-            self.install_pipeline(generation, Arc::clone(&pipeline))?;
-
-            tokio::spawn(async move {
-                while let Some(data) = audio_rx.recv().await {
-                    pipeline.enqueue(data);
-                }
-            });
 
             self.commit_listening(generation)?;
             self.publish_state();
@@ -1103,7 +1132,7 @@ impl SessionManager {
             },
         );
         // Broadcast immediately: the reconnect below can take seconds, and
-        // every window (including the language popover) must see the new
+        // every window (including the overlay control) must see the new
         // selection right away.
         self.publish_settings();
         if self.is_paused() {
@@ -1248,7 +1277,7 @@ impl SessionManager {
         }
 
         if let LiveTranslateServerEvent::Error { code, message } = &event {
-            if code == "transport_error" {
+            if provider_error_is_retryable(code) {
                 let _teardown = self.begin_teardown_operation();
                 let _operation = self.begin_lifecycle_operation();
                 let recovery_owns_attempt = self.is_recovering.load(Ordering::SeqCst);
@@ -1295,7 +1324,7 @@ impl SessionManager {
             self.cancel_translation_timeout();
         }
         if matches!(event, LiveTranslateServerEvent::TranslationStarted) {
-            self.arm_translation_timeout();
+            self.arm_translation_timeout(generation);
         }
 
         let is_terminal = matches!(
@@ -1311,13 +1340,15 @@ impl SessionManager {
         self.publish_state();
 
         if is_terminal {
-            // Content-free: log only the machine-readable code, never the
-            // server's free-text message.
-            let code = match &event {
-                LiveTranslateServerEvent::Error { code, .. } => code.as_str(),
-                _ => "",
+            // Provider error codes are not universally trustworthy (some
+            // protocols carry arbitrary server strings). Keep diagnostics on
+            // a fixed local label just like free-text messages.
+            let label = match &event {
+                LiveTranslateServerEvent::Error { .. } => "provider_terminal_error",
+                LiveTranslateServerEvent::SessionFinished => "session_finished",
+                _ => "terminal_event",
             };
-            pipeline_log!("session terminal error code={code}");
+            pipeline_log!("session terminal event label={label}");
             let _lifecycle = Arc::clone(&self.lifecycle_lock).lock_owned().await;
             self.stop_health_checks().await;
             self.cancel_recovery().await;
@@ -1333,40 +1364,74 @@ impl SessionManager {
     /// then waits for the server's `response.text.done`; if the audio stops
     /// mid-sentence the server may never finalize, so without this the UI
     /// would stay pending forever. The shown subtitle is left untouched.
-    fn arm_translation_timeout(self: &Arc<Self>) {
-        self.cancel_translation_timeout();
+    fn arm_translation_timeout(self: &Arc<Self>, generation: u64) {
+        // Install/cancel under one slot lock. Otherwise a concurrent cancel
+        // can run after `spawn` but before the handle is stored, leaving a
+        // detached stale handle in the slot even though its ownership id was
+        // already invalidated.
+        let mut slot = self.translation_timeout_task.lock().unwrap();
+        if let Some(task) = slot.take() {
+            task.abort();
+        }
+        let task_id = self.next_background_task_id();
+        self.translation_timeout_task_id
+            .store(task_id, Ordering::SeqCst);
         let this = Arc::clone(self);
         let task = tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+            if !this.is_generation_current(generation)
+                || !this.clear_translation_timeout_task_if_id(task_id)
+            {
+                return;
+            }
             pipeline_log!("translation pending timed out; clearing");
             this.controller.lock().unwrap().clear_translation_pending();
             this.publish_state();
         });
-        *self.translation_timeout_task.lock().unwrap() = Some(task);
+        *slot = Some(task);
     }
 
     fn cancel_translation_timeout(self: &Arc<Self>) {
-        if let Some(task) = self.translation_timeout_task.lock().unwrap().take() {
+        let mut slot = self.translation_timeout_task.lock().unwrap();
+        self.translation_timeout_task_id
+            .store(NO_GENERATION, Ordering::SeqCst);
+        if let Some(task) = slot.take() {
             task.abort();
         }
     }
 
-    async fn handle_capture_failure(self: &Arc<Self>, generation: u64, error: String) {
-        let _teardown = self.begin_teardown_operation();
-        let _operation = self.begin_lifecycle_operation();
-        if self.is_paused() || !self.invalidate_generation(generation) {
-            return;
-        }
-        pipeline_log!("audio capture failed error={}", error);
-        self.controller.lock().unwrap().did_fail(error);
-        self.publish_state();
-        let _lifecycle = Arc::clone(&self.lifecycle_lock).lock_owned().await;
-        self.stop_health_checks().await;
-        self.cleanup_generation(generation).await;
-        self.clear_active_settings_for_generation(generation);
+    async fn handle_capture_failure(
+        self: &Arc<Self>,
+        generation: u64,
+        failure: SystemAudioCaptureFailure,
+    ) {
+        self.handle_recoverable_runtime_failure(
+            generation,
+            failure.to_string(),
+            failure.diagnostic_label(),
+        )
+        .await;
     }
 
-    async fn handle_audio_transport_failure(self: &Arc<Self>, generation: u64, message: String) {
+    async fn handle_audio_transport_failure(
+        self: &Arc<Self>,
+        generation: u64,
+        failure: AudioPipelineFailure,
+    ) {
+        self.handle_recoverable_runtime_failure(
+            generation,
+            failure.to_string(),
+            failure.diagnostic_label(),
+        )
+        .await;
+    }
+
+    async fn handle_recoverable_runtime_failure(
+        self: &Arc<Self>,
+        generation: u64,
+        message: String,
+        diagnostic_label: &'static str,
+    ) {
         let _teardown = self.begin_teardown_operation();
         let _operation = self.begin_lifecycle_operation();
         if self.is_paused() || self.active_settings.lock().unwrap().is_none() {
@@ -1388,7 +1453,7 @@ impl SessionManager {
             }
             return;
         }
-        pipeline_log!("audio transport failed error={}", message);
+        pipeline_log!("runtime stream failed label={}", diagnostic_label);
         self.controller.lock().unwrap().begin_connecting();
         self.publish_state();
         let _lifecycle = Arc::clone(&self.lifecycle_lock).lock_owned().await;
@@ -1448,7 +1513,10 @@ impl SessionManager {
                 {
                     return false;
                 }
-                pipeline_log!("connection health failed error={}", error);
+                pipeline_log!(
+                    "connection health failed label={}",
+                    error.diagnostic_label()
+                );
                 self.clear_health_task_if_id(task_id);
                 if self.invalidate_generation(generation) {
                     self.queue_recovery(generation, error.to_string()).await;
@@ -1500,9 +1568,16 @@ impl SessionManager {
 
         let mut recovered = false;
         let mut recovery_epoch = recovery_generation;
-        for (attempt, delay) in [0u64, 1].iter().enumerate() {
-            pipeline_log!("session recovery attempt={}", attempt + 1);
-            tokio::time::sleep(Duration::from_secs(*delay)).await;
+        for attempt in 0..RECOVERY_ATTEMPTS {
+            let delay = recovery_delay(attempt, failed_generation);
+            pipeline_log!(
+                "session recovery attempt={} delayMs={}",
+                attempt + 1,
+                delay.as_millis()
+            );
+            if !delay.is_zero() {
+                tokio::time::sleep(delay).await;
+            }
             if self.active_settings.lock().unwrap().is_none() {
                 clear_recovery_atoms(&self.is_recovering, &self.recovery_retry_generation);
                 return;
@@ -1600,15 +1675,16 @@ impl SessionManager {
         }
     }
 
-    /// Channel through which the audio capture reports fatal errors.
-    fn capture_error_channel(self: &Arc<Self>, generation: u64) -> mpsc::UnboundedSender<String> {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+    /// Capacity-one channel through which a native callback reports its first
+    /// fatal failure without blocking the real-time audio thread.
+    fn capture_failure_channel(self: &Arc<Self>, generation: u64) -> CaptureFailureSender {
+        let (tx, mut rx) = CaptureFailureSender::channel();
         let self_arc = Arc::clone(self);
         tokio::spawn(async move {
-            while let Some(error) = rx.recv().await {
+            if let Some(failure) = rx.recv().await {
                 self_arc
                     .clone()
-                    .handle_capture_failure(generation, error)
+                    .handle_capture_failure(generation, failure)
                     .await;
             }
         });
@@ -1679,6 +1755,14 @@ impl SessionManager {
 
     fn clear_recovery_task_if_id(&self, task_id: u64) -> bool {
         clear_task_slot_if_id(&self.recovery_task, &self.recovery_task_id, task_id)
+    }
+
+    fn clear_translation_timeout_task_if_id(&self, task_id: u64) -> bool {
+        clear_task_slot_if_id(
+            &self.translation_timeout_task,
+            &self.translation_timeout_task_id,
+            task_id,
+        )
     }
 
     fn is_lifecycle_request_current(&self, generation: u64) -> bool {
@@ -1957,7 +2041,7 @@ impl SessionManager {
     // MARK: state publishing
 
     /// Builds the current session state snapshot without emitting it (used by
-    /// windows that boot after the last broadcast, e.g. the language popover).
+    /// windows that boot after the last broadcast, e.g. the overlay control).
     pub fn current_state_event(&self) -> SessionStateEvent {
         let state = self.controller.lock().unwrap().state.clone();
         let mut event = SessionStateEvent::from(&state);
@@ -2007,8 +2091,12 @@ impl SessionManager {
     fn publish_state_now(self: &Arc<Self>) {
         let event = self.current_state_event();
         let is_active = event.is_active;
+        let is_collapsed = event.is_overlay_collapsed;
+        let preferences = self.settings.preferences();
+        let click_through =
+            preferences.overlay_locked || preferences.subtitle_blends_with_background;
         let _ = self.app.emit("session-state", event);
-        OverlayWindowManager::sync_visibility(&self.app, is_active);
+        OverlayWindowManager::sync_presentation(&self.app, is_active, is_collapsed, click_through);
     }
 
     /// Broadcasts the current settings snapshot to every window (used after
@@ -2042,6 +2130,36 @@ impl SessionManager {
 #[cfg(test)]
 mod lifecycle_tests {
     use super::*;
+
+    #[test]
+    fn recovery_backoff_is_bounded_exponential_and_deterministic() {
+        let generation = 42;
+        assert_eq!(recovery_delay(0, generation), Duration::ZERO);
+
+        for (attempt, base_ms) in [(1, 500_u128), (2, 1_000), (3, 2_000)] {
+            let first = recovery_delay(attempt, generation);
+            let second = recovery_delay(attempt, generation);
+            assert_eq!(first, second);
+            assert!(first.as_millis() >= base_ms);
+            assert!(first.as_millis() <= base_ms + base_ms / 4);
+        }
+
+        assert!(recovery_delay(2, generation) > recovery_delay(1, generation));
+        assert!(recovery_delay(3, generation) > recovery_delay(2, generation));
+    }
+
+    #[test]
+    fn only_transient_transport_and_bounded_queue_errors_recover() {
+        for code in [
+            "transport_error",
+            "provider_event_backlog_overflow",
+            "translation_backlog_overflow",
+        ] {
+            assert!(provider_error_is_retryable(code));
+        }
+        assert!(!provider_error_is_retryable("invalid_api_key"));
+        assert!(!provider_error_is_retryable("invalid_configuration"));
+    }
 
     #[test]
     fn terminal_after_setup_ack_invalidates_startup_before_listening_commit() {

@@ -132,10 +132,6 @@ pub enum LiveTranslateServerEvent {
         code: String,
         message: String,
     },
-    /// Client-internal signal: the last confirmed subtitle entry is a
-    /// provisional local commit and should be revoked before the authoritative
-    /// server final for the same sentence is committed.
-    SubtitleRevoked,
     Ignored {
         kind: String,
     },

@@ -1,47 +1,133 @@
-//! High-quality translation pipeline: Audio 3.0 recognition + Qwen-MT
-//! translation with draft stabilization, translation memory, queue bounds,
-//! and provisional-commit replacement.
+//! High-quality translation pipeline: Audio 3.0 recognition + Qwen-MT.
+//!
+//! Replaceable ASR drafts use a latest-only preview lane. Only authoritative
+//! server finals (plus a bounded session-finish fallback) enter the durable,
+//! serial final-translation queue.
 
 use crate::clients::audio3_client::Audio3ASRClient;
+use crate::clients::provider_events::{provider_event_channel, ProviderEventSender};
 use crate::clients::qwen_mt_client::QwenMTClient;
-use crate::core::committer::{final_covers_chunk, ASRDraftCommitter, FinishOutcome};
+use crate::core::committer::ASRDraftCommitter;
 use crate::core::models::{SourceLanguage, TargetLanguage};
 use crate::core::protocols::live_translate::LiveTranslateServerEvent;
 use crate::core::protocols::qwen_mt::{QwenMTClientError, QwenMTMemoryPair, QwenMTModel};
 use crate::core::subtitle_reducer::trim;
 use crate::pipeline_log;
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+
+const MAX_FINAL_QUEUE_DEPTH: usize = 3;
+const MAX_FINAL_REQUEST_AGE: Duration = Duration::from_secs(45);
+const MAX_PREVIEW_REQUEST_AGE: Duration = Duration::from_secs(12);
+const MAX_TRANSLATION_ATTEMPTS: usize = 3;
+const OVERLOAD_ERROR_CODE: &str = "translation_backlog_overflow";
+const OVERLOAD_ERROR_MESSAGE: &str = "Translation fell behind live audio. mimi is reconnecting.";
+
+type PartialHandler = Arc<dyn Fn(String) + Send + Sync>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FinalBoundary {
+    ServerFinal,
+    SessionFinish,
+}
+
+impl FinalBoundary {
+    fn label(self) -> &'static str {
+        match self {
+            Self::ServerFinal => "server-final",
+            Self::SessionFinish => "session-finish",
+        }
+    }
+}
 
 #[derive(Clone)]
 struct TranslationRequest {
     text: String,
     language: Option<String>,
-    /// How the source text was confirmed: "server-final" (authoritative),
-    /// "stable-draft" (provisional local commit), "maximum-wait" or
-    /// "session-finish" (last-resort flushes). Provisional items may be
-    /// coalesced or shed under backlog; authoritative ones never are.
-    boundary: &'static str,
+    boundary: FinalBoundary,
+    utterance_revision: u64,
     enqueued_at: tokio::time::Instant,
+}
+
+impl TranslationRequest {
+    fn key(&self) -> FinalRequestKey {
+        FinalRequestKey {
+            text: self.text.clone(),
+            boundary: self.boundary,
+            utterance_revision: self.utterance_revision,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct FinalRequestKey {
+    text: String,
+    boundary: FinalBoundary,
+    utterance_revision: u64,
+}
+
+impl FinalRequestKey {
+    fn matches(&self, request: &TranslationRequest) -> bool {
+        self.text == request.text
+            && (self.utterance_revision == request.utterance_revision
+                || self.boundary == FinalBoundary::SessionFinish
+                || request.boundary == FinalBoundary::SessionFinish)
+    }
+}
+
+struct TaskSlot {
+    id: u64,
+    handle: JoinHandle<()>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DraftTimerKind {
+    Stable,
+    Maximum,
+}
+
+enum EnqueueOutcome {
+    Queued,
+    Overloaded,
+    DeferredOverload,
 }
 
 struct Inner {
     committer: ASRDraftCommitter,
     latest_draft_language: Option<String>,
+    draft_revision: u64,
+    /// `(text, revision_after_final)`. An identical final with no intervening
+    /// draft is a duplicate; the same spoken line after a new draft is not.
+    last_server_final: Option<(String, u64)>,
     final_queue: VecDeque<TranslationRequest>,
+    active_final: Option<FinalRequestKey>,
     translation_memory: Vec<QwenMTMemoryPair>,
-    pending_revoke_count: usize,
-    draft_stability_task: Option<JoinHandle<()>>,
-    draft_maximum_wait_task: Option<JoinHandle<()>>,
-    final_worker: Option<JoinHandle<()>>,
+    draft_stability_task: Option<TaskSlot>,
+    draft_maximum_wait_task: Option<TaskSlot>,
+    preview_task: Option<TaskSlot>,
+    final_worker: Option<TaskSlot>,
     asr_bridge: Option<JoinHandle<()>>,
+    next_task_id: u64,
+    pipeline_failed: bool,
+    final_completion_in_progress: bool,
+    deferred_overload: bool,
     /// Throttles the per-draft diagnostic log (drafts stream several times
     /// per second while speech flows).
     last_draft_log_at: Option<tokio::time::Instant>,
+}
+
+impl Inner {
+    fn final_lane_busy(&self) -> bool {
+        self.final_worker.is_some()
+            || self.active_final.is_some()
+            || !self.final_queue.is_empty()
+            || self.final_completion_in_progress
+    }
 }
 
 #[derive(Clone)]
@@ -50,8 +136,9 @@ pub struct HighQualityTranslationClient {
     mt: Arc<QwenMTClient>,
     source_language: SourceLanguage,
     translates_audio: bool,
-    events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
+    events: ProviderEventSender,
     inner: Arc<Mutex<Inner>>,
+    preview_epoch: Arc<AtomicU64>,
     stable_draft_delay: Duration,
     maximum_wait_delay: Duration,
     streams_finals: bool,
@@ -67,7 +154,7 @@ impl HighQualityTranslationClient {
         stable_draft_delay: Duration,
         maximum_wait_delay: Duration,
         long_incomplete_commit_threshold: usize,
-        events: mpsc::UnboundedSender<LiveTranslateServerEvent>,
+        events: ProviderEventSender,
     ) -> Result<Self, QwenMTClientError> {
         let asr_client = Audio3ASRClient::new(api_key, source_language)
             .map_err(|_| QwenMTClientError::MissingAPIKey)?;
@@ -100,15 +187,23 @@ impl HighQualityTranslationClient {
             inner: Arc::new(Mutex::new(Inner {
                 committer: ASRDraftCommitter::new(long_incomplete_commit_threshold),
                 latest_draft_language: None,
+                draft_revision: 0,
+                last_server_final: None,
                 final_queue: VecDeque::new(),
+                active_final: None,
                 translation_memory: Vec::new(),
-                pending_revoke_count: 0,
                 draft_stability_task: None,
                 draft_maximum_wait_task: None,
+                preview_task: None,
                 final_worker: None,
                 asr_bridge: None,
+                next_task_id: 0,
+                pipeline_failed: false,
+                final_completion_in_progress: false,
+                deferred_overload: false,
                 last_draft_log_at: None,
             })),
+            preview_epoch: Arc::new(AtomicU64::new(0)),
             stable_draft_delay,
             maximum_wait_delay,
             streams_finals,
@@ -117,12 +212,12 @@ impl HighQualityTranslationClient {
 
     /// Connects the recognizer and resets all draft/final workers.
     pub async fn connect(&self) -> Result<(), QwenMTClientError> {
-        self.reset_draft_finalization().await;
+        self.reset_draft_state().await;
         self.cancel_final_translations().await;
         self.disconnect_asr_bridge().await;
 
         let task_id = Uuid::new_v4().simple().to_string();
-        let (asr_tx, mut asr_rx) = mpsc::unbounded_channel();
+        let (asr_tx, mut asr_rx) = provider_event_channel();
         self.asr_client.set_event_sender(asr_tx).await;
         self.asr_client.connect(&task_id).await.map_err(|error| {
             QwenMTClientError::RequestFailed {
@@ -131,7 +226,6 @@ impl HighQualityTranslationClient {
             }
         })?;
 
-        // Bridge ASR events into this pipeline's handler.
         let self_arc = self.clone();
         let bridge = tokio::spawn(async move {
             while let Some(event) = asr_rx.recv().await {
@@ -162,20 +256,17 @@ impl HighQualityTranslationClient {
     }
 
     pub async fn finish(&self) {
-        // Snappy stop: allow ~1s for the ASR teardown plus ~3s for the
-        // in-flight translation; unfinished work is dropped afterwards
-        // instead of blocking the stop for up to 35s.
         self.asr_client.finish(Duration::from_secs(1)).await;
-        self.commit_pending_draft("session-finish").await;
+        self.flush_pending_draft().await;
         self.wait_for_final_translations(Duration::from_secs(3))
             .await;
-        self.reset_draft_finalization().await;
+        self.reset_draft_state().await;
         self.cancel_final_translations().await;
         self.disconnect_asr_bridge().await;
     }
 
     pub async fn disconnect(&self) {
-        self.reset_draft_finalization().await;
+        self.reset_draft_state().await;
         self.cancel_final_translations().await;
         self.asr_client.disconnect().await;
         self.disconnect_asr_bridge().await;
@@ -190,25 +281,22 @@ impl HighQualityTranslationClient {
                 if text.is_empty() {
                     return;
                 }
-                let (uncommitted_text, has_pending) = {
+                let now = tokio::time::Instant::now();
+                let (uncommitted_text, has_pending, revision, log_due) = {
                     let mut inner = self.inner.lock().await;
                     let uncommitted = inner.committer.update_draft(&text);
                     inner.latest_draft_language = language.clone();
+                    next_nonzero(&mut inner.draft_revision);
                     let has_pending = inner.committer.has_pending_text();
-                    (uncommitted, has_pending)
+                    let log_due = inner
+                        .last_draft_log_at
+                        .is_none_or(|at| now.duration_since(at).as_millis() >= 1000);
+                    if log_due {
+                        inner.last_draft_log_at = Some(now);
+                    }
+                    (uncommitted, has_pending, inner.draft_revision, log_due)
                 };
-                // Throttled: drafts stream several times per second while
-                // speech flows; one line per second is enough to see the
-                // pipeline shape without log flood.
-                let now = tokio::time::Instant::now();
-                let log_due = self
-                    .inner
-                    .lock()
-                    .await
-                    .last_draft_log_at
-                    .is_none_or(|at| now.duration_since(at).as_millis() >= 1000);
                 if log_due {
-                    self.inner.lock().await.last_draft_log_at = Some(now);
                     pipeline_log!(
                         "audio3 asr draft length={} pendingLength={} language={}",
                         text.chars().count(),
@@ -221,7 +309,7 @@ impl HighQualityTranslationClient {
                 if !has_pending {
                     return;
                 }
-                self.schedule_draft_finalization().await;
+
                 if !self.translates_audio {
                     self.emit(LiveTranslateServerEvent::SourceDraft {
                         text: uncommitted_text.clone(),
@@ -229,18 +317,7 @@ impl HighQualityTranslationClient {
                     });
                     self.emit(LiveTranslateServerEvent::TranslationDraft(uncommitted_text));
                 } else {
-                    // High-quality mode shows only confirmed finals unless no
-                    // final translation is in flight.
-                    let worker_idle = {
-                        let inner = self.inner.lock().await;
-                        inner.final_worker.is_none() && inner.final_queue.is_empty()
-                    };
-                    if worker_idle {
-                        self.emit(LiveTranslateServerEvent::SourceDraft {
-                            text: uncommitted_text,
-                            language,
-                        });
-                    }
+                    self.schedule_draft_finalization(revision).await;
                 }
             }
             LiveTranslateServerEvent::SourceFinal { text, language } => {
@@ -248,50 +325,23 @@ impl HighQualityTranslationClient {
                 if text.is_empty() {
                     return;
                 }
-                self.cancel_draft_timers().await;
-                self.inner.lock().await.latest_draft_language = None;
-
-                let (uncommitted_text, was_replaced) = {
-                    let mut inner = self.inner.lock().await;
-                    match inner.committer.finish_sentence(&text) {
-                        FinishOutcome::None => (None, false),
-                        FinishOutcome::Appended(new_text) => (Some(new_text), false),
-                        FinishOutcome::Replaced(new_text) => (Some(new_text), true),
-                    }
+                let Some(utterance_revision) = self.prepare_server_final(&text).await else {
+                    pipeline_log!("audio3 asr final deduplicated");
+                    return;
                 };
                 pipeline_log!(
-                    "audio3 asr final length={} pendingLength={} language={} queuedFinals={}",
+                    "audio3 asr final length={} language={} queuedFinals={}",
                     text.chars().count(),
-                    uncommitted_text
-                        .as_ref()
-                        .map(|t| t.chars().count())
-                        .unwrap_or(0),
                     language
                         .as_deref()
                         .unwrap_or(self.source_language.raw_value()),
                     self.inner.lock().await.final_queue.len()
                 );
-                let Some(uncommitted_text) = uncommitted_text else {
-                    pipeline_log!("audio3 asr final deduplicated");
-                    return;
-                };
-                if was_replaced {
-                    pipeline_log!("audio3 asr final superseded provisional");
-                    if self.translates_audio {
-                        // Translated mode commits through the serial final
-                        // worker; revoke there, right before the authoritative
-                        // replacement, so the provisional history entry has
-                        // already landed.
-                        self.inner.lock().await.pending_revoke_count += 1;
-                    } else {
-                        self.emit(LiveTranslateServerEvent::SubtitleRevoked);
-                    }
-                }
-                self.enqueue_confirmed_source(
-                    uncommitted_text,
+                self.enqueue_final(
+                    text,
                     language,
-                    "server-final",
-                    was_replaced,
+                    FinalBoundary::ServerFinal,
+                    utterance_revision,
                 )
                 .await;
             }
@@ -299,235 +349,513 @@ impl HighQualityTranslationClient {
         }
     }
 
-    async fn schedule_draft_finalization(&self) {
+    async fn prepare_server_final(&self, text: &str) -> Option<u64> {
+        let mut inner = self.inner.lock().await;
+        abort_task(&mut inner.draft_stability_task);
+        abort_task(&mut inner.draft_maximum_wait_task);
+        abort_task(&mut inner.preview_task);
+        self.advance_preview_epoch();
+
+        let utterance_revision = inner.draft_revision;
+        let duplicate = inner
+            .last_server_final
+            .as_ref()
+            .is_some_and(|(last, revision)| last == text && *revision == utterance_revision);
+        inner.committer.reset();
+        inner.latest_draft_language = None;
+        if duplicate {
+            return None;
+        }
+
+        next_nonzero(&mut inner.draft_revision);
+        inner.last_server_final = Some((text.to_string(), inner.draft_revision));
+        Some(utterance_revision)
+    }
+
+    // MARK: Replaceable preview lane
+
+    async fn schedule_draft_finalization(&self, revision: u64) {
+        let mut inner = self.inner.lock().await;
+        if inner.pipeline_failed
+            || revision != inner.draft_revision
+            || !inner.committer.has_pending_text()
+            || inner.final_lane_busy()
         {
-            let inner = self.inner.lock().await;
-            if inner.draft_stability_task.is_some() && inner.draft_maximum_wait_task.is_some() {
-                return;
-            }
-        }
-
-        if self.inner.lock().await.draft_stability_task.is_none() {
-            let self_arc = self.clone();
-            let delay = self.stable_draft_delay;
-            let task = tokio::spawn(async move {
-                tokio::time::sleep(delay).await;
-                self_arc.commit_pending_draft("stable-draft").await;
-            });
-            self.inner.lock().await.draft_stability_task = Some(task);
-        }
-
-        if self.inner.lock().await.draft_maximum_wait_task.is_none() {
-            let self_arc = self.clone();
-            let delay = self.maximum_wait_delay;
-            let task = tokio::spawn(async move {
-                tokio::time::sleep(delay).await;
-                self_arc.commit_pending_draft("maximum-wait").await;
-            });
-            self.inner.lock().await.draft_maximum_wait_task = Some(task);
-        }
-    }
-
-    async fn commit_pending_draft(&self, boundary: &'static str) {
-        self.cancel_draft_timers().await;
-        let text = {
-            let mut inner = self.inner.lock().await;
-            if boundary == "maximum-wait" || boundary == "session-finish" {
-                inner.committer.commit_latest_draft(true)
-            } else {
-                inner.committer.commit_complete_sentences()
-            }
-        };
-        let Some(text) = text else { return };
-        let language = self.inner.lock().await.latest_draft_language.clone();
-        pipeline_log!(
-            "audio3 asr local final boundary={} length={} language={}",
-            boundary,
-            text.chars().count(),
-            language
-                .as_deref()
-                .unwrap_or(self.source_language.raw_value())
-        );
-        self.enqueue_confirmed_source(text, language, boundary, false)
-            .await;
-    }
-
-    async fn enqueue_confirmed_source(
-        &self,
-        text: String,
-        language: Option<String>,
-        boundary: &'static str,
-        supersedes_provisional: bool,
-    ) {
-        if !self.translates_audio {
-            self.emit(LiveTranslateServerEvent::SourceFinal {
-                text: text.clone(),
-                language: language.clone(),
-            });
-            self.emit(LiveTranslateServerEvent::TranslationFinal(text));
             return;
         }
 
-        {
+        abort_task(&mut inner.draft_stability_task);
+        let stable_id = next_nonzero(&mut inner.next_task_id);
+        let stable_self = self.clone();
+        let stable_delay = self.stable_draft_delay;
+        let stable_task = tokio::spawn(async move {
+            tokio::time::sleep(stable_delay).await;
+            stable_self
+                .handle_draft_timer(DraftTimerKind::Stable, stable_id, revision)
+                .await;
+        });
+        inner.draft_stability_task = Some(TaskSlot {
+            id: stable_id,
+            handle: stable_task,
+        });
+
+        if inner.draft_maximum_wait_task.is_none() {
+            let maximum_id = next_nonzero(&mut inner.next_task_id);
+            let maximum_self = self.clone();
+            let maximum_delay = self.maximum_wait_delay;
+            let maximum_task = tokio::spawn(async move {
+                tokio::time::sleep(maximum_delay).await;
+                maximum_self
+                    .handle_draft_timer(DraftTimerKind::Maximum, maximum_id, revision)
+                    .await;
+            });
+            inner.draft_maximum_wait_task = Some(TaskSlot {
+                id: maximum_id,
+                handle: maximum_task,
+            });
+        }
+    }
+
+    async fn handle_draft_timer(
+        &self,
+        kind: DraftTimerKind,
+        timer_id: u64,
+        scheduled_revision: u64,
+    ) {
+        let preview = {
             let mut inner = self.inner.lock().await;
-            // Coalesce: a server final that covers the queued local commit
-            // replaces it in place. The provisional was never shown, so one
-            // translation round-trip and one duplicate history row are both
-            // avoided. (When the tail translation already started, the
-            // provisional revoke path handles the replacement instead.)
-            if boundary == "server-final" {
-                if let Some(tail) = inner.final_queue.back_mut() {
-                    if tail.boundary != "server-final" && final_covers_chunk(&text, &tail.text) {
-                        tail.text = text;
-                        tail.language = language;
-                        tail.boundary = boundary;
-                        if supersedes_provisional && inner.pending_revoke_count > 0 {
-                            // The provisional never reached the screen; the
-                            // revoke reserved for it must not fire.
-                            inner.pending_revoke_count -= 1;
-                        }
-                        pipeline_log!("mt plus final coalesced depth={}", inner.final_queue.len());
+            let slot_matches = match kind {
+                DraftTimerKind::Stable => inner
+                    .draft_stability_task
+                    .as_ref()
+                    .is_some_and(|slot| slot.id == timer_id),
+                DraftTimerKind::Maximum => inner
+                    .draft_maximum_wait_task
+                    .as_ref()
+                    .is_some_and(|slot| slot.id == timer_id),
+            };
+            if !slot_matches {
+                return;
+            }
+
+            match kind {
+                DraftTimerKind::Stable => {
+                    drop(inner.draft_stability_task.take());
+                    if scheduled_revision != inner.draft_revision {
                         return;
                     }
                 }
-            }
-            // Shed the oldest still-queued provisional commit once the queue
-            // is deep. Authoritative server finals and last-resort flushes
-            // are never dropped; provisional stable-drafts are almost always
-            // superseded by the server final that follows within a second,
-            // and dropping them keeps latency bounded instead of letting a
-            // speech burst build an ever-growing backlog.
-            const MAX_QUEUE_DEPTH: usize = 3;
-            if inner.final_queue.len() >= MAX_QUEUE_DEPTH {
-                if let Some(position) = inner
-                    .final_queue
-                    .iter()
-                    .position(|request| request.boundary == "stable-draft")
-                {
-                    let shed = inner
-                        .final_queue
-                        .remove(position)
-                        .expect("position comes from the same queue");
-                    pipeline_log!(
-                        "mt plus final shed boundary={} depth={}",
-                        shed.boundary,
-                        inner.final_queue.len()
-                    );
+                DraftTimerKind::Maximum => {
+                    drop(inner.draft_maximum_wait_task.take());
+                    abort_task(&mut inner.draft_stability_task);
                 }
             }
-            inner.final_queue.push_back(TranslationRequest {
-                text,
-                language,
-                boundary,
-                enqueued_at: tokio::time::Instant::now(),
-            });
+
+            if inner.pipeline_failed {
+                return;
+            }
+            if inner.final_lane_busy() {
+                return;
+            }
+            let text = match kind {
+                DraftTimerKind::Stable => inner.committer.preview_complete_sentences(),
+                DraftTimerKind::Maximum => inner.committer.preview_latest_draft(true),
+            };
+            text.map(|text| {
+                (
+                    text,
+                    inner.latest_draft_language.clone(),
+                    inner.draft_revision,
+                    match kind {
+                        DraftTimerKind::Stable => "stable-draft",
+                        DraftTimerKind::Maximum => "maximum-wait",
+                    },
+                )
+            })
+        };
+
+        if let Some((text, language, revision, boundary)) = preview {
             pipeline_log!(
-                "mt plus final enqueued boundary={} depth={}",
+                "mt preview scheduled boundary={} length={} language={}",
                 boundary,
-                inner.final_queue.len()
+                text.chars().count(),
+                language
+                    .as_deref()
+                    .unwrap_or(self.source_language.raw_value())
             );
-        }
-        self.start_final_worker_if_needed().await;
-    }
-
-    async fn cancel_draft_timers(&self) {
-        let mut inner = self.inner.lock().await;
-        if let Some(task) = inner.draft_stability_task.take() {
-            task.abort();
-        }
-        if let Some(task) = inner.draft_maximum_wait_task.take() {
-            task.abort();
+            self.start_preview(text, language, revision).await;
         }
     }
 
-    async fn reset_draft_finalization(&self) {
-        self.cancel_draft_timers().await;
+    async fn start_preview(&self, text: String, language: Option<String>, revision: u64) {
         let mut inner = self.inner.lock().await;
-        inner.committer.reset();
-        inner.latest_draft_language = None;
-        inner.pending_revoke_count = 0;
+        if inner.pipeline_failed
+            || revision != inner.draft_revision
+            || !inner.committer.has_pending_text()
+            || inner.final_lane_busy()
+        {
+            return;
+        }
+
+        abort_task(&mut inner.preview_task);
+        let preview_id = self.advance_preview_epoch();
+        let preview_self = self.clone();
+        let task = tokio::spawn(async move {
+            preview_self.run_preview(preview_id, text, language).await;
+        });
+        inner.preview_task = Some(TaskSlot {
+            id: preview_id,
+            handle: task,
+        });
+    }
+
+    async fn run_preview(&self, preview_id: u64, text: String, language: Option<String>) {
+        if !self.preview_is_current(preview_id) {
+            return;
+        }
+        self.emit(LiveTranslateServerEvent::SourceDraft {
+            text: text.clone(),
+            language: language.clone(),
+        });
+
+        let preview_epoch = Arc::clone(&self.preview_epoch);
+        let events = self.events.clone();
+        let partial_handler: PartialHandler = Arc::new(move |partial| {
+            if preview_epoch.load(Ordering::SeqCst) == preview_id {
+                let _ = events.send(LiveTranslateServerEvent::TranslationDraft(partial));
+            }
+        });
+        let deadline = tokio::time::Instant::now() + MAX_PREVIEW_REQUEST_AGE;
+        let result = self
+            .translate_with_retry(&text, language.as_deref(), deadline, partial_handler)
+            .await;
+
+        if self.preview_is_current(preview_id) {
+            match result {
+                Ok(translation) => {
+                    self.emit(LiveTranslateServerEvent::TranslationDraft(translation));
+                    pipeline_log!("mt preview completed");
+                }
+                Err(error) => {
+                    pipeline_log!("mt preview failed error={}", error.diagnostic_label());
+                }
+            }
+        }
+        self.clear_preview_task(preview_id).await;
+    }
+
+    fn preview_is_current(&self, preview_id: u64) -> bool {
+        self.preview_epoch.load(Ordering::SeqCst) == preview_id
+    }
+
+    fn advance_preview_epoch(&self) -> u64 {
+        let id = self
+            .preview_epoch
+            .fetch_add(1, Ordering::SeqCst)
+            .wrapping_add(1);
+        if id == 0 {
+            self.preview_epoch
+                .fetch_add(1, Ordering::SeqCst)
+                .wrapping_add(1)
+        } else {
+            id
+        }
+    }
+
+    async fn clear_preview_task(&self, preview_id: u64) {
+        let mut inner = self.inner.lock().await;
+        if inner
+            .preview_task
+            .as_ref()
+            .is_some_and(|task| task.id == preview_id)
+        {
+            drop(inner.preview_task.take());
+        }
+    }
+
+    // MARK: Durable final lane
+
+    async fn enqueue_final(
+        &self,
+        text: String,
+        language: Option<String>,
+        boundary: FinalBoundary,
+        utterance_revision: u64,
+    ) {
+        if !self.translates_audio {
+            self.emit(LiveTranslateServerEvent::SubtitleFinalPair {
+                source: text.clone(),
+                language,
+                translation: text,
+            });
+            return;
+        }
+
+        let request = TranslationRequest {
+            text,
+            language,
+            boundary,
+            utterance_revision,
+            enqueued_at: tokio::time::Instant::now(),
+        };
+        let outcome = {
+            let mut inner = self.inner.lock().await;
+            if inner.pipeline_failed {
+                return;
+            }
+
+            if inner
+                .active_final
+                .as_ref()
+                .is_some_and(|active| active.matches(&request))
+            {
+                return;
+            }
+            if let Some(queued) = inner
+                .final_queue
+                .iter_mut()
+                .find(|queued| queued.key().matches(&request))
+            {
+                if boundary == FinalBoundary::ServerFinal {
+                    queued.language = request.language;
+                    queued.boundary = FinalBoundary::ServerFinal;
+                    queued.utterance_revision = request.utterance_revision;
+                }
+                return;
+            }
+
+            if inner.final_queue.len() >= MAX_FINAL_QUEUE_DEPTH {
+                if inner.final_completion_in_progress {
+                    inner.deferred_overload = true;
+                    EnqueueOutcome::DeferredOverload
+                } else {
+                    inner.pipeline_failed = true;
+                    EnqueueOutcome::Overloaded
+                }
+            } else {
+                pipeline_log!(
+                    "mt final enqueued boundary={} depth={}",
+                    boundary.label(),
+                    inner.final_queue.len() + 1
+                );
+                inner.final_queue.push_back(request);
+                EnqueueOutcome::Queued
+            }
+        };
+
+        match outcome {
+            EnqueueOutcome::Queued => self.start_final_worker_if_needed().await,
+            EnqueueOutcome::Overloaded => {
+                self.cancel_replaceable_work().await;
+                pipeline_log!("mt final overload depth={MAX_FINAL_QUEUE_DEPTH}");
+                self.emit_overload_error();
+            }
+            EnqueueOutcome::DeferredOverload => {}
+        }
     }
 
     async fn start_final_worker_if_needed(&self) {
         let mut inner = self.inner.lock().await;
-        if inner.final_worker.is_some() {
+        if inner.pipeline_failed || inner.final_worker.is_some() || inner.final_queue.is_empty() {
             return;
         }
+        let worker_id = next_nonzero(&mut inner.next_task_id);
         let self_arc = self.clone();
         let task = tokio::spawn(async move {
-            self_arc.run_final_worker().await;
+            self_arc.run_final_worker(worker_id).await;
         });
-        inner.final_worker = Some(task);
+        inner.final_worker = Some(TaskSlot {
+            id: worker_id,
+            handle: task,
+        });
     }
 
-    async fn run_final_worker(&self) {
+    async fn run_final_worker(&self, worker_id: u64) {
         loop {
             let request = {
                 let mut inner = self.inner.lock().await;
+                if inner.pipeline_failed {
+                    clear_task_if_id(&mut inner.final_worker, worker_id);
+                    inner.active_final = None;
+                    return;
+                }
                 match inner.final_queue.pop_front() {
-                    Some(request) => request,
+                    Some(request) => {
+                        abort_task(&mut inner.draft_stability_task);
+                        abort_task(&mut inner.draft_maximum_wait_task);
+                        abort_task(&mut inner.preview_task);
+                        self.advance_preview_epoch();
+                        inner.active_final = Some(request.key());
+                        Some(request)
+                    }
                     None => {
-                        inner.final_worker = None;
-                        return;
+                        clear_task_if_id(&mut inner.final_worker, worker_id);
+                        inner.active_final = None;
+                        None
                     }
                 }
             };
+            let Some(request) = request else {
+                self.resume_pending_preview_if_final_lane_idle().await;
+                return;
+            };
 
             let started_at = tokio::time::Instant::now();
+            let queue_age = started_at.saturating_duration_since(request.enqueued_at);
+            if queue_age >= MAX_FINAL_REQUEST_AGE {
+                self.fail_final_worker_overload(worker_id, queue_age).await;
+                return;
+            }
             pipeline_log!(
-                "mt plus final started waitMs={} remaining={}",
-                started_at
-                    .saturating_duration_since(request.enqueued_at)
-                    .as_millis(),
+                "mt final started boundary={} waitMs={} remaining={}",
+                request.boundary.label(),
+                queue_age.as_millis(),
                 self.inner.lock().await.final_queue.len()
             );
             self.emit(LiveTranslateServerEvent::TranslationStarted);
-            self.emit(LiveTranslateServerEvent::SourceFinal {
+            self.emit(LiveTranslateServerEvent::SourceDraft {
                 text: request.text.clone(),
                 language: request.language.clone(),
             });
 
+            let events = self.events.clone();
+            let partial_handler: PartialHandler = Arc::new(move |partial| {
+                let _ = events.send(LiveTranslateServerEvent::TranslationDraft(partial));
+            });
+            let deadline = request.enqueued_at + MAX_FINAL_REQUEST_AGE;
             match self
-                .translate_with_retry(&request.text, request.language.as_deref())
+                .translate_with_retry(
+                    &request.text,
+                    request.language.as_deref(),
+                    deadline,
+                    partial_handler,
+                )
                 .await
             {
                 Ok(translation) => {
-                    {
+                    let should_emit = {
                         let mut inner = self.inner.lock().await;
-                        if inner.pending_revoke_count > 0 {
-                            // The previous item was a provisional local commit
-                            // that the server final superseded. Revoke it
-                            // immediately before the authoritative replacement
-                            // lands so history holds the sentence once.
-                            inner.pending_revoke_count -= 1;
-                            drop(inner);
-                            self.emit(LiveTranslateServerEvent::SubtitleRevoked);
+                        let owned = inner
+                            .final_worker
+                            .as_ref()
+                            .is_some_and(|task| task.id == worker_id);
+                        if inner.pipeline_failed || !owned {
+                            clear_task_if_id(&mut inner.final_worker, worker_id);
+                            inner.active_final = None;
+                            false
+                        } else {
+                            inner.final_completion_in_progress = true;
+                            true
                         }
+                    };
+                    if !should_emit {
+                        return;
                     }
+
+                    self.emit(LiveTranslateServerEvent::SubtitleFinalPair {
+                        source: request.text.clone(),
+                        language: request.language.clone(),
+                        translation: translation.clone(),
+                    });
+
+                    let deferred_overload = {
+                        let mut inner = self.inner.lock().await;
+                        inner.final_completion_in_progress = false;
+                        inner.active_final = None;
+                        if inner.deferred_overload {
+                            inner.deferred_overload = false;
+                            inner.pipeline_failed = true;
+                            clear_task_if_id(&mut inner.final_worker, worker_id);
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if deferred_overload {
+                        self.cancel_replaceable_work().await;
+                        pipeline_log!("mt final overload depth={MAX_FINAL_QUEUE_DEPTH}");
+                        self.emit_overload_error();
+                        return;
+                    }
+
                     pipeline_log!(
-                        "mt plus final completed requestMs={} remaining={}",
+                        "mt final completed boundary={} requestMs={} remaining={}",
+                        request.boundary.label(),
                         started_at.elapsed().as_millis(),
                         self.inner.lock().await.final_queue.len()
                     );
-                    self.emit(LiveTranslateServerEvent::TranslationFinal(
-                        translation.clone(),
-                    ));
                     self.remember(&request.text, &translation).await;
                 }
                 Err(error) => {
-                    pipeline_log!(
-                        "mt plus final failed requestMs={} error={}",
-                        started_at.elapsed().as_millis(),
-                        error.diagnostic_label()
-                    );
-                    self.handle_translation_failure(&error).await;
+                    let should_emit = {
+                        let mut inner = self.inner.lock().await;
+                        let owned = inner
+                            .final_worker
+                            .as_ref()
+                            .is_some_and(|task| task.id == worker_id);
+                        if owned {
+                            inner.pipeline_failed = true;
+                            inner.active_final = None;
+                            clear_task_if_id(&mut inner.final_worker, worker_id);
+                        }
+                        owned
+                    };
+                    if should_emit {
+                        pipeline_log!(
+                            "mt final failed requestMs={} error={}",
+                            started_at.elapsed().as_millis(),
+                            error.diagnostic_label()
+                        );
+                        self.handle_translation_failure(&error);
+                    }
                     return;
                 }
             }
         }
     }
 
-    async fn handle_translation_failure(&self, error: &QwenMTClientError) {
+    async fn fail_final_worker_overload(&self, worker_id: u64, queue_age: Duration) {
+        let should_emit = {
+            let mut inner = self.inner.lock().await;
+            let owned = inner
+                .final_worker
+                .as_ref()
+                .is_some_and(|task| task.id == worker_id);
+            if owned {
+                inner.pipeline_failed = true;
+                inner.active_final = None;
+                clear_task_if_id(&mut inner.final_worker, worker_id);
+            }
+            owned
+        };
+        if should_emit {
+            self.cancel_replaceable_work().await;
+            pipeline_log!("mt final expired waitMs={}", queue_age.as_millis());
+            self.emit_overload_error();
+        }
+    }
+
+    async fn resume_pending_preview_if_final_lane_idle(&self) {
+        let revision = {
+            let inner = self.inner.lock().await;
+            (!inner.pipeline_failed
+                && !inner.final_lane_busy()
+                && inner.committer.has_pending_text())
+            .then_some(inner.draft_revision)
+        };
+        if let Some(revision) = revision {
+            self.schedule_draft_finalization(revision).await;
+        }
+    }
+
+    fn emit_overload_error(&self) {
+        self.emit(LiveTranslateServerEvent::Error {
+            code: OVERLOAD_ERROR_CODE.into(),
+            message: OVERLOAD_ERROR_MESSAGE.into(),
+        });
+    }
+
+    fn handle_translation_failure(&self, error: &QwenMTClientError) {
         let code = if error.is_authentication_failure() {
             "translation_authentication_failed"
         } else {
@@ -543,6 +871,8 @@ impl HighQualityTranslationClient {
         &self,
         text: &str,
         language: Option<&str>,
+        deadline: tokio::time::Instant,
+        on_partial: PartialHandler,
     ) -> Result<String, QwenMTClientError> {
         let memory = {
             let inner = self.inner.lock().await;
@@ -556,35 +886,49 @@ impl HighQualityTranslationClient {
                 .collect::<Vec<_>>()
         };
         let source_override = if self.source_language == SourceLanguage::Automatic {
-            language.and_then(|l| SourceLanguage::from_detected(Some(l)))
+            language.and_then(|value| SourceLanguage::from_detected(Some(value)))
         } else {
             None
         };
         let mut attempt = 1usize;
 
         loop {
-            let result = if self.streams_finals {
-                let mt = self.mt.clone();
-                let events = self.events.clone();
-                let text_owned = text.to_string();
-                mt.translate_streaming(&text_owned, source_override, &memory, move |partial| {
-                    let _ = events.send(LiveTranslateServerEvent::TranslationDraft(partial));
-                })
-                .await
-            } else {
-                self.mt.translate(text, source_override, &memory).await
-            };
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(QwenMTClientError::RequestTimedOut);
+            }
+
+            let handler = Arc::clone(&on_partial);
+            let result = tokio::time::timeout(remaining, async {
+                if self.streams_finals {
+                    self.mt
+                        .translate_streaming(text, source_override, &memory, move |partial| {
+                            (handler)(partial)
+                        })
+                        .await
+                } else {
+                    self.mt.translate(text, source_override, &memory).await
+                }
+            })
+            .await
+            .unwrap_or(Err(QwenMTClientError::RequestTimedOut));
 
             match result {
                 Ok(translation) => return Ok(translation),
                 Err(error) => {
+                    if attempt >= MAX_TRANSLATION_ATTEMPTS {
+                        return Err(error);
+                    }
                     let Some(delay) =
                         crate::core::protocols::qwen_mt::QwenMTRetryPolicy::delay(&error, attempt)
                     else {
                         return Err(error);
                     };
+                    if tokio::time::Instant::now() + delay >= deadline {
+                        return Err(QwenMTClientError::RequestTimedOut);
+                    }
                     pipeline_log!(
-                        "mt plus final retrying attempt={} delayMs={} error={}",
+                        "mt retrying attempt={} delayMs={} error={}",
                         attempt,
                         delay.as_millis(),
                         error.diagnostic_label()
@@ -611,14 +955,61 @@ impl HighQualityTranslationClient {
         }
     }
 
+    // MARK: Lifecycle helpers
+
+    async fn flush_pending_draft(&self) {
+        let pending = {
+            let mut inner = self.inner.lock().await;
+            abort_task(&mut inner.draft_stability_task);
+            abort_task(&mut inner.draft_maximum_wait_task);
+            abort_task(&mut inner.preview_task);
+            self.advance_preview_epoch();
+            let text = inner.committer.preview_latest_draft(false);
+            let language = inner.latest_draft_language.clone();
+            let revision = inner.draft_revision;
+            inner.committer.reset();
+            inner.latest_draft_language = None;
+            next_nonzero(&mut inner.draft_revision);
+            text.map(|text| (text, language, revision))
+        };
+        if let Some((text, language, revision)) = pending {
+            pipeline_log!("audio3 asr fallback final length={}", text.chars().count());
+            self.enqueue_final(text, language, FinalBoundary::SessionFinish, revision)
+                .await;
+        }
+    }
+
+    async fn cancel_replaceable_work(&self) {
+        let mut inner = self.inner.lock().await;
+        abort_task(&mut inner.draft_stability_task);
+        abort_task(&mut inner.draft_maximum_wait_task);
+        abort_task(&mut inner.preview_task);
+        self.advance_preview_epoch();
+        next_nonzero(&mut inner.draft_revision);
+    }
+
+    async fn reset_draft_state(&self) {
+        let mut inner = self.inner.lock().await;
+        abort_task(&mut inner.draft_stability_task);
+        abort_task(&mut inner.draft_maximum_wait_task);
+        abort_task(&mut inner.preview_task);
+        self.advance_preview_epoch();
+        inner.committer.reset();
+        inner.latest_draft_language = None;
+        next_nonzero(&mut inner.draft_revision);
+        inner.last_server_final = None;
+        inner.last_draft_log_at = None;
+    }
+
     async fn cancel_final_translations(&self) {
         let mut inner = self.inner.lock().await;
-        if let Some(task) = inner.final_worker.take() {
-            task.abort();
-        }
+        abort_task(&mut inner.final_worker);
         inner.final_queue.clear();
+        inner.active_final = None;
         inner.translation_memory.clear();
-        inner.pending_revoke_count = 0;
+        inner.pipeline_failed = false;
+        inner.final_completion_in_progress = false;
+        inner.deferred_overload = false;
     }
 
     async fn wait_for_final_translations(&self, timeout: Duration) {
@@ -641,5 +1032,299 @@ impl HighQualityTranslationClient {
 
     fn emit(&self, event: LiveTranslateServerEvent) {
         let _ = self.events.send(event);
+    }
+}
+
+fn next_nonzero(counter: &mut u64) -> u64 {
+    *counter = counter.wrapping_add(1);
+    if *counter == 0 {
+        *counter = 1;
+    }
+    *counter
+}
+
+fn abort_task(slot: &mut Option<TaskSlot>) {
+    if let Some(task) = slot.take() {
+        task.handle.abort();
+    }
+}
+
+fn clear_task_if_id(slot: &mut Option<TaskSlot>, task_id: u64) {
+    if slot.as_ref().is_some_and(|task| task.id == task_id) {
+        drop(slot.take());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::clients::provider_events::ProviderEventReceiver;
+
+    fn test_client(
+        target_language: TargetLanguage,
+        threshold: usize,
+    ) -> (HighQualityTranslationClient, ProviderEventReceiver) {
+        let (events, receiver) = provider_event_channel();
+        let client = HighQualityTranslationClient::new(
+            "test-key",
+            SourceLanguage::Japanese,
+            target_language,
+            QwenMTModel::Plus,
+            Duration::from_secs(60),
+            Duration::from_secs(60),
+            threshold,
+            events,
+        )
+        .unwrap();
+        (client, receiver)
+    }
+
+    #[tokio::test]
+    async fn stable_timer_resets_while_maximum_timer_keeps_its_first_token() {
+        let (client, _events) = test_client(TargetLanguage::SimplifiedChinese, 100);
+        client
+            .handle_asr_event(LiveTranslateServerEvent::SourceDraft {
+                text: "まだ話しています".into(),
+                language: Some("ja".into()),
+            })
+            .await;
+        let (first_stable, first_maximum) = {
+            let inner = client.inner.lock().await;
+            (
+                inner.draft_stability_task.as_ref().unwrap().id,
+                inner.draft_maximum_wait_task.as_ref().unwrap().id,
+            )
+        };
+
+        client
+            .handle_asr_event(LiveTranslateServerEvent::SourceDraft {
+                text: "まだ話し続けています".into(),
+                language: Some("ja".into()),
+            })
+            .await;
+        let (second_stable, second_maximum) = {
+            let inner = client.inner.lock().await;
+            (
+                inner.draft_stability_task.as_ref().unwrap().id,
+                inner.draft_maximum_wait_task.as_ref().unwrap().id,
+            )
+        };
+
+        assert_ne!(first_stable, second_stable);
+        assert_eq!(first_maximum, second_maximum);
+        client.reset_draft_state().await;
+    }
+
+    #[tokio::test]
+    async fn stable_callback_clears_only_itself_and_preserves_maximum_wait() {
+        let (client, _events) = test_client(TargetLanguage::SimplifiedChinese, 100);
+        client
+            .handle_asr_event(LiveTranslateServerEvent::SourceDraft {
+                text: "短い未完の文".into(),
+                language: Some("ja".into()),
+            })
+            .await;
+        let (stable_id, maximum_id, revision) = {
+            let inner = client.inner.lock().await;
+            (
+                inner.draft_stability_task.as_ref().unwrap().id,
+                inner.draft_maximum_wait_task.as_ref().unwrap().id,
+                inner.draft_revision,
+            )
+        };
+
+        client
+            .handle_draft_timer(DraftTimerKind::Stable, stable_id, revision)
+            .await;
+        let inner = client.inner.lock().await;
+        assert!(inner.draft_stability_task.is_none());
+        assert_eq!(
+            inner.draft_maximum_wait_task.as_ref().map(|task| task.id),
+            Some(maximum_id)
+        );
+        drop(inner);
+        client.reset_draft_state().await;
+    }
+
+    #[tokio::test]
+    async fn original_mode_commits_server_final_as_one_atomic_pair() {
+        let (client, mut events) = test_client(TargetLanguage::Original, 20);
+        client
+            .handle_asr_event(LiveTranslateServerEvent::SourceFinal {
+                text: "今日は晴れです。".into(),
+                language: Some("ja".into()),
+            })
+            .await;
+
+        assert_eq!(
+            events.recv().await,
+            Some(LiveTranslateServerEvent::SubtitleFinalPair {
+                source: "今日は晴れです。".into(),
+                language: Some("ja".into()),
+                translation: "今日は晴れです。".into(),
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn server_final_cancels_timers_and_invalidates_an_inflight_preview() {
+        let (client, _events) = test_client(TargetLanguage::SimplifiedChinese, 20);
+        client
+            .handle_asr_event(LiveTranslateServerEvent::SourceDraft {
+                text: "今日は晴れです。".into(),
+                language: Some("ja".into()),
+            })
+            .await;
+        let preview_id = client.advance_preview_epoch();
+        {
+            let mut inner = client.inner.lock().await;
+            inner.preview_task = Some(TaskSlot {
+                id: preview_id,
+                handle: tokio::spawn(std::future::pending()),
+            });
+        }
+
+        assert!(client
+            .prepare_server_final("今日は晴れです。")
+            .await
+            .is_some());
+
+        let inner = client.inner.lock().await;
+        assert!(inner.draft_stability_task.is_none());
+        assert!(inner.draft_maximum_wait_task.is_none());
+        assert!(inner.preview_task.is_none());
+        assert!(!inner.committer.has_pending_text());
+        assert_ne!(client.preview_epoch.load(Ordering::SeqCst), preview_id);
+    }
+
+    #[tokio::test]
+    async fn active_final_defers_preview_until_the_final_lane_is_idle() {
+        let (client, mut events) = test_client(TargetLanguage::SimplifiedChinese, 20);
+        {
+            let mut inner = client.inner.lock().await;
+            inner.final_worker = Some(TaskSlot {
+                id: 999,
+                handle: tokio::spawn(std::future::pending()),
+            });
+            inner.active_final = Some(FinalRequestKey {
+                text: "earlier final".into(),
+                boundary: FinalBoundary::ServerFinal,
+                utterance_revision: 1,
+            });
+        }
+
+        client
+            .handle_asr_event(LiveTranslateServerEvent::SourceDraft {
+                text: "まだ話し続けています".into(),
+                language: Some("ja".into()),
+            })
+            .await;
+
+        let pending_revision = {
+            let inner = client.inner.lock().await;
+            assert!(inner.committer.has_pending_text());
+            assert!(inner.draft_stability_task.is_none());
+            assert!(inner.draft_maximum_wait_task.is_none());
+            assert!(inner.preview_task.is_none());
+            inner.draft_revision
+        };
+        assert!(events.try_recv().is_err());
+
+        {
+            let mut inner = client.inner.lock().await;
+            abort_task(&mut inner.final_worker);
+            inner.active_final = None;
+        }
+        client.resume_pending_preview_if_final_lane_idle().await;
+
+        let inner = client.inner.lock().await;
+        assert_eq!(inner.draft_revision, pending_revision);
+        assert!(inner.draft_stability_task.is_some());
+        assert!(inner.draft_maximum_wait_task.is_some());
+        drop(inner);
+        client.reset_draft_state().await;
+    }
+
+    #[tokio::test]
+    async fn identical_server_final_is_only_deduplicated_without_a_new_draft() {
+        let (client, mut events) = test_client(TargetLanguage::Original, 20);
+        let final_event = LiveTranslateServerEvent::SourceFinal {
+            text: "はい。".into(),
+            language: Some("ja".into()),
+        };
+        client.handle_asr_event(final_event.clone()).await;
+        client.handle_asr_event(final_event.clone()).await;
+        assert!(matches!(
+            events.recv().await,
+            Some(LiveTranslateServerEvent::SubtitleFinalPair { .. })
+        ));
+        assert!(events.try_recv().is_err());
+
+        client
+            .handle_asr_event(LiveTranslateServerEvent::SourceDraft {
+                text: "はい".into(),
+                language: Some("ja".into()),
+            })
+            .await;
+        let _ = events.recv().await;
+        let _ = events.recv().await;
+        client.handle_asr_event(final_event).await;
+        assert!(matches!(
+            events.recv().await,
+            Some(LiveTranslateServerEvent::SubtitleFinalPair { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn final_queue_has_a_hard_limit_and_reports_overload_once() {
+        let (client, mut events) = test_client(TargetLanguage::SimplifiedChinese, 20);
+        {
+            let mut inner = client.inner.lock().await;
+            inner.final_worker = Some(TaskSlot {
+                id: 999,
+                handle: tokio::spawn(std::future::pending()),
+            });
+        }
+
+        for revision in 1..=MAX_FINAL_QUEUE_DEPTH as u64 {
+            client
+                .enqueue_final(
+                    format!("server final {revision}"),
+                    Some("ja".into()),
+                    FinalBoundary::ServerFinal,
+                    revision,
+                )
+                .await;
+        }
+        client
+            .enqueue_final(
+                "overflow".into(),
+                Some("ja".into()),
+                FinalBoundary::ServerFinal,
+                99,
+            )
+            .await;
+        client
+            .enqueue_final(
+                "second overflow".into(),
+                Some("ja".into()),
+                FinalBoundary::ServerFinal,
+                100,
+            )
+            .await;
+
+        let inner = client.inner.lock().await;
+        assert_eq!(inner.final_queue.len(), MAX_FINAL_QUEUE_DEPTH);
+        assert!(inner.pipeline_failed);
+        drop(inner);
+        assert_eq!(
+            events.recv().await,
+            Some(LiveTranslateServerEvent::Error {
+                code: OVERLOAD_ERROR_CODE.into(),
+                message: OVERLOAD_ERROR_MESSAGE.into(),
+            })
+        );
+        assert!(events.try_recv().is_err());
+        client.cancel_final_translations().await;
     }
 }

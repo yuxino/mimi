@@ -1,0 +1,66 @@
+[[permission]]
+identifier = "app-bootstrap"
+description = "Allows every bundled window to hydrate public settings and session snapshots."
+commands.allow = [
+  "settings_get",
+  "session_get_state",
+]
+
+[[permission]]
+identifier = "app-settings"
+description = "Allows the settings window to mutate preferences, profiles, and write-only credentials."
+commands.allow = [
+  "settings_save",
+  "profile_create",
+  "profile_update",
+  "profile_select",
+  "profile_delete",
+  "profile_save_api_key",
+  "profile_delete_api_key",
+  "session_switch_source_language",
+  "overlay_set_locked",
+]
+
+[[permission]]
+identifier = "app-overlay"
+description = "Allows the subtitle overlay to control its own presentation and active session."
+commands.allow = [
+  "session_toggle_paused",
+  "session_clear_subtitles",
+  "overlay_set_collapsed",
+  "app_show_settings",
+  "resize_start",
+  "resize_move",
+  "resize_end",
+]
+
+[[permission]]
+identifier = "app-overlay-control"
+description = "Allows the overlay control island to change live options and manage its panel."
+commands.allow = [
+  "session_switch_source_language",
+  "session_switch_translation_mode",
+  "settings_save",
+  "app_show_settings",
+  "overlay_popover_toggle",
+  "overlay_popover_hide",
+  "overlay_control_state",
+  "overlay_control_set_panel_height",
+]
+
+[[permission]]
+identifier = "app-tray-panel"
+description = "Allows the tray panel to operate sessions, presentation preferences, and app actions."
+commands.allow = [
+  "session_start",
+  "session_stop",
+  "session_toggle_paused",
+  "session_clear_subtitles",
+  "session_switch_source_language",
+  "settings_save",
+  "overlay_set_locked",
+  "overlay_show",
+  "tray_panel_hide",
+  "app_show_settings",
+  "app_quit",
+]

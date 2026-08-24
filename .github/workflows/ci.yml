@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   rust:
     strategy:
@@ -13,6 +16,8 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '13.0' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -57,11 +62,11 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Release bundles for the platforms the app ships on. Runs on the main
-  # branch (and PRs so packaging regressions surface before merge). The
-  # tauri-action step builds the native bundles (.app/.dmg on macOS,
-  # .msi/.nsis on Windows) and uploads them as workflow artifacts.
-  release:
+  # Build native bundles on branches and pull requests so packaging
+  # regressions surface before a tag. This job has read-only repository
+  # access and never receives a release token.
+  bundle:
+    if: ${{ github.ref_type != 'tag' }}
     strategy:
       fail-fast: false
       matrix:
@@ -71,6 +76,8 @@ jobs:
           - os: windows-latest
             args: ""
     runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '13.0' || '' }}
     needs: [rust, frontend]
     steps:
       - uses: actions/checkout@v4
@@ -88,23 +95,11 @@ jobs:
 
       - run: npm ci
 
-      # Builds the native bundle (.app/.dmg on macOS, .msi/.nsis on Windows).
-      # On a v* tag push, tauri-action also creates a GitHub Release and
-      # attaches the installers (releaseName/tagName only set for tags, so a
-      # plain main-branch push just uploads workflow artifacts instead).
       - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: ${{ github.ref_type == 'tag' && format('mimi {0}', github.ref_name) || '' }}
-          releaseBody: "See the assets below for installers (macOS .dmg, Windows .msi/.exe)."
-          releaseDraft: false
-          prerelease: false
 
       - name: Upload bundles
-        if: ${{ github.ref_type != 'tag' }}
         uses: actions/upload-artifact@v4
         with:
           name: mimi-${{ matrix.os }}
@@ -114,3 +109,49 @@ jobs:
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
           if-no-files-found: error
+
+  # A tag is the only event that receives a contents:write token. Separating
+  # publication from ordinary bundle checks prevents pull-request code from
+  # inheriting release authority.
+  release:
+    if: ${{ github.ref_type == 'tag' }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: ""
+          - os: windows-latest
+            args: ""
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '13.0' || '' }}
+    needs: [rust, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+          tagName: ${{ github.ref_name }}
+          releaseName: "mimi ${{ github.ref_name }}"
+          releaseBody: "See the assets below for installers (macOS .dmg, Windows .msi/.exe)."
+          releaseDraft: false
+          prerelease: false
