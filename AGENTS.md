@@ -23,9 +23,13 @@ Preserve these product constraints:
 - `mimi-web/`: the product website (marketing site, not the app).
 - `docs/plans/`: current accepted design records; completed checklists and
   superseded designs stay in Git history.
+- `docs/development/common-regressions.md`: required macOS signing, permission,
+  Keychain, overlay, and local-testing pitfalls. Read it before packaging or
+  diagnosing a repeated system prompt.
 - `scripts/check.sh`: canonical automated test and strict-build entry point.
-- `scripts/package-app.sh`: release build via `tauri build`, re-signed with the stable local identity.
-- `scripts/codesign-identity.sh`: picks the code-signing identity for local builds (`MIMI_CODESIGN_IDENTITY` → `mimi Local Development` → ad-hoc). Stable identity keeps Screen Recording / keychain grants valid across rebuilds.
+- `scripts/package-app.sh`: release-shaped local build via `tauri build`, signed with the stable local identity; it is not an identity-compatible update for a GitHub Release build.
+- `scripts/codesign-identity.sh`: honors an explicit `MIMI_CODESIGN_IDENTITY`; otherwise it selects the exact fingerprint of the unique `mimi Local Development` identity or reports unavailable. macOS packaging and development launch fail closed rather than use ad-hoc signing.
+- `scripts/verify-macos-install-identity.sh`: compares the complete designated requirement before a formal app is replaced.
 - `.github/workflows/ci.yml`: CI (Rust fmt/clippy/test on macOS and Windows, frontend checks).
 
 ## Working agreements
@@ -38,6 +42,9 @@ Preserve these product constraints:
 - Add focused `#[cfg(test)]` coverage when changing `core/`. `cargo test` runs the repository's suite.
 - The wire protocols (JSON shapes, model names, domain prompts, filler glossaries) mirror the upstream services exactly; do not reword the translation prompts.
 - Do not introduce a dependency, external service, or credential requirement unless the task needs it and the trade-off is documented.
+- On macOS use `/Applications/mimi-dev.app` for all pre-push testing. Never overwrite `/Applications/mimi.app` with a locally signed package when its designated requirement differs from the installed GitHub Release. An intentional certificate migration must be explicit and is expected to require one final Screen Recording and Keychain authorization.
+- A normal credential snapshot may read each profile API key once, but must not touch migration-only Keychain items after a profile-scoped key exists. Keep non-secret migration bookkeeping off the steady-state authorization path.
+- Never delete and recreate a Keychain credential to refresh its ACL, widen an item or keychain to allow-all, or fabricate a Team ID for a self-signed build. Preserve the same service/account and update its secret in place. Password-free Keychain continuity across rebuilt binaries requires an Apple-issued signing identity with a stable Team ID; the current self-signed identities guarantee a stable designated requirement for TCC, not that stronger Keychain property.
 
 ## Verification
 
@@ -53,6 +60,6 @@ Additional checks by change type:
 
 - UI changes: on macOS run `./scripts/dev-app.sh` and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. This launches a signed bundle from one canonical path so macOS does not treat every rebuild as a new app and repeat privacy prompts. Use `./scripts/dev-app.sh --ui-only` for credential-free UI smoke tests; UI-test mode must not access provider networks or start system-audio capture. On Windows, use `npm run tauri:dev`.
 - Latency or streaming changes: measure against a real session for the affected provider (user-supplied OS-keychain credentials) and report timing diagnostics as well as correctness tests.
-- Packaging or signing changes: run `./scripts/package-app.sh` and verify the resulting app opens. Windows packaging is verified on a Windows machine (or CI). Never commit `dist/`, `src-tauri/target/`, or signing identities.
+- Packaging or signing changes: read `docs/development/common-regressions.md`, run `./scripts/package-app.sh`, and verify the resulting app opens without replacing an installed app of a different designated requirement. Windows packaging is verified on a Windows machine (or CI). Never commit `dist/`, `src-tauri/target/`, or signing identities.
 
 Before committing, inspect the diff for credentials, recordings, subtitle content, personal paths, and build artifacts.

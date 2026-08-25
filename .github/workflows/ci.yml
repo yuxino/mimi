@@ -118,7 +118,9 @@ jobs:
             exit 1
           fi
           app_path="${app_paths[0]}"
-          ./scripts/verify-macos-app.sh "$app_path"
+          # Branch artifacts are packaging probes only. Keep this opt-in
+          # explicit so local/formal verification still rejects ad-hoc apps.
+          ./scripts/verify-macos-app.sh --ci-adhoc "$app_path"
 
       - name: Upload bundles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -160,9 +162,13 @@ jobs:
           fi
 
   # GitHub macOS releases use one persistent self-signed identity. It does not
-  # bypass Gatekeeper, but it keeps privacy and keychain grants attached to the
-  # same app across updates. The certificate is pinned in source and its private
-  # key exists only in the protected github-release environment.
+  # bypass Gatekeeper, but its stable designated requirement lets TCC recognize
+  # the same app across updates. File-based Keychain access has an additional
+  # partition check and this self-signed certificate has no Apple Team ID, so
+  # password-free credential access across every binary update is not promised.
+  # The certificate is pinned in source. Its CI-accessible private-key copy
+  # exists only in the protected github-release environment; any offline
+  # encrypted backup remains outside CI.
   release-macos:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-latest
@@ -498,4 +504,4 @@ jobs:
             exit 1
           fi
 
-          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "GitHub packages for macOS (Apple Silicon) and Windows. On first launch, macOS may require Open Anyway in System Settings → Privacy & Security. Users upgrading from v1.3.0 may need to approve system-audio capture and Keychain access one final time; later releases keep the same app identity." --draft=false --latest
+          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "GitHub packages for macOS (Apple Silicon) and Windows. On first launch, macOS may require Open Anyway in System Settings → Privacy & Security. Users upgrading from a build signed with a different identity may need to approve Screen & System Audio Recording once. Because this distribution is self-signed without an Apple Team ID, macOS may still ask once for Keychain access after a binary update." --draft=false --latest

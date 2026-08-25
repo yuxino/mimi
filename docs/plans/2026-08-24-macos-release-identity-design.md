@@ -14,10 +14,10 @@ so Screen & System Audio Recording grants and Keychain access could be
 requested again.
 
 The release must remain downloadable from GitHub without Apple credentials,
-keep one stable app identity across future builds, keep private signing
+keep one stable TCC app identity across future builds, keep private signing
 material out of source control, and fail before publication when that identity
-changes. A first-launch Gatekeeper override is an accepted limitation of this
-distribution model.
+changes. A first-launch Gatekeeper override and the absence of Apple Team ID
+Keychain continuity are accepted limitations of this distribution model.
 
 ## Decision
 
@@ -56,7 +56,7 @@ distribution model.
 
 - GitHub Releases work without an Apple developer account.
 - The stable certificate and bundle identifier let later versions satisfy the
-  same designated requirement, preserving privacy and Keychain identity.
+  same designated requirement, preserving the TCC privacy identity.
 - Signing material never enters the repository or public artifacts.
 - A lost or replaced certificate fails visibly because its public fingerprint
   is part of the reviewed workflow.
@@ -65,6 +65,10 @@ distribution model.
 
 - The first launch from a browser download is not warning-free; Gatekeeper does
   not trust the self-signed certificate.
+- A self-signed identity has no Apple Team ID. File-based Keychain partition
+  checks may therefore ask once after the binary CDHash changes even though the
+  designated requirement is stable. The app must keep steady-state credential
+  access to one profile item and must never weaken ACLs or fabricate a Team ID.
 - The private key has no Apple revocation path. Release-environment secret
   access must remain limited, and certificate rotation is a security migration.
 - GitHub Secrets cannot be exported again. Keep one encrypted offline backup of
@@ -87,6 +91,8 @@ distribution model.
 ## Upgrade behavior
 
 Users upgrading from v1.3.0 may need to approve Screen & System Audio Recording
-and Keychain access one final time. Later releases keep the same certificate,
-bundle identifier, and designated requirement. Changing any of them must be an
-explicit migration decision.
+and Keychain access. Later releases keep the same certificate, bundle
+identifier, and designated requirement, so TCC remains continuous. Keychain
+access may still ask once for a rebuilt self-signed binary because this model
+has no stable Apple Team ID. Changing the certificate or moving to Developer ID
+must be an explicit migration decision.

@@ -2,15 +2,22 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [--github-release] /absolute/path/to/mimi.app" >&2
+  echo "Usage: $0 [--github-release|--ci-adhoc] /absolute/path/to/mimi.app" >&2
   exit 2
 }
 
 GITHUB_RELEASE=0
-if [[ "${1:-}" == "--github-release" ]]; then
-  GITHUB_RELEASE=1
-  shift
-fi
+CI_ADHOC=0
+case "${1:-}" in
+  --github-release)
+    GITHUB_RELEASE=1
+    shift
+    ;;
+  --ci-adhoc)
+    CI_ADHOC=1
+    shift
+    ;;
+esac
 [[ $# -eq 1 ]] || usage
 
 APP="$1"
@@ -52,6 +59,32 @@ AUDIO_USAGE="$(read_plist NSAudioCaptureUsageDescription)"
 
 codesign --verify --deep --strict "$APP"
 
+SIGNATURE_DETAILS="$(codesign --display --verbose=4 "$APP" 2>&1)"
+REQUIREMENT="$(
+  codesign --display --requirements - "$APP" 2>&1 \
+    | sed -n 's/^#*[[:space:]]*designated => //p'
+)"
+grep -Fq "Identifier=app.yuxino.mimi" <<<"$SIGNATURE_DETAILS" || {
+  echo "The signing identifier is not app.yuxino.mimi." >&2
+  exit 1
+}
+if [[ "$CI_ADHOC" == "1" ]]; then
+  grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" || {
+    echo "The CI branch bundle must use the expected ad-hoc signature." >&2
+    exit 1
+  }
+  [[ "$REQUIREMENT" == cdhash\ * ]] || {
+    echo "The CI branch bundle must have a build-specific requirement." >&2
+    exit 1
+  }
+else
+  if grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" \
+    || [[ -z "$REQUIREMENT" || "$REQUIREMENT" == cdhash\ * ]]; then
+    echo "Ad-hoc or build-specific signatures are forbidden for formal mimi app bundles." >&2
+    exit 1
+  fi
+fi
+
 if [[ "$GITHUB_RELEASE" == "1" ]]; then
   EXPECTED_CERT_SHA1="${MIMI_EXPECTED_CERT_SHA1:-}"
   [[ "$EXPECTED_CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]] || {
@@ -59,21 +92,8 @@ if [[ "$GITHUB_RELEASE" == "1" ]]; then
     exit 1
   }
   EXPECTED_CERT_SHA1="$(printf '%s' "$EXPECTED_CERT_SHA1" | tr '[:upper:]' '[:lower:]')"
-  SIGNATURE_DETAILS="$(codesign --display --verbose=4 "$APP" 2>&1)"
-  REQUIREMENT="$(
-    codesign --display --requirements - "$APP" 2>&1 \
-      | sed -n 's/^designated => //p'
-  )"
   EXPECTED_REQUIREMENT="identifier \"app.yuxino.mimi\" and certificate root = H\"$EXPECTED_CERT_SHA1\""
 
-  grep -Fq "Identifier=app.yuxino.mimi" <<<"$SIGNATURE_DETAILS" || {
-    echo "The signing identifier is not app.yuxino.mimi." >&2
-    exit 1
-  }
-  if grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS"; then
-    echo "Ad-hoc signatures are forbidden for GitHub releases." >&2
-    exit 1
-  fi
   [[ "$REQUIREMENT" == "$EXPECTED_REQUIREMENT" ]] || {
     echo "The app does not use the pinned GitHub release identity." >&2
     exit 1

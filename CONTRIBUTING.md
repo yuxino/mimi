@@ -23,7 +23,11 @@ Thank you for improving mimi. Small, focused pull requests are the easiest to re
 
 界面改动还需要在 macOS 通过 `./scripts/dev-app.sh` 启动固定身份的应用（Windows 使用 `npm run tauri:dev`），检查设置窗、托盘面板和字幕浮窗的普通、空白、错误、暂停、收起、翻译中和长字幕状态。涉及延迟或流式管线的改动应使用所改服务商的真实会话（仅使用本地系统钥匙串凭证）验证并记录测量结果。
 
+macOS 调试或打包前请阅读 [`docs/development/common-regressions.md`](docs/development/common-regressions.md)。本地 `package-app.sh` 产物使用开发证书，不能覆盖使用 GitHub 发布证书的 `/Applications/mimi.app`；日常验证一律使用 `/Applications/mimi-dev.app`。
+
 For UI changes, launch the stable app identity with `./scripts/dev-app.sh` on macOS (`npm run tauri:dev` on Windows) and inspect the settings window, tray panel, and overlay in normal, empty, error, paused, collapsed, translating, and long-subtitle states. Latency- or streaming-sensitive changes should be verified against a real session for the changed provider, using only local OS-keychain credentials, and include measured results.
+
+Before macOS testing or packaging, read [`docs/development/common-regressions.md`](docs/development/common-regressions.md). A local `package-app.sh` bundle uses the development certificate and must not replace `/Applications/mimi.app` when that app uses the GitHub release certificate; routine testing belongs in `/Applications/mimi-dev.app`.
 
 ## 平台 / Platforms
 

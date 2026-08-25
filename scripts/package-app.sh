@@ -9,8 +9,10 @@ set -euo pipefail
 # On macOS the signing identity is selected before Tauri creates either the
 # .app or .dmg. This is essential: re-signing only the loose .app afterwards
 # leaves the copy already embedded in the DMG with its original identity.
-# Local builds prefer the stable "mimi Local Development" identity. Public
-# GitHub releases use a separate persistent self-signed identity in CI.
+# Local builds require the stable "mimi Local Development" identity. Public
+# GitHub releases use a separate persistent self-signed identity in CI. These
+# identities are intentionally not interchangeable: replacing an installed
+# GitHub release with a local package resets macOS privacy/keychain trust.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -23,10 +25,17 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   APPLE_SIGNING_IDENTITY="$("$SCRIPT_DIR/codesign-identity.sh")"
   export APPLE_SIGNING_IDENTITY
   if [[ "$APPLE_SIGNING_IDENTITY" == "-" ]]; then
-    echo "warning: no stable local signing identity; privacy grants will not survive rebuilds" >&2
-  else
-    echo "using macOS signing identity: $APPLE_SIGNING_IDENTITY"
+    cat >&2 <<'EOF'
+error: release packaging requires a stable macOS code-signing identity.
+
+Install the local "mimi Local Development" identity or set
+MIMI_CODESIGN_IDENTITY to an explicit code-signing identity (prefer the exact
+certificate fingerprint). Ad-hoc packages are rejected because they reset
+Screen Recording and Keychain authorization.
+EOF
+    exit 1
   fi
+  echo "using macOS signing identity: $APPLE_SIGNING_IDENTITY"
 fi
 
 npm run tauri build
@@ -42,4 +51,18 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     exit 1
   }
   "$SCRIPT_DIR/verify-macos-app.sh" "$APP"
+  if [[ -e /Applications/mimi.app ]]; then
+    cat <<EOF
+An existing /Applications/mimi.app was left untouched. This local package uses
+the development signing identity and is not expected to match a GitHub Release
+installation. Before any deliberate replacement, run:
+
+  ./scripts/verify-macos-install-identity.sh "$APP" /Applications/mimi.app
+EOF
+  fi
+  cat <<EOF
+Local package identity checked. For normal pre-push testing use
+./scripts/dev-app.sh. A local package is not an identity-compatible update for
+a GitHub Release build; package creation never replaces the installed app.
+EOF
 fi
