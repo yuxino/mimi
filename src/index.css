@@ -80,6 +80,19 @@ body.settings-body {
   background: transparent;
 }
 
+/* Immersive Mode still auto-scrolls to the newest subtitle, but its floating
+   text should not reveal browser chrome over full-screen media. */
+.overlay-timeline--immersive {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overlay-timeline--immersive::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 
 /* Subtle brightness feedback for interactive controls. */
 button.ux-hover {

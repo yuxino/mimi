@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from "react";
 import { hexToRgba } from "../../lib/types";
 import type { SubtitleAlignment } from "../../lib/types";
 import { rowHorizontalPadding } from "./alignment";
-import type { SubtitleRow } from "./overlayModel";
+import { timelineClassName, type SubtitleRow } from "./overlayModel";
 
 const ACCENT = "#7AA8FF";
 const MONO_FONT =
@@ -55,7 +55,7 @@ export const Timeline = memo(function Timeline({
   return (
     <div
       ref={containerRef}
-      className="min-h-0 flex-1 overflow-y-auto"
+      className={timelineClassName(blendsWithBackground)}
       style={{ overscrollBehavior: "contain" }}
     >
       {rows.map((row, index) => {

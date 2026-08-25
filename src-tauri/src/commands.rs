@@ -86,6 +86,12 @@ mod tests {
         assert!(normalize_overlay_collapsed(true, false));
     }
 
+    #[test]
+    fn immersive_mode_toggle_inverts_the_current_preference() {
+        assert!(toggled_immersive_mode(false));
+        assert!(!toggled_immersive_mode(true));
+    }
+
     struct PartiallyUnavailableSecretStore;
 
     impl crate::settings_store::SecretStore for PartiallyUnavailableSecretStore {
@@ -279,15 +285,34 @@ pub async fn settings_save(
     state: State<'_, AppState>,
     draft: SettingsDraft,
 ) -> Result<SettingsSnapshotPayload, String> {
+    apply_settings_draft(&app, &state, draft).await
+}
+
+async fn apply_settings_draft(
+    app: &AppHandle,
+    state: &AppState,
+    draft: SettingsDraft,
+) -> Result<SettingsSnapshotPayload, String> {
     let changes_listening_settings = draft.source_language.is_some()
         || draft.target_language.is_some()
         || draft.translation_mode.is_some();
-    let changes_ui_language = draft.ui_language.is_some();
-    let enables_background_blend = draft.subtitle_blends_with_background == Some(true);
     let _lifecycle = state
         .session
         .settings_mutation_guard(changes_listening_settings)
         .await?;
+    apply_settings_draft_guarded(app, state, draft)
+}
+
+/// Applies a settings draft while the caller owns the settings mutation
+/// guard. Keeping the read and write inside one guard makes native toggles
+/// atomic with ordinary settings saves.
+fn apply_settings_draft_guarded(
+    app: &AppHandle,
+    state: &AppState,
+    draft: SettingsDraft,
+) -> Result<SettingsSnapshotPayload, String> {
+    let changes_ui_language = draft.ui_language.is_some();
+    let enables_background_blend = draft.subtitle_blends_with_background == Some(true);
     ensure_settings_draft_allowed(&draft, state.session.has_active_session())?;
     let needs_save = draft.source_language.is_some()
         || draft.target_language.is_some()
@@ -334,25 +359,52 @@ pub async fn settings_save(
     // or reloading; do not rely on a React effect to repair geometry later.
     if enables_background_blend && state.session.is_overlay_collapsed() {
         state.session.set_overlay_collapsed(false);
-        OverlayWindowManager::set_collapsed(&app, &state.overlay, false);
+        OverlayWindowManager::set_collapsed(app, &state.overlay, false);
         state.session.publish_state();
     }
     if draft.is_overlay_locked.is_some() || draft.subtitle_blends_with_background.is_some() {
         let preferences = state.settings.preferences();
         OverlayWindowManager::sync_presentation(
-            &app,
+            app,
             state.session.is_active(),
             state.session.is_overlay_collapsed(),
             preferences.overlay_locked || preferences.subtitle_blends_with_background,
+            preferences.subtitle_blends_with_background,
         );
     }
     if changes_ui_language {
-        crate::refresh_native_tray_language(&app);
+        crate::refresh_native_tray_language(app);
     }
 
     let payload = SettingsSnapshotPayload::try_from_store(&state.settings)?;
     let _ = app.emit("settings-changed", payload.clone());
     Ok(payload)
+}
+
+/// Toggles the persisted Immersive Mode presentation from native surfaces
+/// such as the global shortcut. This deliberately reuses the settings mutation
+/// path so collapsed geometry, click-through state, and settings broadcasts
+/// stay identical to UI-triggered changes.
+pub(crate) async fn toggle_immersive_mode(app: &AppHandle) -> Result<(), String> {
+    let state = app
+        .try_state::<AppState>()
+        .ok_or_else(|| "Application state is unavailable.".to_string())?;
+    let _lifecycle = state.session.settings_mutation_guard(false).await?;
+    let enabled =
+        toggled_immersive_mode(state.settings.preferences().subtitle_blends_with_background);
+    apply_settings_draft_guarded(
+        app,
+        &state,
+        SettingsDraft {
+            subtitle_blends_with_background: Some(enabled),
+            ..SettingsDraft::default()
+        },
+    )?;
+    Ok(())
+}
+
+fn toggled_immersive_mode(current: bool) -> bool {
+    !current
 }
 
 fn ensure_settings_draft_allowed(draft: &SettingsDraft, is_active: bool) -> Result<(), String> {
@@ -522,6 +574,7 @@ pub fn overlay_set_collapsed(
         state.session.is_active(),
         collapsed,
         preferences.overlay_locked || preferences.subtitle_blends_with_background,
+        preferences.subtitle_blends_with_background,
     );
     // The frontend's collapse UI state only updates through the
     // session-state event; without this the overlay renders the wrong
@@ -549,6 +602,7 @@ pub fn overlay_set_locked(
         state.session.is_active(),
         state.session.is_overlay_collapsed(),
         locked || preferences.subtitle_blends_with_background,
+        preferences.subtitle_blends_with_background,
     );
     let _ = app.emit(
         "settings-changed",
@@ -566,7 +620,9 @@ pub fn overlay_show(app: AppHandle, state: State<'_, AppState>) -> Result<(), St
             true,
             state.session.is_overlay_collapsed(),
             preferences.overlay_locked || preferences.subtitle_blends_with_background,
+            preferences.subtitle_blends_with_background,
         );
+        OverlayWindowManager::reassert_on_active_space(&app);
     }
     Ok(())
 }

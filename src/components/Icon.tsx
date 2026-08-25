@@ -16,6 +16,7 @@ import {
   Key,
   Languages,
   LockKeyhole,
+  LockKeyholeOpen,
   Pause,
   Play,
   Plus,
@@ -55,6 +56,7 @@ export type IconName =
   | "cloud"
   | "languages"
   | "lock"
+  | "unlock"
   | "plus"
   | "shield-check"
   | "trash"
@@ -82,6 +84,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   cloud: Cloud,
   languages: Languages,
   lock: LockKeyhole,
+  unlock: LockKeyholeOpen,
   plus: Plus,
   "shield-check": ShieldCheck,
   trash: Trash2,

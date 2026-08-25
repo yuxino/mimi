@@ -27,6 +27,7 @@ export function OverlayControlWindow() {
     (state) => state.switchTranslationMode,
   );
   const saveSettings = useStore((state) => state.saveSettings);
+  const setOverlayLocked = useStore((state) => state.setOverlayLocked);
   const showSettings = useStore((state) => state.showSettings);
   const [mode, setMode] = useState<OverlayControlMode>(initialPreviewMode);
 
@@ -110,9 +111,10 @@ export function OverlayControlWindow() {
         onDismiss={dismiss}
         onSwitchSourceLanguage={switchSourceLanguage}
         onSwitchTranslationMode={switchTranslationMode}
-        onSaveBackgroundBlend={(subtitleBlendsWithBackground) =>
+        onSetImmersiveMode={(subtitleBlendsWithBackground) =>
           saveSettings({ subtitleBlendsWithBackground })
         }
+        onSetOverlayLocked={setOverlayLocked}
         onShowSettings={showSettings}
       />
     );

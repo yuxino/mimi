@@ -109,6 +109,28 @@ export function emptyStateIsError(session: SessionStateEvent): boolean {
   return session.status.kind === "error";
 }
 
+export type EmptyStateDensity = "minimal" | "compact" | "comfortable";
+
+/**
+ * Empty-state chrome adapts to the freely resized overlay height. At the
+ * 100px native minimum only one status line fits below the control band, so
+ * the decorative pulse yields to the text instead of being clipped.
+ */
+export function emptyStateDensity(overlayHeight: number): EmptyStateDensity {
+  if (overlayHeight <= 112) return "minimal";
+  if (overlayHeight < 176) return "compact";
+  return "comfortable";
+}
+
+export function timelineClassName(blendsWithBackground: boolean): string {
+  return [
+    "min-h-0 flex-1 overflow-y-auto",
+    blendsWithBackground ? "overlay-timeline--immersive" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** Maximum characters per segment for the current target/display language. */
 export function subtitleSegmentLength(
   targetLanguage: SettingsSnapshot["targetLanguage"],
@@ -170,6 +192,61 @@ export function visibleDraft(
     history[history.length - 1]?.translation === translation.text;
   if (currentIsAlreadyInHistory) return null;
   return { text: translation.text, isFinal: translation.isFinal };
+}
+
+export interface LiveSubtitlePreview {
+  text: string;
+  isFinal: boolean;
+  kind: "translation" | "source";
+}
+
+/**
+ * Selects the active subtitle tail. Translation remains the preferred output,
+ * but source recognition is a latency and failure fallback: long utterances,
+ * same-language audio, and an empty provider translation must never leave the
+ * subtitle canvas blank while usable recognition text already exists.
+ */
+export function visibleLiveSubtitle(
+  subtitles: SubtitleSnapshot,
+  settings: Pick<SettingsSnapshot, "sourceLanguage" | "targetLanguage">,
+  detectedLanguage: string | null,
+  isTranslationPending: boolean,
+  isTranslationTimedOut: boolean,
+): LiveSubtitlePreview | null {
+  const translation = visibleDraft(
+    subtitles.translation,
+    subtitles.history,
+  );
+  if (translation !== null) {
+    return { ...translation, kind: "translation" };
+  }
+
+  const source = subtitles.source;
+  if (source.text === "") return null;
+
+  const latestPair = subtitles.history[subtitles.history.length - 1];
+  const currentTranslationMatchesLatestPair =
+    subtitles.translation.isFinal &&
+    subtitles.translation.text !== "" &&
+    latestPair?.translation === subtitles.translation.text;
+  const sourceIsAlreadyCommitted =
+    source.isFinal &&
+    !isTranslationPending &&
+    !isTranslationTimedOut &&
+    latestPair?.source === source.text &&
+    currentTranslationMatchesLatestPair;
+  if (sourceIsAlreadyCommitted) return null;
+
+  return {
+    text: source.text,
+    // A final source is durable display text only when no translation is
+    // semantically needed. Otherwise keep the preview treatment until the
+    // provider supplies the translated replacement.
+    isFinal:
+      source.isFinal &&
+      isSameLanguageMode(settings, detectedLanguage),
+    kind: "source",
+  };
 }
 
 export interface LanguageStatus {

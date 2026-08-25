@@ -27,11 +27,22 @@ pub fn run() {
         )
         .init();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+
+    builder
         .setup(|app| {
             tracing::info!("mimi starting");
+
+            // macOS only admits accessory utilities into another app's true
+            // full-screen presentation. mimi already exposes its lifecycle
+            // through the menu-bar tray, so it does not need a Dock or Cmd-Tab
+            // presence of its own.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             // Dev-build marker: the settings window is created from the
             // static config title, so adjust it at runtime so the dev binary
@@ -54,6 +65,15 @@ pub fn run() {
                 is_ui_test,
                 &app.config().identifier,
             ));
+            // A deterministic standard-overlay fixture is useful for native
+            // window-level checks. It changes only the in-memory UI-test
+            // snapshot; `SettingsStore` never persists UI-test writes.
+            if is_ui_test && std::env::var("MIMI_UI_TEST_STANDARD_OVERLAY").as_deref() == Ok("1") {
+                let _ = settings.save_preferences(|preferences| {
+                    preferences.subtitle_blends_with_background = false;
+                    preferences.overlay_locked = false;
+                });
+            }
             let session = SessionManager::new(app_handle.clone(), Arc::clone(&settings));
 
             let overlay = Arc::new(std::sync::Mutex::new(windows::OverlayState::load(
@@ -77,7 +97,7 @@ pub fn run() {
             windows::OverlayControlWindowManager::ensure(&app_handle);
 
             setup_tray(&app_handle)?;
-            setup_global_shortcut(&app_handle, Arc::clone(&session))?;
+            setup_global_shortcuts(&app_handle, Arc::clone(&session))?;
 
             // Test-only probe: `SessionManager` handles UI-test starts as a
             // synthetic local state transition. It never reads the keychain,
@@ -106,9 +126,12 @@ pub fn run() {
                             &state.settings,
                         );
                     }
-                    // Keep the child control island/panel glued to the
-                    // subtitle canvas (Windows owned windows do not move
-                    // automatically with their owner).
+                    // AppKit moves an NSWindow child in the same native drag
+                    // transaction as its parent. Repositioning it again from
+                    // the later Moved event makes the control visibly trail.
+                    // Windows owned windows and Linux transient windows still
+                    // need explicit live following.
+                    #[cfg(not(target_os = "macos"))]
                     windows::OverlayControlWindowManager::follow_overlay(app);
                 }
                 WindowEvent::Focused(false) if window.label() == "tray-panel" => {
@@ -485,10 +508,10 @@ fn refresh_native_tray_session_action(app: &tauri::AppHandle, is_active: bool) {
     }
 }
 
-/// Registers the global start/stop shortcut — ⌘⇧Space on macOS (matching the
-/// original app), Ctrl+Shift+Space on Windows. A 500ms debounce mirrors the
-/// original `GlobalHotKeyController`.
-fn setup_global_shortcut(
+/// Registers the global start/stop and Immersive Mode shortcuts. Each action
+/// owns an independent 500ms debounce so presentation switching never blocks
+/// a session lifecycle action (or vice versa).
+fn setup_global_shortcuts(
     app: &tauri::AppHandle,
     session: Arc<SessionManager>,
 ) -> tauri::Result<()> {
@@ -501,7 +524,8 @@ fn setup_global_shortcut(
     let modifiers = Modifiers::SUPER | Modifiers::SHIFT;
     #[cfg(not(target_os = "macos"))]
     let modifiers = Modifiers::CONTROL | Modifiers::SHIFT;
-    let shortcut = Shortcut::new(Some(modifiers), Code::Space);
+    let session_shortcut = Shortcut::new(Some(modifiers), Code::Space);
+    let immersive_shortcut = Shortcut::new(Some(modifiers), Code::KeyM);
 
     let last_trigger = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
     let session_for_handler = Arc::clone(&session);
@@ -510,40 +534,73 @@ fn setup_global_shortcut(
     // app (e.g. a second mimi instance) may already own the combo, in which
     // case macOS delivers the key to that app and this one simply has no
     // shortcut.
-    let register = app
-        .global_shortcut()
-        .on_shortcut(shortcut, move |_app, _shortcut, event| {
-            if event.state() != ShortcutState::Pressed {
-                return;
-            }
-            // Debounce repeated global-shortcut presses.
-            let now_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0);
-            let previous = last_trigger.load(std::sync::atomic::Ordering::SeqCst);
-            if now_ms.saturating_sub(previous) < 500 {
-                return;
-            }
-            last_trigger.store(now_ms, std::sync::atomic::Ordering::SeqCst);
-            let session = Arc::clone(&session_for_handler);
-            tauri::async_runtime::spawn(async move {
-                let status = session.status_kind();
-                if status == "connecting" || status == "stopping" {
+    let session_register =
+        app.global_shortcut()
+            .on_shortcut(session_shortcut, move |_app, _shortcut, event| {
+                if event.state() != ShortcutState::Pressed {
                     return;
                 }
-                if session.is_active() {
-                    session.stop().await;
-                } else {
-                    let _ = session.start(true).await;
+                // Debounce repeated global-shortcut presses.
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                let previous = last_trigger.load(std::sync::atomic::Ordering::SeqCst);
+                if now_ms.saturating_sub(previous) < 500 {
+                    return;
                 }
+                last_trigger.store(now_ms, std::sync::atomic::Ordering::SeqCst);
+                let session = Arc::clone(&session_for_handler);
+                tauri::async_runtime::spawn(async move {
+                    let status = session.status_kind();
+                    if status == "connecting" || status == "stopping" {
+                        return;
+                    }
+                    if session.is_active() {
+                        session.stop().await;
+                    } else {
+                        let _ = session.start(true).await;
+                    }
+                });
             });
-        });
-    match register {
-        Ok(()) => tracing::info!("global shortcut registered"),
+    match session_register {
+        Ok(()) => tracing::info!("global session shortcut registered"),
         Err(error) => tracing::warn!(
-            "global shortcut could not be registered: {error} \
+            "global session shortcut could not be registered: {error} \
              (another mimi instance may already own ⌘⇧Space)"
+        ),
+    }
+
+    let immersive_last_trigger = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let immersive_register =
+        app.global_shortcut()
+            .on_shortcut(immersive_shortcut, move |app, _shortcut, event| {
+                if event.state() != ShortcutState::Pressed {
+                    return;
+                }
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                let previous = immersive_last_trigger.load(std::sync::atomic::Ordering::SeqCst);
+                if now_ms.saturating_sub(previous) < 500 {
+                    return;
+                }
+                immersive_last_trigger.store(now_ms, std::sync::atomic::Ordering::SeqCst);
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = commands::toggle_immersive_mode(&app).await {
+                        tracing::warn!(
+                            "immersive shortcut failed label=settings_unavailable error={error}"
+                        );
+                    }
+                });
+            });
+    match immersive_register {
+        Ok(()) => tracing::info!("global immersive shortcut registered"),
+        Err(error) => tracing::warn!(
+            "global immersive shortcut could not be registered: {error} \
+             (another app may already own the combination)"
         ),
     }
     Ok(())

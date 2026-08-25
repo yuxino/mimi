@@ -45,6 +45,8 @@ export interface SessionStateEvent {
   /** "zh" | "ja" | "en" | "ko" | ... (normalized language code). */
   detectedLanguage: string | null;
   isTranslationPending: boolean;
+  /** The latest source final outlived its translation deadline. */
+  isTranslationTimedOut: boolean;
 }
 
 // ---------------------------------------------------------------------------

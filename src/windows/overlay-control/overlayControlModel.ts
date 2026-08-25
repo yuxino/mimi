@@ -14,7 +14,8 @@ export interface OverlayControlPanelModel {
   sourceOptions: readonly SourceLanguage[];
   translationModeOptions: readonly TranslationMode[];
   effectiveTranslationMode: TranslationMode;
-  backgroundVisible: boolean;
+  immersiveModeEnabled: boolean;
+  overlayLocked: boolean;
 }
 
 /**
@@ -35,6 +36,7 @@ export function overlayControlPanelModel(
         ? translationModes
         : [],
     effectiveTranslationMode: effectiveTranslationModeForSettings(settings),
-    backgroundVisible: !settings.subtitleBlendsWithBackground,
+    immersiveModeEnabled: settings.subtitleBlendsWithBackground,
+    overlayLocked: settings.isOverlayLocked,
   };
 }

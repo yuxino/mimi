@@ -27,7 +27,9 @@ description = "Allows the subtitle overlay to control its own presentation and a
 commands.allow = [
   "session_toggle_paused",
   "session_clear_subtitles",
+  "settings_save",
   "overlay_set_collapsed",
+  "overlay_set_locked",
   "app_show_settings",
   "resize_start",
   "resize_move",
@@ -41,6 +43,7 @@ commands.allow = [
   "session_switch_source_language",
   "session_switch_translation_mode",
   "settings_save",
+  "overlay_set_locked",
   "app_show_settings",
   "overlay_popover_toggle",
   "overlay_popover_hide",

@@ -19,7 +19,12 @@ import {
 import { LanguageStatusCapsule } from "./LanguageStatusCapsule";
 import type { OverlayControlPanelModel } from "./overlayControlModel";
 
-type PendingAction = "source" | "mode" | "background" | "settings";
+type PendingAction =
+  | "source"
+  | "mode"
+  | "immersive"
+  | "lock"
+  | "settings";
 
 interface OverlayControlPanelProps {
   phase: OverlayActivityPhaseKind;
@@ -32,7 +37,8 @@ interface OverlayControlPanelProps {
   onDismiss: () => void;
   onSwitchSourceLanguage: (language: SourceLanguage) => Promise<void>;
   onSwitchTranslationMode: (mode: TranslationMode) => Promise<void>;
-  onSaveBackgroundBlend: (blend: boolean) => Promise<void>;
+  onSetImmersiveMode: (enabled: boolean) => Promise<void>;
+  onSetOverlayLocked: (locked: boolean) => Promise<void>;
   onShowSettings: () => Promise<void>;
 }
 
@@ -47,14 +53,16 @@ export function OverlayControlPanel({
   onDismiss,
   onSwitchSourceLanguage,
   onSwitchTranslationMode,
-  onSaveBackgroundBlend,
+  onSetImmersiveMode,
+  onSetOverlayLocked,
   onShowSettings,
 }: OverlayControlPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedSourceRef = useRef<HTMLButtonElement>(null);
   const selectedModeRef = useRef<HTMLButtonElement>(null);
-  const backgroundRef = useRef<HTMLButtonElement>(null);
+  const immersiveRef = useRef<HTMLButtonElement>(null);
+  const lockRef = useRef<HTMLButtonElement>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const canChangeSessionSettings = !isChangingSession && pendingAction === null;
@@ -92,7 +100,8 @@ export function OverlayControlPanel({
     const target = [
       selectedSourceRef.current,
       selectedModeRef.current,
-      backgroundRef.current,
+      immersiveRef.current,
+      lockRef.current,
     ].find((candidate) => candidate !== null && !candidate.disabled);
     const animationFrame = window.requestAnimationFrame(() => target?.focus());
     return () => window.cancelAnimationFrame(animationFrame);
@@ -207,28 +216,62 @@ export function OverlayControlPanel({
         <div className="overlay-control-divider" />
 
         <button
-          ref={backgroundRef}
+          ref={immersiveRef}
           type="button"
           role="switch"
-          aria-checked={model.backgroundVisible}
-          aria-label={I18N.overlay.subtitleBackground}
+          aria-checked={model.immersiveModeEnabled}
+          aria-label={I18N.overlay.immersiveMode}
           className="overlay-control-setting"
           disabled={pendingAction !== null}
           onClick={() =>
-            performAction("background", () =>
-              onSaveBackgroundBlend(model.backgroundVisible),
+            performAction("immersive", () =>
+              onSetImmersiveMode(!model.immersiveModeEnabled),
             )
           }
         >
           <span className="overlay-control-setting__icon" aria-hidden="true">
-            <Icon name="app-window" />
+            <Icon name="blend" />
           </span>
           <span className="overlay-control-setting__copy">
-            <strong>{I18N.overlay.subtitleBackground}</strong>
+            <strong>{I18N.overlay.immersiveMode}</strong>
             <small>
-              {model.backgroundVisible
-                ? I18N.overlay.backgroundShown
-                : I18N.overlay.backgroundHidden}
+              {model.immersiveModeEnabled
+                ? I18N.overlay.immersiveModeOn
+                : I18N.overlay.immersiveModeOff}
+            </small>
+          </span>
+          <span className="overlay-control-switch" aria-hidden="true">
+            <span />
+          </span>
+        </button>
+
+        <button
+          ref={lockRef}
+          type="button"
+          role="switch"
+          aria-checked={model.overlayLocked}
+          aria-label={I18N.overlay.lockPosition}
+          className="overlay-control-setting"
+          disabled={pendingAction !== null}
+          onClick={() =>
+            performAction("lock", () =>
+              onSetOverlayLocked(!model.overlayLocked),
+            )
+          }
+        >
+          <span className="overlay-control-setting__icon" aria-hidden="true">
+            <Icon name={model.overlayLocked ? "unlock" : "lock"} />
+          </span>
+          <span className="overlay-control-setting__copy">
+            <strong>
+              {model.overlayLocked
+                ? I18N.overlay.unlockPosition
+                : I18N.overlay.lockPosition}
+            </strong>
+            <small>
+              {model.overlayLocked
+                ? I18N.overlay.positionLocked
+                : I18N.overlay.positionUnlocked}
             </small>
           </span>
           <span className="overlay-control-switch" aria-hidden="true">

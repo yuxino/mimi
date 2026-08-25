@@ -75,6 +75,56 @@ use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
+#[cfg(target_os = "macos")]
+tauri_nspanel::tauri_panel! {
+    panel!(SubtitleOverlayPanel {
+        config: {
+            can_become_key_window: false,
+            can_become_main_window: false,
+            is_floating_panel: true,
+            hides_on_deactivate: false
+        }
+    })
+
+    panel!(SubtitleControlPanel {
+        config: {
+            can_become_key_window: true,
+            can_become_main_window: false,
+            is_floating_panel: true,
+            hides_on_deactivate: false,
+            becomes_key_only_if_needed: true
+        }
+    })
+}
+
+#[derive(Clone, Copy)]
+enum OverlayPanelKind {
+    Subtitles,
+    Controls,
+}
+
+#[cfg(target_os = "macos")]
+fn convert_overlay_to_panel(
+    window: &tauri::WebviewWindow,
+    kind: OverlayPanelKind,
+) -> Result<(), ()> {
+    use tauri_nspanel::WebviewWindowExt;
+
+    let result = match kind {
+        OverlayPanelKind::Subtitles => window.to_panel::<SubtitleOverlayPanel>(),
+        OverlayPanelKind::Controls => window.to_panel::<SubtitleControlPanel>(),
+    };
+    result.map(|_| ()).map_err(|_| ())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn convert_overlay_to_panel(
+    _window: &tauri::WebviewWindow,
+    _kind: OverlayPanelKind,
+) -> Result<(), ()> {
+    Ok(())
+}
+
 /// Logical-coordinate frame layout version. Frames saved before this version
 /// stored physical pixels and must be discarded (they restore off-screen on
 /// Retina displays).
@@ -332,6 +382,11 @@ impl OverlayWindowManager {
 
         match builder.build() {
             Ok(window) => {
+                if convert_overlay_to_panel(&window, OverlayPanelKind::Subtitles).is_err() {
+                    let _ = window.destroy();
+                    pipeline_log!("overlay window failed label=panel_conversion_failed");
+                    return;
+                }
                 if let Some(presentation) = app.try_state::<OverlayPresentationState>() {
                     presentation.invalidate();
                 }
@@ -344,33 +399,40 @@ impl OverlayWindowManager {
 
     /// Applies the complete native overlay presentation in one place:
     /// visibility, click-through behavior, and the child control surface.
-    /// The control island is visible only for an active, expanded overlay;
-    /// an already-open panel remains open across ordinary state broadcasts.
+    /// The control island is visible only for an active, expanded,
+    /// non-immersive overlay; an already-open panel remains open across
+    /// ordinary state broadcasts.
     pub fn sync_presentation(
         app: &AppHandle,
         is_active: bool,
         is_collapsed: bool,
         click_through: bool,
+        is_immersive: bool,
     ) {
         if is_active {
             if click_through {
-                // Preserve the escape hatch invariant: the subtitle canvas
-                // cannot become click-through until its independent control
-                // island/panel is visible and interactive.
+                // Ordinary position locking keeps the independent control
+                // island as an unlock escape hatch. Immersive Mode hides all
+                // overlay chrome and is exited via shortcut, tray, or settings.
                 Self::sync_overlay_visibility(app, true);
-                OverlayControlWindowManager::sync_presentation(app, true, is_collapsed);
+                OverlayControlWindowManager::sync_presentation(
+                    app,
+                    true,
+                    is_collapsed,
+                    is_immersive,
+                );
                 Self::update_locked(app, true);
             } else {
                 // Restore canvas interaction before changing either visible
                 // surface, so unlocking never leaves an inert frame behind.
                 Self::update_locked(app, false);
                 Self::sync_overlay_visibility(app, true);
-                OverlayControlWindowManager::sync_presentation(app, true, is_collapsed);
+                OverlayControlWindowManager::sync_presentation(app, true, is_collapsed, false);
             }
         } else {
             // Hide the child first so it cannot linger for a frame after its
             // subtitle parent disappears.
-            OverlayControlWindowManager::sync_presentation(app, false, is_collapsed);
+            OverlayControlWindowManager::sync_presentation(app, false, is_collapsed, is_immersive);
             Self::sync_overlay_visibility(app, false);
             Self::update_locked(app, click_through);
         }
@@ -385,10 +447,29 @@ impl OverlayWindowManager {
         // already-visible window re-activates it and steals focus from the
         // child control on every subtitle update.
         if is_active && !visible {
-            configure_overlay_window(&window);
-            let _ = window.show();
+            show_overlay_window(&window);
         } else if !is_active && visible {
             let _ = window.hide();
+        }
+    }
+
+    /// Restores already-visible overlay surfaces to the active Space after an
+    /// explicit show request. This is deliberately separate from ordinary
+    /// streaming state broadcasts so subtitle updates never reorder windows or
+    /// disturb focus.
+    pub fn reassert_on_active_space(app: &AppHandle) {
+        let Some(overlay) = app.get_webview_window("overlay") else {
+            return;
+        };
+        if overlay.is_visible().unwrap_or(false) {
+            reassert_overlay_window_on_active_space(&overlay);
+        }
+
+        let Some(control) = app.get_webview_window("overlay-control") else {
+            return;
+        };
+        if control.is_visible().unwrap_or(false) {
+            reassert_overlay_window_on_active_space(&control);
         }
     }
 
@@ -509,6 +590,12 @@ impl OverlayWindowManager {
                         persist_user_frame(&settings, &state.user_frame);
                     }
                 }
+                // AppKit owns live child movement on macOS, avoiding a
+                // one-event-late manual correction during the drag. Once the
+                // parent settles, re-derive the child geometry on every
+                // platform so work-area and scale changes are still clamped.
+                drop(state);
+                OverlayControlWindowManager::follow_overlay(&app);
                 return;
             }
         });
@@ -632,26 +719,115 @@ impl OverlayWindowManager {
 }
 
 /// Reasserts presentation-level window behavior whenever the overlay is
-/// created or explicitly shown. macOS needs `FullScreenAuxiliary` in addition
-/// to Tauri's all-workspaces flag to accompany another app's full-screen
-/// window instead of remaining on the previous Space.
+/// created or shown. macOS needs both `CanJoinAllApplications` and
+/// `FullScreenAuxiliary` in addition to Tauri's all-workspaces flag to
+/// accompany another app's full-screen window instead of remaining on the
+/// previous Space. macOS composites true full-screen video above ordinary
+/// floating and status windows, so the subtitle surface uses the screen-saver
+/// window level recommended for cross-application media overlays.
 fn configure_overlay_window(window: &tauri::WebviewWindow) {
-    let _ = window.set_always_on_top(true);
-    let _ = window.set_visible_on_all_workspaces(true);
+    configure_overlay_window_impl(window, false);
+}
+
+/// Orders an overlay onscreen without making it key. Tauri's ordinary macOS
+/// `show()` path uses `makeKeyAndOrderFront`, which can activate mimi and pull
+/// the user out of the media app's full-screen Space.
+fn show_overlay_window(window: &tauri::WebviewWindow) {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window.show();
+        configure_overlay_window(window);
+    }
 
     #[cfg(target_os = "macos")]
-    unsafe {
-        use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    configure_overlay_window_impl(window, true);
+}
 
-        let Ok(pointer) = window.ns_window() else {
-            return;
-        };
-        let ns_window: &NSWindow = &*pointer.cast();
-        let behavior = ns_window.collectionBehavior()
-            | NSWindowCollectionBehavior::CanJoinAllSpaces
-            | NSWindowCollectionBehavior::FullScreenAuxiliary;
-        ns_window.setCollectionBehavior(behavior);
+/// Reapplies the native behavior for an explicit user-requested show. AppKit's
+/// `isVisible` remains true for an ordered-in window on another Space, so a
+/// plain Tauri `show()` would otherwise be skipped without restoring it to the
+/// active full-screen Space.
+fn reassert_overlay_window_on_active_space(window: &tauri::WebviewWindow) {
+    configure_overlay_window_impl(window, true);
+}
+
+/// Expanding the control surface follows a click that already gives its
+/// nonactivating panel any key status it needs. Tao's macOS `set_focus` path
+/// activates the entire application, which would steal focus from the media
+/// app and can pull the user out of its full-screen Space.
+fn focus_overlay_control(window: &tauri::WebviewWindow) {
+    #[cfg(not(target_os = "macos"))]
+    let _ = window.set_focus();
+
+    #[cfg(target_os = "macos")]
+    let _ = window;
+}
+
+fn configure_overlay_window_impl(window: &tauri::WebviewWindow, order_front: bool) {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_visible_on_all_workspaces(true);
     }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Session transitions may call this function from a tokio worker.
+        // Raw AppKit access is main-thread-only and macOS traps immediately
+        // if `setLevel:` is sent from that worker, so resolve the NSWindow and
+        // apply both native properties inside Tauri's main-thread dispatcher.
+        let window_for_main = window.clone();
+        let _ = window.run_on_main_thread(move || unsafe {
+            use objc2_app_kit::{NSWindow, NSWindowStyleMask};
+
+            let Ok(pointer) = window_for_main.ns_window() else {
+                return;
+            };
+            let ns_window: &NSWindow = &*pointer.cast();
+            // `to_panel` changes the native class while retaining Tauri's
+            // existing borderless/resizable style bits. Add the one panel
+            // style required to avoid activating mimi when the user clicks
+            // subtitles or controls over another app's full-screen video.
+            ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+            let behavior = overlay_collection_behavior(ns_window.collectionBehavior());
+            ns_window.setCollectionBehavior(behavior);
+            ns_window.setHidesOnDeactivate(false);
+            ns_window.setLevel(overlay_window_level());
+            if order_front {
+                ns_window.orderFrontRegardless();
+            }
+        });
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn overlay_window_level() -> objc2_app_kit::NSWindowLevel {
+    objc2_app_kit::NSScreenSaverWindowLevel
+}
+
+#[cfg(target_os = "macos")]
+fn overlay_collection_behavior(
+    current: objc2_app_kit::NSWindowCollectionBehavior,
+) -> objc2_app_kit::NSWindowCollectionBehavior {
+    use objc2_app_kit::NSWindowCollectionBehavior;
+
+    // AppKit permits only one member from each of these behavior groups.
+    // Remove incompatible defaults before declaring the overlay as eligible
+    // for other applications' full-screen Spaces.
+    let incompatible = NSWindowCollectionBehavior::MoveToActiveSpace
+        | NSWindowCollectionBehavior::Managed
+        | NSWindowCollectionBehavior::Transient
+        | NSWindowCollectionBehavior::ParticipatesInCycle
+        | NSWindowCollectionBehavior::Primary
+        | NSWindowCollectionBehavior::Auxiliary
+        | NSWindowCollectionBehavior::FullScreenPrimary
+        | NSWindowCollectionBehavior::FullScreenNone;
+    (current & !incompatible)
+        | NSWindowCollectionBehavior::CanJoinAllSpaces
+        | NSWindowCollectionBehavior::Stationary
+        | NSWindowCollectionBehavior::IgnoresCycle
+        | NSWindowCollectionBehavior::CanJoinAllApplications
+        | NSWindowCollectionBehavior::FullScreenAuxiliary
 }
 
 // ---------------------------------------------------------------------------
@@ -906,7 +1082,7 @@ impl OverlayControlWindowManager {
     // Matches the first-open height of the full Alibaba control set; React
     // immediately replaces it with the measured provider/locale-specific
     // height, but this default avoids a visible clipped first frame.
-    pub const DEFAULT_PANEL_HEIGHT: f64 = 374.0;
+    pub const DEFAULT_PANEL_HEIGHT: f64 = 428.0;
     const MIN_PANEL_HEIGHT: f64 = 132.0;
     const MAX_PANEL_HEIGHT: f64 = 520.0;
     const ANCHOR_OFFSET_X: f64 = 18.0;
@@ -944,6 +1120,11 @@ impl OverlayControlWindowManager {
 
         match builder.build() {
             Ok(window) => {
+                if convert_overlay_to_panel(&window, OverlayPanelKind::Controls).is_err() {
+                    let _ = window.destroy();
+                    pipeline_log!("overlay control failed label=panel_conversion_failed");
+                    return;
+                }
                 configure_overlay_window(&window);
                 pipeline_log!("overlay control created");
             }
@@ -959,13 +1140,19 @@ impl OverlayControlWindowManager {
 
     /// Derives the persistent island visibility from the overlay lifecycle.
     /// An open panel survives ordinary subtitle/status broadcasts, but any
-    /// inactive or collapsed transition hides the entire child surface.
-    pub fn sync_presentation(app: &AppHandle, is_active: bool, is_collapsed: bool) {
+    /// inactive, collapsed, or immersive transition hides the entire child
+    /// surface.
+    pub fn sync_presentation(
+        app: &AppHandle,
+        is_active: bool,
+        is_collapsed: bool,
+        is_immersive: bool,
+    ) {
         let Some(state) = app.try_state::<OverlayControlState>() else {
             return;
         };
         let current = state.mode();
-        let next = control_mode_for_presentation(current, is_active, is_collapsed);
+        let next = control_mode_for_presentation(current, is_active, is_collapsed, is_immersive);
         let mode_changed = state.set_mode(next);
         let visible_surface_needs_restore = !mode_changed
             && next != OverlayControlMode::Hidden
@@ -1054,8 +1241,10 @@ impl OverlayControlWindowManager {
     }
 
     /// Keeps the child surface attached to the overlay on platforms where an
-    /// owned window does not automatically move with its owner (notably
-    /// Windows), and re-clamps after monitor or scale changes.
+    /// owned/transient window does not automatically move with its owner, and
+    /// performs the final cross-platform clamp after movement settles. macOS
+    /// intentionally does not call this for every Moved event because AppKit
+    /// already moves native child windows synchronously with their parent.
     pub fn follow_overlay(app: &AppHandle) {
         let mode = Self::mode(app);
         if mode != OverlayControlMode::Hidden {
@@ -1076,11 +1265,10 @@ impl OverlayControlWindowManager {
         let _ = window.emit(OVERLAY_CONTROL_MODE_EVENT, mode);
         Self::apply_geometry(app, mode);
         if !window.is_visible().unwrap_or(false) {
-            configure_overlay_window(&window);
-            let _ = window.show();
+            show_overlay_window(&window);
         }
         if focus {
-            let _ = window.set_focus();
+            focus_overlay_control(&window);
         }
     }
 
@@ -1122,8 +1310,9 @@ fn control_mode_for_presentation(
     current: OverlayControlMode,
     is_active: bool,
     is_collapsed: bool,
+    is_immersive: bool,
 ) -> OverlayControlMode {
-    if !is_active || is_collapsed {
+    if !is_active || is_collapsed || is_immersive {
         OverlayControlMode::Hidden
     } else if current == OverlayControlMode::Panel {
         OverlayControlMode::Panel
@@ -1340,11 +1529,11 @@ mod geometry_tests {
     #[test]
     fn active_expanded_overlay_keeps_an_open_panel() {
         assert_eq!(
-            control_mode_for_presentation(OverlayControlMode::Panel, true, false),
+            control_mode_for_presentation(OverlayControlMode::Panel, true, false, false),
             OverlayControlMode::Panel
         );
         assert_eq!(
-            control_mode_for_presentation(OverlayControlMode::Hidden, true, false),
+            control_mode_for_presentation(OverlayControlMode::Hidden, true, false, false),
             OverlayControlMode::Island
         );
     }
@@ -1352,11 +1541,15 @@ mod geometry_tests {
     #[test]
     fn inactive_or_collapsed_overlay_hides_control_surface() {
         assert_eq!(
-            control_mode_for_presentation(OverlayControlMode::Panel, false, false),
+            control_mode_for_presentation(OverlayControlMode::Panel, false, false, false),
             OverlayControlMode::Hidden
         );
         assert_eq!(
-            control_mode_for_presentation(OverlayControlMode::Panel, true, true),
+            control_mode_for_presentation(OverlayControlMode::Panel, true, true, false),
+            OverlayControlMode::Hidden
+        );
+        assert_eq!(
+            control_mode_for_presentation(OverlayControlMode::Panel, true, false, true),
             OverlayControlMode::Hidden
         );
     }
@@ -1478,5 +1671,44 @@ mod geometry_tests {
         assert_eq!(geometry.x, 136.0);
         assert_eq!(geometry.y, 58.0);
         assert_eq!(geometry.height, 164.0);
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod macos_presentation_tests {
+    use super::{overlay_collection_behavior, overlay_window_level};
+    use objc2_app_kit::{
+        NSScreenSaverWindowLevel, NSStatusWindowLevel, NSWindowCollectionBehavior,
+    };
+
+    #[test]
+    fn overlay_level_covers_true_full_screen_media() {
+        assert_eq!(overlay_window_level(), NSScreenSaverWindowLevel);
+        assert!(overlay_window_level() > NSStatusWindowLevel);
+    }
+
+    #[test]
+    fn overlay_can_join_other_apps_full_screen_spaces() {
+        let current = NSWindowCollectionBehavior::MoveToActiveSpace
+            | NSWindowCollectionBehavior::Managed
+            | NSWindowCollectionBehavior::ParticipatesInCycle
+            | NSWindowCollectionBehavior::Primary
+            | NSWindowCollectionBehavior::FullScreenPrimary;
+
+        let behavior = overlay_collection_behavior(current);
+
+        assert!(behavior.contains(NSWindowCollectionBehavior::CanJoinAllSpaces));
+        assert!(behavior.contains(NSWindowCollectionBehavior::Stationary));
+        assert!(behavior.contains(NSWindowCollectionBehavior::IgnoresCycle));
+        assert!(behavior.contains(NSWindowCollectionBehavior::CanJoinAllApplications));
+        assert!(behavior.contains(NSWindowCollectionBehavior::FullScreenAuxiliary));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::MoveToActiveSpace));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::Managed));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::Transient));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::ParticipatesInCycle));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::Primary));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::Auxiliary));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::FullScreenPrimary));
+        assert!(!behavior.contains(NSWindowCollectionBehavior::FullScreenNone));
     }
 }

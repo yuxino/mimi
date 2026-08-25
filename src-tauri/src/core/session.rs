@@ -10,6 +10,7 @@ pub struct TranslationSessionState {
     pub subtitles: SubtitleSnapshot,
     pub detected_language: Option<DetectedLanguage>,
     pub is_translation_pending: bool,
+    pub is_translation_timed_out: bool,
 }
 
 impl Default for TranslationSessionState {
@@ -19,6 +20,7 @@ impl Default for TranslationSessionState {
             subtitles: SubtitleSnapshot::empty(),
             detected_language: None,
             is_translation_pending: false,
+            is_translation_timed_out: false,
         }
     }
 }
@@ -36,6 +38,7 @@ impl TranslationSessionController {
         self.state.status = SessionStatus::Connecting;
         self.state.detected_language = None;
         self.state.is_translation_pending = false;
+        self.state.is_translation_timed_out = false;
     }
 
     pub fn did_connect(&mut self) {
@@ -47,12 +50,13 @@ impl TranslationSessionController {
         self.state.is_translation_pending = false;
     }
 
-    /// Clears only the waiting-for-final flag (the "正在翻译" indicator)
-    /// without touching status or subtitles. Used by the translation-timeout
-    /// guard when the server never returns a final (e.g. audio stopped
-    /// mid-sentence); the draft/history already shown stays on screen.
+    /// Marks the active translation as timed out and clears its
+    /// waiting-for-final indicator without touching status or subtitles. The
+    /// explicit timeout bit lets presentation distinguish an identical new
+    /// utterance from the latest already-committed history pair.
     pub fn clear_translation_pending(&mut self) {
         self.state.is_translation_pending = false;
+        self.state.is_translation_timed_out = true;
     }
 
     pub fn begin_stopping(&mut self) {
@@ -63,6 +67,7 @@ impl TranslationSessionController {
     pub fn did_stop(&mut self) {
         self.state.status = SessionStatus::Idle;
         self.state.is_translation_pending = false;
+        self.state.is_translation_timed_out = false;
     }
 
     pub fn did_fail(&mut self, message: impl Into<String>) {
@@ -74,6 +79,7 @@ impl TranslationSessionController {
         self.subtitle_reducer
             .apply(crate::core::models::SubtitleEvent::Clear);
         self.state.subtitles = self.subtitle_reducer.snapshot.clone();
+        self.state.is_translation_timed_out = false;
     }
 
     pub fn handle(&mut self, event: LiveTranslateServerEvent) {
@@ -102,6 +108,7 @@ impl TranslationSessionController {
             }
             LiveTranslateServerEvent::TranslationStarted => {
                 self.state.is_translation_pending = true;
+                self.state.is_translation_timed_out = false;
             }
             LiveTranslateServerEvent::TranslationDraft(text) => {
                 self.subtitle_reducer
@@ -109,6 +116,7 @@ impl TranslationSessionController {
             }
             LiveTranslateServerEvent::TranslationFinal(text) => {
                 self.state.is_translation_pending = false;
+                self.state.is_translation_timed_out = false;
                 self.subtitle_reducer
                     .apply(crate::core::models::SubtitleEvent::TranslationFinal(text));
             }
@@ -119,6 +127,7 @@ impl TranslationSessionController {
             } => {
                 self.update_detected_language(language.as_deref());
                 self.state.is_translation_pending = false;
+                self.state.is_translation_timed_out = false;
                 self.subtitle_reducer
                     .apply(crate::core::models::SubtitleEvent::FinalPair {
                         source,
@@ -279,7 +288,11 @@ mod tests {
 
         assert_eq!(controller.state.status, SessionStatus::Listening);
         assert!(!controller.state.is_translation_pending);
+        assert!(controller.state.is_translation_timed_out);
         assert_eq!(controller.state.subtitles, subtitles_before);
+
+        controller.handle(LiveTranslateServerEvent::TranslationStarted);
+        assert!(!controller.state.is_translation_timed_out);
     }
 
     #[test]

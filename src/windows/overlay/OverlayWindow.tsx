@@ -9,15 +9,17 @@ import { PulseRing } from "./PulseRing";
 import { ResizeHandles } from "./ResizeHandles";
 import { Timeline } from "./Timeline";
 import { useStableText } from "./animation";
+import { overlayTopChromeLayout } from "./overlayChromeLayout";
 import { visibleDraftSegments } from "./segmenter";
 import {
   computeActivityPhase,
   computeVisibleRows,
+  emptyStateDensity,
   emptyStateIsError,
   emptyStateText,
   hasSubtitleContent,
   subtitleSegmentLength,
-  visibleDraft,
+  visibleLiveSubtitle,
 } from "./overlayModel";
 
 const ACCENT = "#7AA8FF";
@@ -29,18 +31,19 @@ export function OverlayWindow() {
   const togglePaused = useStore((state) => state.togglePaused);
   const clearSubtitles = useStore((state) => state.clearSubtitles);
   const setOverlayCollapsed = useStore((state) => state.setOverlayCollapsed);
+  const setOverlayLocked = useStore((state) => state.setOverlayLocked);
+  const saveSettings = useStore((state) => state.saveSettings);
   const showSettings = useStore((state) => state.showSettings);
 
   const [isHovering, setIsHovering] = useState(false);
-  const [overlaySize, setOverlaySize] = useState({ width: 640, height: 136 });
-  // Keep the drag handle clear of the child control island and the action
-  // buttons when the window is narrow. The handle itself stays horizontally
-  // centered in the subtitle window.
-  const windowWidth =
-    typeof window !== "undefined" ? window.innerWidth : overlaySize.width;
-  const dragHandleWidth = Math.max(
-    48,
-    Math.min(120, windowWidth - 260 - (session.isActive ? 156 : 0)),
+  const [overlaySize, setOverlaySize] = useState(() => ({
+    width: typeof window === "undefined" || !isTauri ? 640 : window.innerWidth,
+    height:
+      typeof window === "undefined" || !isTauri ? 136 : window.innerHeight,
+  }));
+  const topChromeLayout = overlayTopChromeLayout(
+    overlaySize.width,
+    session.isActive,
   );
 
   const collapsed = session.isOverlayCollapsed;
@@ -64,18 +67,37 @@ export function OverlayWindow() {
   );
   // The live preview line is the timeline's LAST row (dimmed with a trailing
   // ellipsis), so it naturally follows history instead of piling up at the
-  // bottom of the panel. Its text is stabilized: the shown value settles
-  // ~400ms after the last update instead of flickering on every recognition
-  // block. A final-but-not-yet-committed line is shown as-is.
-  const draft = useMemo(
+  // bottom of the panel. Its text is stabilized: source fallback settles
+  // quickly, translated text stays calmer, and confirmed/removed tails update
+  // immediately. This avoids both per-block flicker and a blank canvas during
+  // long provider-side sentence boundaries.
+  const liveSubtitle = useMemo(
     () =>
-      visibleDraft(session.subtitles.translation, session.subtitles.history),
-    [session.subtitles.translation, session.subtitles.history],
+      visibleLiveSubtitle(
+        session.subtitles,
+        settings,
+        detectedLanguage,
+        session.isTranslationPending,
+        session.isTranslationTimedOut,
+      ),
+    [
+      session.subtitles,
+      session.isTranslationPending,
+      session.isTranslationTimedOut,
+      settings,
+      detectedLanguage,
+    ],
   );
   const draftText = useStableText(
-    draft?.text ?? "",
-    draft?.isFinal ? 0 : 400,
+    liveSubtitle?.text ?? "",
+    liveSubtitle === null || liveSubtitle.isFinal
+      ? 0
+      : liveSubtitle.kind === "source"
+        ? 180
+        : 400,
+    liveSubtitle?.kind === "source" ? 750 : 1_500,
   );
+  const hasLiveDraft = draftText !== "" && !liveSubtitle?.isFinal;
   // Full row list: history rows plus the stabilized draft segments as the
   // trailing rows. Rebuilt only when history or the (settled) draft changes.
   const allRows = useMemo(() => {
@@ -108,6 +130,16 @@ export function OverlayWindow() {
       void setOverlayCollapsed(false);
     }
   }, [blendsWithBackground, collapsed, setOverlayCollapsed]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    const syncViewportSize = () => {
+      setOverlaySize({ width: window.innerWidth, height: window.innerHeight });
+    };
+    syncViewportSize();
+    window.addEventListener("resize", syncViewportSize);
+    return () => window.removeEventListener("resize", syncViewportSize);
+  }, []);
 
   const handleResize = (width: number, height: number) => {
     setOverlaySize({ width, height });
@@ -151,21 +183,37 @@ export function OverlayWindow() {
   );
 
   function renderExpanded() {
+    const topBandHeight = (session.isActive ? 38 : 24) + 13;
+    const emptyDensity = emptyStateDensity(overlaySize.height);
+    const showEmptyPulse = session.isActive && emptyDensity !== "minimal";
+    const compactEmptyPulse = emptyDensity === "compact";
+
     if (blendsWithBackground) {
       return (
         <div
           className="relative flex h-full w-full overflow-hidden"
           data-presentation="background-blend"
         >
-          {allRows.length > 0 && (
-            <Timeline
-              rows={allRows}
-              fontSize={settings.fontSize}
-              alignment={settings.subtitleAlignment}
-              blendsWithBackground
-              draft={draftText !== ""}
-            />
-          )}
+          <div
+            className="flex min-h-0 w-full flex-col"
+            style={{
+              // Keep the same subtitle content origin as the regular canvas.
+              // Only its chrome disappears in Immersive Mode; the text must
+              // not jump upward when the presentation changes.
+              paddingTop: topBandHeight + 5,
+              height: "100%",
+            }}
+          >
+            {allRows.length > 0 && (
+              <Timeline
+                rows={allRows}
+                fontSize={settings.fontSize}
+                alignment={settings.subtitleAlignment}
+                blendsWithBackground
+                draft={hasLiveDraft}
+              />
+            )}
+          </div>
         </div>
       );
     }
@@ -175,8 +223,6 @@ export function OverlayWindow() {
       ? hexToRgba(ACCENT, 0.34)
       : "rgba(255,255,255,0.12)";
     const borderWidth = hoverHighlight ? 1 : 0.75;
-    const topBandHeight = (session.isActive ? 38 : 24) + 13;
-
     return (
       <div
         className="relative h-full w-full overflow-hidden"
@@ -220,7 +266,7 @@ export function OverlayWindow() {
             <div
               style={{
                 position: "absolute",
-                left: "50%",
+                left: topChromeLayout.dragHandleCenterX,
                 bottom: 0,
                 transform: "translateX(-50%)",
                 pointerEvents: "auto",
@@ -228,20 +274,22 @@ export function OverlayWindow() {
             >
               <DragHandle
                 onToggleCollapsed={toggleCollapsed}
-                width={dragHandleWidth}
+                width={topChromeLayout.dragHandleWidth}
               />
             </div>
           </div>
 
-          {session.isActive && !settings.isOverlayLocked && (
+          {session.isActive &&
+            !settings.isOverlayLocked &&
+            topChromeLayout.showActions && (
             <div
               className="absolute flex"
               style={{
                 top: 10,
                 right: 10,
                 gap: 4,
-                opacity: isHovering || session.isPaused ? 1 : 0,
-                pointerEvents: isHovering || session.isPaused ? "auto" : "none",
+                opacity: isHovering || session.isPaused ? 1 : 0.54,
+                pointerEvents: "auto",
                 transition: "opacity 120ms ease",
               }}
             >
@@ -264,6 +312,20 @@ export function OverlayWindow() {
                 />
               )}
               <ControlButton
+                icon="blend"
+                label={I18N.overlay.enterImmersiveMode}
+                onClick={() =>
+                  void saveSettings({ subtitleBlendsWithBackground: true })
+                }
+                data-testid="toggle-immersive-mode"
+              />
+              <ControlButton
+                icon="lock"
+                label={I18N.overlay.lockPosition}
+                onClick={() => void setOverlayLocked(true)}
+                data-testid="toggle-overlay-lock"
+              />
+              <ControlButton
                 icon="gear"
                 label={I18N.overlay.openSettings}
                 onClick={() => void showSettings()}
@@ -284,22 +346,34 @@ export function OverlayWindow() {
           {allRows.length === 0 ? (
             <div
               className="flex flex-1 flex-col items-center justify-center"
-              style={{ gap: 12 }}
+              style={{ gap: emptyDensity === "comfortable" ? 12 : 4 }}
             >
-              {session.isActive && (
-                <div className="flex items-center" style={{ height: 56 }}>
-                  <PulseRing phase={phase} />
+              {showEmptyPulse && (
+                <div
+                  className="flex items-center"
+                  style={{ height: compactEmptyPulse ? 24 : 56 }}
+                >
+                  <PulseRing phase={phase} compact={compactEmptyPulse} />
                 </div>
               )}
               <div
                 style={{
-                  fontSize: Math.max(12, settings.fontSize * 0.68),
+                  width: "100%",
+                  minWidth: 0,
+                  fontSize:
+                    emptyDensity === "minimal"
+                      ? 12
+                      : Math.max(12, settings.fontSize * 0.68),
                   fontWeight: 500,
                   color: emptyStateIsError(session)
                     ? "rgba(255,69,58,0.9)"
                     : "rgba(255,255,255,0.5)",
                   textAlign: settings.subtitleAlignment,
                   padding: "0 24px",
+                  whiteSpace: emptyDensity === "minimal" ? "nowrap" : undefined,
+                  overflow: emptyDensity === "minimal" ? "hidden" : undefined,
+                  textOverflow:
+                    emptyDensity === "minimal" ? "ellipsis" : undefined,
                 }}
               >
                 {emptyStateText(session, settings)}
@@ -310,7 +384,7 @@ export function OverlayWindow() {
               rows={allRows}
               fontSize={settings.fontSize}
               alignment={settings.subtitleAlignment}
-              draft={draftText !== ""}
+              draft={hasLiveDraft}
             />
           )}
           </div>

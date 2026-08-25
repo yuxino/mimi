@@ -66,13 +66,18 @@ describe("overlay control panel model", () => {
     expect(model.effectiveTranslationMode).toBe("turbo");
   });
 
-  it("derives the visible-background switch state", () => {
-    expect(overlayControlPanelModel(BASE_SETTINGS).backgroundVisible).toBe(true);
-    expect(
-      overlayControlPanelModel({
-        ...BASE_SETTINGS,
-        subtitleBlendsWithBackground: true,
-      }).backgroundVisible,
-    ).toBe(false);
+  it("derives immersive and position-lock switch state", () => {
+    expect(overlayControlPanelModel(BASE_SETTINGS).immersiveModeEnabled).toBe(
+      false,
+    );
+    expect(overlayControlPanelModel(BASE_SETTINGS).overlayLocked).toBe(false);
+
+    const enabled = overlayControlPanelModel({
+      ...BASE_SETTINGS,
+      subtitleBlendsWithBackground: true,
+      isOverlayLocked: true,
+    });
+    expect(enabled.immersiveModeEnabled).toBe(true);
+    expect(enabled.overlayLocked).toBe(true);
   });
 });

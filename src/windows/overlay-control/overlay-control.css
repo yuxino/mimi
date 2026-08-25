@@ -8,15 +8,15 @@
 .overlay-control-island,
 .overlay-control-header,
 .overlay-control-panel {
-  --control-bg: rgba(15, 15, 15, 0.94);
+  --control-bg: rgba(30, 30, 30, 0.97);
   --control-surface: rgba(255, 255, 255, 0.055);
   --control-surface-hover: rgba(255, 255, 255, 0.09);
   --control-surface-pressed: rgba(255, 255, 255, 0.13);
-  --control-border: rgba(255, 255, 255, 0.13);
-  --control-border-strong: rgba(255, 255, 255, 0.2);
-  --control-text: rgba(255, 255, 255, 0.94);
-  --control-text-muted: rgba(255, 255, 255, 0.66);
-  --control-text-faint: rgba(255, 255, 255, 0.43);
+  --control-border: rgba(255, 255, 255, 0.24);
+  --control-border-strong: rgba(255, 255, 255, 0.38);
+  --control-text: rgba(255, 255, 255, 1);
+  --control-text-muted: rgba(255, 255, 255, 0.9);
+  --control-text-faint: rgba(255, 255, 255, 0.72);
   --control-focus: #ffffff;
   width: 100%;
   color: var(--control-text);
@@ -51,7 +51,7 @@
 }
 
 .overlay-control-island {
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .overlay-control-island:hover,

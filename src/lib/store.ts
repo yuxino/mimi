@@ -70,6 +70,7 @@ const INITIAL_SESSION: SessionStateEvent = {
   subtitles: EMPTY_SUBTITLES,
   detectedLanguage: null,
   isTranslationPending: false,
+  isTranslationTimedOut: false,
 };
 
 const INITIAL_SETTINGS: SettingsSnapshot = {
@@ -233,6 +234,7 @@ export const useStore = create<StoreState>()((set, get) => ({
         },
         detectedLanguage: "ja",
         isTranslationPending: false,
+        isTranslationTimedOut: false,
       },
     }));
   },
@@ -249,6 +251,7 @@ export const useStore = create<StoreState>()((set, get) => ({
         isActive: false,
         isPaused: false,
         isTranslationPending: false,
+        isTranslationTimedOut: false,
       },
     }));
   },
@@ -269,7 +272,11 @@ export const useStore = create<StoreState>()((set, get) => ({
       return;
     }
     set((state) => ({
-      session: { ...state.session, subtitles: EMPTY_SUBTITLES },
+      session: {
+        ...state.session,
+        subtitles: EMPTY_SUBTITLES,
+        isTranslationTimedOut: false,
+      },
     }));
   },
 

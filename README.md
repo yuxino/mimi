@@ -34,7 +34,7 @@ Turn Chinese, Japanese, English, or Korean audio playing on your device into liv
 - **Flexible overlay** — move, resize, collapse, or lock the subtitle panel for click-through.
 - **Multiple languages** — recognize Chinese, Japanese, English, and Korean.
 - **Privacy** — no microphone, no mimi account, and no saved audio or subtitle history.
-- **Global shortcut** — **⌘ ⇧ Space** on macOS, **Ctrl+Shift+Space** on Windows to start or stop listening.
+- **Global shortcuts** — **⌘ ⇧ Space** on macOS or **Ctrl+Shift+Space** on Windows starts/stops listening; **⌘ ⇧ M** or **Ctrl+Shift+M** toggles Immersive Mode.
 
 ## Get started
 
@@ -74,7 +74,7 @@ Build the Windows package on a Windows machine (Rust's C dependencies cannot cro
 
 ### macOS dev notes
 
-- Always launch a working macOS build through `./scripts/dev-app.sh`. It packages and verifies a real `.app`, installs it at one canonical path, and refuses an unstable ad-hoc identity. This keeps Screen & System Audio Recording and secure credential storage access attached to the same app across rebuilds.
+- Always launch a working macOS build through `./scripts/dev-app.sh`. It packages and verifies a real `.app`, installs it at one canonical path, and refuses an unstable ad-hoc identity. This keeps the Screen & System Audio Recording identity stable across rebuilds; because the local certificate is self-signed and has no Apple Team ID, macOS may still ask once for Keychain access after a binary update.
 - The launcher selects the stable `mimi Local Development` identity through `scripts/codesign-identity.sh`. Avoid any `tauri dev` command or bare binary on macOS: each ad-hoc rebuild can look like a different app to macOS and request permission again.
 - Development builds use a separate app identifier, settings directory, and credential namespace, so they never read or modify an installed release's service configurations or API keys.
 

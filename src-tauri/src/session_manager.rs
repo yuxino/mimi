@@ -52,6 +52,8 @@ pub struct SessionStateEvent {
     pub detected_language: Option<String>,
     #[serde(rename = "isTranslationPending")]
     pub is_translation_pending: bool,
+    #[serde(rename = "isTranslationTimedOut")]
+    pub is_translation_timed_out: bool,
 }
 
 const NO_GENERATION: u64 = 0;
@@ -426,6 +428,7 @@ impl From<&TranslationSessionState> for SessionStateEvent {
                 .as_ref()
                 .map(|language| language.code.clone()),
             is_translation_pending: state.is_translation_pending,
+            is_translation_timed_out: state.is_translation_timed_out,
         }
     }
 }
@@ -2096,7 +2099,13 @@ impl SessionManager {
         let click_through =
             preferences.overlay_locked || preferences.subtitle_blends_with_background;
         let _ = self.app.emit("session-state", event);
-        OverlayWindowManager::sync_presentation(&self.app, is_active, is_collapsed, click_through);
+        OverlayWindowManager::sync_presentation(
+            &self.app,
+            is_active,
+            is_collapsed,
+            click_through,
+            preferences.subtitle_blends_with_background,
+        );
     }
 
     /// Broadcasts the current settings snapshot to every window (used after
