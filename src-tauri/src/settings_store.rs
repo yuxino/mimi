@@ -673,15 +673,12 @@ impl SettingsStore {
             if value.trim().is_empty() {
                 return Err(SecretStoreError::Unavailable);
             }
-            if is_default_alibaba(profile)
-                && self.migrate_legacy_alibaba
-                && self.write_legacy_tombstone().is_err()
-            {
-                // The profile-scoped credential is already authoritative.
-                // Keep it usable and retry the migration marker on the next
-                // read instead of reporting a false credential loss.
-                tracing::warn!("credential migration deferred label=tombstone_write_failed");
-            }
+            // A profile-scoped credential is already authoritative. Do not
+            // touch the separate migration marker on the normal read path:
+            // macOS authorizes Keychain items independently, so reading both
+            // accounts can produce two password prompts after an intentional
+            // signing-identity migration. Save, delete, and actual legacy
+            // migration still persist the marker before it matters.
             return Ok(Some(value));
         }
         if !is_default_alibaba(profile) || !self.migrate_legacy_alibaba {
@@ -1266,13 +1263,17 @@ mod tests {
             Some("sk-replacement")
         );
 
-        // A fresh process retries the marker but still treats the verified
-        // profile slot as authoritative. Explicit deletion remains fail-closed
-        // because it must persist the marker before removing the key.
+        // A fresh process reads only the authoritative profile slot. Explicit
+        // deletion remains fail-closed because it must persist the marker
+        // before removing the key.
         let restarted = settings(&fake);
         assert_eq!(
             restarted.load_api_key().unwrap().as_deref(),
             Some("sk-replacement")
+        );
+        assert_eq!(
+            fake.load_count(PROFILE_KEYCHAIN_SERVICE, LEGACY_MIGRATION_TOMBSTONE_ACCOUNT),
+            1
         );
         assert_eq!(
             restarted
@@ -1284,6 +1285,43 @@ mod tests {
             fake.value(PROFILE_KEYCHAIN_SERVICE, &credential_account(&default))
                 .as_deref(),
             Some("sk-replacement")
+        );
+    }
+
+    #[test]
+    fn existing_profile_credential_does_not_read_migration_items() {
+        let fake = FakeSecretStore::default();
+        let default = ServiceProfile::alibaba_default();
+        fake.put(
+            PROFILE_KEYCHAIN_SERVICE,
+            &credential_account(&default),
+            "sk-profile",
+        );
+        fake.put(
+            PROFILE_KEYCHAIN_SERVICE,
+            LEGACY_MIGRATION_TOMBSTONE_ACCOUNT,
+            LEGACY_MIGRATION_TOMBSTONE_VALUE,
+        );
+        fake.put(
+            LEGACY_KEYCHAIN_SERVICE_V3,
+            LEGACY_KEYCHAIN_ACCOUNT,
+            "sk-legacy",
+        );
+        let store = settings(&fake);
+
+        assert_eq!(store.credential_state(&default), CredentialState::Present);
+        assert_eq!(store.load_api_key().unwrap().as_deref(), Some("sk-profile"));
+        assert_eq!(
+            fake.load_count(PROFILE_KEYCHAIN_SERVICE, &credential_account(&default)),
+            1
+        );
+        assert_eq!(
+            fake.load_count(PROFILE_KEYCHAIN_SERVICE, LEGACY_MIGRATION_TOMBSTONE_ACCOUNT),
+            0
+        );
+        assert_eq!(
+            fake.load_count(LEGACY_KEYCHAIN_SERVICE_V3, LEGACY_KEYCHAIN_ACCOUNT),
+            0
         );
     }
 

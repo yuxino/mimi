@@ -78,6 +78,13 @@ tombstone first, then strictly removes the legacy slots before deleting the
 current profile slot; a failure leaves the current credential reachable for a
 retry.
 
+Once a readable profile-scoped credential exists, it is authoritative and the
+steady-state read path returns it without reading the migration tombstone or
+legacy slots. This keeps a normal startup to one Keychain authorization per
+profile after an intentional code-identity migration. The tombstone is touched
+only while importing a missing legacy value or during an explicit credential
+save/delete, before it can affect resurrection behavior.
+
 ## Provider boundary
 
 The session layer resolves the active profile natively, obtains its secret only
