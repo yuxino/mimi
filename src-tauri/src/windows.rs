@@ -8,11 +8,15 @@
 //! * `user_frame` — the user's chosen expanded size/position. The only frame
 //!   that is ever persisted. Mutated exclusively by resize drags and window
 //!   moves (debounced); the child control and collapse never touch it.
+//! * `presentation_frame` — a runtime-only frame used while following the
+//!   display that owns the active macOS Space. Matching native geometry events
+//!   are ignored; a different frame is explicit user movement and is promoted
+//!   to `user_frame`.
 //! * `mode` — [`OverlayMode`]. Collapse is a temporary visual state *derived*
 //!   from the user frame; the child control owns separate transient state.
 //!
-//! [`OverlayWindowManager::apply`] is the single place that writes OS window
-//! geometry: it derives size/position/min/max from `(mode, user_frame)`. OS
+//! The overlay apply helpers are the single path that writes OS window
+//! geometry: they derive size/position/min/max from `(mode, user_frame)`. OS
 //! `Moved`/`Resized` events never persist directly — they only arm a debounced
 //! commit (so native drags are still remembered), and control-panel mode is
 //! never persisted at all. This replaces the earlier design where resize,
@@ -159,6 +163,15 @@ pub struct OverlayState {
     pub mode: OverlayMode,
     /// The user's chosen expanded frame; the only persisted frame.
     pub user_frame: OverlayFrame,
+    /// Runtime-only frame used to present the overlay on the screen owning the
+    /// active macOS Space. Programmatic follow moves never replace
+    /// `user_frame`; a later manual move or resize promotes the observed frame
+    /// through the ordinary persistence path.
+    presentation_frame: Option<OverlayFrame>,
+    /// Native titlebar-style drag origin. The explicit mouse-down marker lets
+    /// a later collapse or Space transition distinguish a real user move from
+    /// an in-flight programmatic resize animation.
+    native_drag_start: Option<(f64, f64)>,
     /// Active resize drag, if any (only valid while `mode == Expanded`).
     pub resize_drag: Option<ResizeRegion>,
     /// Pointer position and frame snapshot taken at `resize_start`.
@@ -171,6 +184,58 @@ pub struct OverlayState {
     geometry_task_pending: bool,
     /// Last time a resize-move was logged (throttles the per-event log).
     resize_log_at: Option<std::time::Instant>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct OverlayApplySnapshot {
+    mode: OverlayMode,
+    user_frame: OverlayFrame,
+    presentation_frame: Option<OverlayFrame>,
+    resize_drag: Option<ResizeRegion>,
+    resize_start: Option<(f64, f64, OverlayFrame)>,
+}
+
+impl From<&OverlayState> for OverlayApplySnapshot {
+    fn from(state: &OverlayState) -> Self {
+        Self {
+            mode: state.mode,
+            user_frame: state.user_frame,
+            presentation_frame: state.presentation_frame,
+            resize_drag: state.resize_drag,
+            resize_start: state.resize_start,
+        }
+    }
+}
+
+/// Native reads also include the drag marker so an origin observed before a
+/// programmatic transition can never be attached to the state after it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct OverlayGeometrySnapshot {
+    apply: OverlayApplySnapshot,
+    native_drag_start: Option<(f64, f64)>,
+}
+
+impl From<&OverlayState> for OverlayGeometrySnapshot {
+    fn from(state: &OverlayState) -> Self {
+        Self {
+            apply: OverlayApplySnapshot::from(state),
+            native_drag_start: state.native_drag_start,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct GeometryAnimationGuard {
+    state: Arc<std::sync::Mutex<OverlayState>>,
+    expected: OverlayApplySnapshot,
+}
+
+fn geometry_snapshot_is_current(state: &OverlayState, expected: OverlayGeometrySnapshot) -> bool {
+    OverlayGeometrySnapshot::from(state) == expected
+}
+
+fn apply_snapshot_is_current(state: &OverlayState, expected: OverlayApplySnapshot) -> bool {
+    OverlayApplySnapshot::from(state) == expected
 }
 
 /// The lightweight control surface that floats above the subtitle canvas.
@@ -284,20 +349,31 @@ impl OverlayState {
             .as_ref()
             .map_or(SubtitleOverlayMetrics::REFERENCE_HEIGHT, |f| f.height);
         let (x, y) = default_overlay_origin(app, width, height, &trusted);
+        let mut user_frame = OverlayFrame {
+            x,
+            y,
+            width,
+            height,
+        };
+        // A saved frame can outgrow the current work area after a monitor is
+        // removed or its resolution changes. Fit the complete frame, not just
+        // its origin, so restore can never bring back a half-missing overlay.
+        fit_user_frame_to_screen(app, &mut user_frame);
         Self {
             mode: OverlayMode::Expanded,
-            user_frame: OverlayFrame {
-                x,
-                y,
-                width,
-                height,
-            },
+            user_frame,
+            presentation_frame: None,
+            native_drag_start: None,
             resize_drag: None,
             resize_start: None,
             last_geometry_event: None,
             geometry_task_pending: false,
             resize_log_at: None,
         }
+    }
+
+    fn effective_frame(&self) -> OverlayFrame {
+        self.presentation_frame.unwrap_or(self.user_frame)
     }
 }
 
@@ -469,8 +545,82 @@ impl OverlayWindowManager {
             return;
         };
         if control.is_visible().unwrap_or(false) {
-            reassert_overlay_window_on_active_space(&control);
+            show_overlay_control_window(app, &control);
         }
+    }
+
+    /// Follows the display that owns macOS's active Space without replacing
+    /// the user's saved frame. The AppKit screen lookup and the resulting
+    /// presentation transaction must run on the main thread.
+    #[cfg(target_os = "macos")]
+    pub fn follow_active_space(
+        app: &AppHandle,
+        overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
+        settings: &Arc<SettingsStore>,
+    ) {
+        let Some(overlay) = app.get_webview_window("overlay") else {
+            return;
+        };
+        let app_for_main = app.clone();
+        let state_for_main = Arc::clone(overlay_state);
+        let settings_for_main = Arc::clone(settings);
+        let _ = overlay.run_on_main_thread(move || {
+            Self::follow_active_space_on_main(&app_for_main, &state_for_main, &settings_for_main);
+        });
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn follow_active_space_on_main(
+        app: &AppHandle,
+        overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
+        settings: &SettingsStore,
+    ) {
+        let Some(target_area) = macos_space::main_screen_work_area() else {
+            Self::reassert_on_active_space(app);
+            return;
+        };
+
+        let (mut state, observed_frame, work_areas, primary_work_area) =
+            lock_overlay_after_native_geometry_read(app, overlay_state);
+        let manual_drag =
+            reconcile_native_drag(&mut state, observed_frame, &work_areas, primary_work_area);
+        let follow_changed = if active_space_follow_allowed(&state) {
+            choose_work_area_for_frame(
+                &state.user_frame,
+                work_areas.iter().copied(),
+                primary_work_area,
+            )
+            .map(|source_area| {
+                let next = map_frame_between_work_areas(state.user_frame, source_area, target_area);
+                update_presentation_frame(&mut state, next)
+            })
+            .unwrap_or(false)
+        } else {
+            // Never replace a live resize frame with a Space transition. The
+            // user's pointer owns geometry until resize_end.
+            false
+        };
+        let frame_to_persist = manual_drag.promoted.then_some(state.user_frame);
+        let should_apply = follow_changed || manual_drag.fit_changed;
+        let expected_state = OverlayApplySnapshot::from(&*state);
+        drop(state);
+
+        if let Some(frame) = frame_to_persist {
+            persist_user_frame_if_current(overlay_state, settings, frame);
+        }
+        if should_apply {
+            Self::apply_if_geometry_current(app, overlay_state, expected_state, false);
+        }
+        Self::reassert_on_active_space(app);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn follow_active_space(
+        app: &AppHandle,
+        _overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
+        _settings: &Arc<SettingsStore>,
+    ) {
+        Self::reassert_on_active_space(app);
     }
 
     /// Locks the overlay: the window ignores mouse events so clicks pass
@@ -486,13 +636,18 @@ impl OverlayWindowManager {
         }
     }
 
-    /// The single writer of OS window geometry. Derives size/position/min/max
-    /// from the overlay state and applies them (optionally animated).
-    pub fn apply(app: &AppHandle, state: &OverlayState, animate: bool) {
+    /// The complete writer of OS window geometry. Derives and applies
+    /// size/position/min/max, with an optional cancellable animation guard.
+    fn apply_frame(
+        app: &AppHandle,
+        mode: OverlayMode,
+        frame: OverlayFrame,
+        animation: Option<GeometryAnimationGuard>,
+    ) {
         let Some(window) = app.get_webview_window("overlay") else {
             return;
         };
-        let geometry = geometry_for(state.mode, &state.user_frame);
+        let geometry = geometry_for(mode, &frame);
         let _ = window.set_min_size(Some(tauri::LogicalSize::new(
             geometry.min.0,
             geometry.min.1,
@@ -501,13 +656,78 @@ impl OverlayWindowManager {
             geometry.max.0,
             geometry.max.1,
         )));
-        if animate {
+        if let Some(animation) = animation {
             let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
             let _ = window.set_position(tauri::LogicalPosition::new(geometry.x, geometry.y));
-            animate_resize(&window, scale, geometry.width, geometry.height);
+            animate_resize(&window, animation, scale, geometry.width, geometry.height);
         } else {
             let _ = window.set_position(tauri::LogicalPosition::new(geometry.x, geometry.y));
             let _ = window.set_size(tauri::LogicalSize::new(geometry.width, geometry.height));
+        }
+    }
+
+    /// Serializes deferred geometry writes through the main event loop and
+    /// drops any transaction whose interpreting state has already changed.
+    /// The closure re-derives the frame after validation instead of trusting a
+    /// worker-thread copy, so a newer Space/collapse transition always wins.
+    fn apply_if_geometry_current(
+        app: &AppHandle,
+        state: &Arc<std::sync::Mutex<OverlayState>>,
+        expected: OverlayApplySnapshot,
+        animate: bool,
+    ) {
+        let app_for_main = app.clone();
+        let state_for_main = Arc::clone(state);
+        if app
+            .run_on_main_thread(move || {
+                let (mode, frame) = {
+                    let state = state_for_main.lock().unwrap();
+                    if !apply_snapshot_is_current(&state, expected) {
+                        return;
+                    }
+                    (state.mode, state.effective_frame())
+                };
+                let animation = animate.then(|| GeometryAnimationGuard {
+                    state: Arc::clone(&state_for_main),
+                    expected,
+                });
+                Self::apply_frame(&app_for_main, mode, frame, animation);
+            })
+            .is_err()
+        {
+            tracing::warn!("overlay geometry unavailable label=main_dispatch_failed");
+        }
+    }
+
+    /// High-frequency resize writes use the same guarded main-thread ordering
+    /// without resetting min/max constraints on every pointer event.
+    fn apply_resize_if_geometry_current(
+        app: &AppHandle,
+        state: &Arc<std::sync::Mutex<OverlayState>>,
+        expected: OverlayApplySnapshot,
+    ) {
+        let app_for_main = app.clone();
+        let state_for_main = Arc::clone(state);
+        if app
+            .run_on_main_thread(move || {
+                let frame = {
+                    let state = state_for_main.lock().unwrap();
+                    if !apply_snapshot_is_current(&state, expected)
+                        || state.mode != OverlayMode::Expanded
+                    {
+                        return;
+                    }
+                    state.effective_frame()
+                };
+                let Some(window) = app_for_main.get_webview_window("overlay") else {
+                    return;
+                };
+                let _ = window.set_position(tauri::LogicalPosition::new(frame.x, frame.y));
+                let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
+            })
+            .is_err()
+        {
+            tracing::warn!("overlay resize unavailable label=main_dispatch_failed");
         }
     }
 
@@ -516,29 +736,57 @@ impl OverlayWindowManager {
     /// the remembered frame back onto the visible screen.
     pub fn set_collapsed(
         app: &AppHandle,
-        state: &Arc<std::sync::Mutex<OverlayState>>,
+        overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
+        settings: &SettingsStore,
         collapsed: bool,
     ) {
-        let mut state = state.lock().unwrap();
+        let (mut state, observed_frame, work_areas, primary_work_area) =
+            lock_overlay_after_native_geometry_read(app, overlay_state);
+        let manual_drag =
+            reconcile_native_drag(&mut state, observed_frame, &work_areas, primary_work_area);
+        let frame_to_persist = manual_drag.promoted.then_some(state.user_frame);
         let new_mode = if collapsed {
             OverlayMode::Collapsed
         } else {
             OverlayMode::Expanded
         };
         if state.mode == new_mode {
+            let expected_state = OverlayApplySnapshot::from(&*state);
+            drop(state);
+            if let Some(frame) = frame_to_persist {
+                persist_user_frame_if_current(overlay_state, settings, frame);
+            }
+            if manual_drag.fit_changed {
+                Self::apply_if_geometry_current(app, overlay_state, expected_state, false);
+            }
             return;
         }
         if collapsed {
             // Adopt the exact current window frame before shrinking so an
-            // expand later restores precisely what the user saw.
-            sync_user_frame_from_window(app, &mut state);
+            // expand later restores precisely what the user saw. A temporary
+            // active-Space frame is already exact but must not become saved
+            // merely because the user collapsed the surface.
+            if should_sync_before_collapse(manual_drag, &state) {
+                if let Some(observed_frame) = observed_frame {
+                    state.user_frame = observed_frame;
+                }
+            }
         } else {
             // The screen configuration may have changed while collapsed;
             // keep the expanded frame on the visible screen.
-            clamp_user_frame_to_screen(app, &mut state.user_frame);
+            if let Some(frame) = state.presentation_frame.as_mut() {
+                fit_user_frame_to_work_areas(frame, &work_areas, primary_work_area);
+            } else {
+                fit_user_frame_to_work_areas(&mut state.user_frame, &work_areas, primary_work_area);
+            }
         }
         state.mode = new_mode;
-        Self::apply(app, &state, true);
+        let expected_state = OverlayApplySnapshot::from(&*state);
+        drop(state);
+        if let Some(frame) = frame_to_persist {
+            persist_user_frame_if_current(overlay_state, settings, frame);
+        }
+        Self::apply_if_geometry_current(app, overlay_state, expected_state, true);
     }
 
     /// Handles OS Moved/Resized events for the overlay. Never persists
@@ -563,42 +811,119 @@ impl OverlayWindowManager {
             state.geometry_task_pending = true;
         }
         let app = app.clone();
-        let state = Arc::clone(state);
+        let overlay_state = Arc::clone(state);
         let settings = Arc::clone(settings);
         tauri::async_runtime::spawn(async move {
             let mut expected = now;
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(350)).await;
-                let mut state = state.lock().unwrap();
-                if state.last_geometry_event != Some(expected) {
-                    // Newer events arrived while we slept; tail them instead
-                    // of dropping their commit (the single-flight flag made
-                    // them skip spawning their own task).
+                let expected_state = {
+                    let mut state = overlay_state.lock().unwrap();
+                    if state.last_geometry_event != Some(expected) {
+                        // Newer events arrived while we slept; tail them
+                        // instead of dropping their commit (the single-flight
+                        // flag made them skip spawning their own task).
+                        expected = state.last_geometry_event.expect("checked as Some");
+                        continue;
+                    }
+                    if state.resize_drag.is_some() {
+                        // A stationary pointer can leave a live resize quiet
+                        // for longer than the debounce. `resize_end` owns the
+                        // final fit so the window never snaps before mouse-up.
+                        state.geometry_task_pending = false;
+                        return;
+                    }
+                    OverlayGeometrySnapshot::from(&*state)
+                };
+
+                // Tauri's window/monitor getters can synchronously rendezvous
+                // with the main event loop. Never call them while holding the
+                // overlay mutex: the active-Space callback runs on main and
+                // also needs this state, so doing both would invert the locks.
+                let observed_frame = overlay_frame_from_window(&app);
+                let (work_areas, primary_work_area) = available_work_areas(&app);
+
+                let mut state = overlay_state.lock().unwrap();
+                if state.last_geometry_event != Some(expected)
+                    || !geometry_snapshot_is_current(&state, expected_state)
+                {
+                    // Geometry or the state used to interpret it changed while
+                    // the native frame was being read. Re-read after the newer
+                    // event/state transition has settled.
                     expected = state.last_geometry_event.expect("checked as Some");
                     continue;
                 }
                 state.geometry_task_pending = false;
-                match state.mode {
-                    OverlayMode::Expanded => {
-                        sync_user_frame_from_window(&app, &mut state);
-                        persist_user_frame(&settings, &state.user_frame);
-                    }
+                if state.resize_drag.is_some() {
+                    return;
+                }
+                let Some(observed_frame) = observed_frame else {
+                    drop(state);
+                    OverlayControlWindowManager::follow_overlay(&app);
+                    return;
+                };
+                if !adopt_observed_frame(&mut state, observed_frame) {
+                    // This is the exact Moved/Resized event produced by an
+                    // active-Space follow (or its collapse/expand geometry).
+                    // Keep the canonical user frame and preferences untouched.
+                    drop(state);
+                    OverlayControlWindowManager::follow_overlay(&app);
+                    return;
+                }
+                // A different native frame means the user moved the followed
+                // overlay. Promote that intentional placement to canonical
+                // state and resume the ordinary persistence path.
+                let geometry_changed = match state.mode {
+                    OverlayMode::Expanded => fit_user_frame_to_work_areas(
+                        &mut state.user_frame,
+                        &work_areas,
+                        primary_work_area,
+                    ),
                     OverlayMode::Collapsed => {
                         // Only the position is meaningful while collapsed; the
                         // remembered expanded size must survive.
-                        sync_position_from_window(&app, &mut state.user_frame);
-                        persist_user_frame(&settings, &state.user_frame);
+                        fit_collapsed_position_to_work_areas(
+                            &mut state.user_frame,
+                            &work_areas,
+                            primary_work_area,
+                        )
                     }
+                };
+                let frame_to_persist = state.user_frame;
+                let expected_state = OverlayApplySnapshot::from(&*state);
+                drop(state);
+                persist_user_frame_if_current(&overlay_state, &settings, frame_to_persist);
+                if geometry_changed {
+                    // Native movement remains untouched while the pointer is
+                    // down. Once it settles, perform at most one corrective
+                    // write so the whole overlay returns to the work area
+                    // without making the control island trail during drag.
+                    Self::apply_if_geometry_current(&app, &overlay_state, expected_state, false);
                 }
                 // AppKit owns live child movement on macOS, avoiding a
                 // one-event-late manual correction during the drag. Once the
                 // parent settles, re-derive the child geometry on every
                 // platform so work-area and scale changes are still clamped.
-                drop(state);
                 OverlayControlWindowManager::follow_overlay(&app);
                 return;
             }
         });
+    }
+
+    /// Marks the beginning of Tauri's native window drag. AppKit owns the
+    /// gesture, so this origin is the only reliable way to distinguish a
+    /// user-authored position from a simultaneous programmatic size animation.
+    pub fn move_start(app: &AppHandle, overlay_state: &Arc<std::sync::Mutex<OverlayState>>) {
+        let (mut state, observed, _, _) =
+            lock_overlay_after_native_geometry_read(app, overlay_state);
+        let Some(observed) = observed else {
+            return;
+        };
+        state.native_drag_start = Some((observed.x, observed.y));
+    }
+
+    pub fn move_cancel(state: &Arc<std::sync::Mutex<OverlayState>>) {
+        state.lock().unwrap().native_drag_start = None;
     }
 
     /// Begins an overlay resize drag. `region` is one of topLeft/top/topRight/
@@ -606,19 +931,27 @@ impl OverlayWindowManager {
     /// position in screen (logical) coordinates.
     pub fn resize_start(
         app: &AppHandle,
-        state: &Arc<std::sync::Mutex<OverlayState>>,
+        overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
         region_name: &str,
         x: f64,
         y: f64,
     ) -> Result<(), String> {
         let region = ResizeRegion::from_name(region_name)
             .ok_or_else(|| format!("unknown resize region: {region_name}"))?;
-        let mut state = state.lock().unwrap();
+        let (mut state, observed_frame, _, _) =
+            lock_overlay_after_native_geometry_read(app, overlay_state);
         // Resizing is meaningless (and corrupting) in any transient mode.
         if state.mode != OverlayMode::Expanded {
             return Ok(());
         }
-        sync_user_frame_from_window(app, &mut state);
+        state.native_drag_start = None;
+        // A resize gesture is explicit user intent. Adopt the currently
+        // presented frame before calculating resize anchors, then let the
+        // existing resize path persist its final result.
+        state.presentation_frame = None;
+        if let Some(observed_frame) = observed_frame {
+            state.user_frame = observed_frame;
+        }
         state.resize_drag = Some(region);
         state.resize_start = Some((x, y, state.user_frame));
         tracing::info!(
@@ -638,21 +971,24 @@ impl OverlayWindowManager {
     /// min/max, and the frame keeps at least 48 px on screen.
     pub fn resize_move(
         app: &AppHandle,
-        state: &Arc<std::sync::Mutex<OverlayState>>,
+        overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
         x: f64,
         y: f64,
     ) {
-        let mut state = state.lock().unwrap();
+        let Some(window) = app.get_webview_window("overlay") else {
+            return;
+        };
+        let work_area = current_work_area_logical(app, &window);
+        let mut state = overlay_state.lock().unwrap();
+        if state.mode != OverlayMode::Expanded {
+            return;
+        }
         let Some(region) = state.resize_drag else {
             return;
         };
         let Some((start_x, start_y, start_frame)) = state.resize_start else {
             return;
         };
-        let Some(window) = app.get_webview_window("overlay") else {
-            return;
-        };
-        let work_area = current_work_area_logical(app, &window);
         let mut local_start_frame = start_frame;
         local_start_frame.x -= work_area.x;
         local_start_frame.y -= work_area.y;
@@ -683,10 +1019,6 @@ impl OverlayWindowManager {
             return;
         }
         state.user_frame = frame;
-        // Only position and size change during a drag; skip the full apply()
-        // (which also resets min/max) to halve the window ops per event.
-        let _ = window.set_position(tauri::LogicalPosition::new(frame.x, frame.y));
-        let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
         let log_now = std::time::Instant::now();
         let due = state
             .resize_log_at
@@ -698,22 +1030,32 @@ impl OverlayWindowManager {
                 (frame.x, frame.y, frame.width, frame.height)
             );
         }
+        let expected_state = OverlayApplySnapshot::from(&*state);
+        drop(state);
+        Self::apply_resize_if_geometry_current(app, overlay_state, expected_state);
     }
 
     /// Ends a resize drag and persists the final frame.
     pub fn resize_end(
         app: &AppHandle,
-        state: &Arc<std::sync::Mutex<OverlayState>>,
+        overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
         settings: &SettingsStore,
     ) {
-        let mut state = state.lock().unwrap();
+        let (work_areas, primary_work_area) = available_work_areas(app);
+        let mut state = overlay_state.lock().unwrap();
         state.resize_drag = None;
         state.resize_start = None;
         if state.mode != OverlayMode::Expanded {
             return;
         }
-        sync_user_frame_from_window(app, &mut state);
-        persist_user_frame(settings, &state.user_frame);
+        state.presentation_frame = None;
+        state.native_drag_start = None;
+        fit_user_frame_to_work_areas(&mut state.user_frame, &work_areas, primary_work_area);
+        let frame_to_persist = state.user_frame;
+        let expected_state = OverlayApplySnapshot::from(&*state);
+        drop(state);
+        persist_user_frame_if_current(overlay_state, settings, frame_to_persist);
+        Self::apply_if_geometry_current(app, overlay_state, expected_state, false);
         tracing::info!("resize end");
     }
 }
@@ -743,6 +1085,29 @@ fn show_overlay_window(window: &tauri::WebviewWindow) {
     configure_overlay_window_impl(window, true);
 }
 
+/// Shows the control surface and restores its native parent first. AppKit
+/// automatically detaches a child window whenever `orderOut:` hides it, so the
+/// relationship created by `WebviewWindowBuilder::parent` is not persistent
+/// across inactive, collapsed, or immersive transitions. Reattaching in the
+/// same main-thread transaction as `orderFrontRegardless` keeps the control
+/// moving synchronously with the subtitle panel during the next drag.
+fn show_overlay_control_window(app: &AppHandle, window: &tauri::WebviewWindow) {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        show_overlay_window(window);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let Some(parent) = app.get_webview_window("overlay") else {
+            pipeline_log!("overlay control show failed label=missing_parent");
+            return;
+        };
+        configure_overlay_window_impl_macos(window, true, Some(parent));
+    }
+}
+
 /// Reapplies the native behavior for an explicit user-requested show. AppKit's
 /// `isVisible` remains true for an ordered-in window on another Space, so a
 /// plain Tauri `show()` would otherwise be skipped without restoring it to the
@@ -766,38 +1131,66 @@ fn focus_overlay_control(window: &tauri::WebviewWindow) {
 fn configure_overlay_window_impl(window: &tauri::WebviewWindow, order_front: bool) {
     #[cfg(not(target_os = "macos"))]
     {
+        let _ = order_front;
         let _ = window.set_always_on_top(true);
         let _ = window.set_visible_on_all_workspaces(true);
     }
 
     #[cfg(target_os = "macos")]
-    {
-        // Session transitions may call this function from a tokio worker.
-        // Raw AppKit access is main-thread-only and macOS traps immediately
-        // if `setLevel:` is sent from that worker, so resolve the NSWindow and
-        // apply both native properties inside Tauri's main-thread dispatcher.
-        let window_for_main = window.clone();
-        let _ = window.run_on_main_thread(move || unsafe {
-            use objc2_app_kit::{NSWindow, NSWindowStyleMask};
+    configure_overlay_window_impl_macos(window, order_front, None);
+}
 
-            let Ok(pointer) = window_for_main.ns_window() else {
-                return;
-            };
-            let ns_window: &NSWindow = &*pointer.cast();
-            // `to_panel` changes the native class while retaining Tauri's
-            // existing borderless/resizable style bits. Add the one panel
-            // style required to avoid activating mimi when the user clicks
-            // subtitles or controls over another app's full-screen video.
-            ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
-            let behavior = overlay_collection_behavior(ns_window.collectionBehavior());
-            ns_window.setCollectionBehavior(behavior);
-            ns_window.setHidesOnDeactivate(false);
-            ns_window.setLevel(overlay_window_level());
-            if order_front {
-                ns_window.orderFrontRegardless();
+#[cfg(target_os = "macos")]
+fn configure_overlay_window_impl_macos(
+    window: &tauri::WebviewWindow,
+    order_front: bool,
+    parent: Option<tauri::WebviewWindow>,
+) {
+    // Session transitions may call this function from a tokio worker. Raw
+    // AppKit access is main-thread-only and macOS traps immediately if native
+    // window state is mutated from that worker, so presentation, optional
+    // parent restoration, and ordering happen in one dispatched transaction.
+    let window_for_main = window.clone();
+    let _ = window.run_on_main_thread(move || unsafe {
+        use objc2_app_kit::{NSWindow, NSWindowOrderingMode, NSWindowStyleMask};
+
+        let Ok(pointer) = window_for_main.ns_window() else {
+            return;
+        };
+        let ns_window: &NSWindow = &*pointer.cast();
+        // `to_panel` changes the native class while retaining Tauri's existing
+        // borderless/resizable style bits. Add the one panel style required to
+        // avoid activating mimi over another app's full-screen video.
+        ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+        let behavior = overlay_collection_behavior(ns_window.collectionBehavior());
+        ns_window.setCollectionBehavior(behavior);
+        ns_window.setHidesOnDeactivate(false);
+        ns_window.setLevel(overlay_window_level());
+
+        if let Some(parent_window) = parent {
+            match parent_window.ns_window() {
+                Ok(parent_pointer) => {
+                    let parent_ns_window: &NSWindow = &*parent_pointer.cast();
+                    let current_parent = ns_window.parentWindow();
+                    let already_attached = current_parent
+                        .as_deref()
+                        .is_some_and(|current| std::ptr::eq(current, parent_ns_window));
+                    if !already_attached {
+                        if let Some(current) = current_parent {
+                            current.removeChildWindow(ns_window);
+                        }
+                        parent_ns_window
+                            .addChildWindow_ordered(ns_window, NSWindowOrderingMode::Above);
+                    }
+                }
+                Err(_) => pipeline_log!("overlay control show failed label=parent_unavailable"),
             }
-        });
-    }
+        }
+
+        if order_front {
+            ns_window.orderFrontRegardless();
+        }
+    });
 }
 
 #[cfg(target_os = "macos")]
@@ -852,36 +1245,168 @@ fn current_work_area_logical(app: &AppHandle, window: &tauri::WebviewWindow) -> 
         })
 }
 
-/// Adopts the OS window's current frame as the user frame (logical coords).
-fn sync_user_frame_from_window(app: &AppHandle, state: &mut OverlayState) {
-    let Some(window) = app.get_webview_window("overlay") else {
-        return;
-    };
+fn overlay_frame_from_window(app: &AppHandle) -> Option<OverlayFrame> {
+    let window = app.get_webview_window("overlay")?;
     let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-    let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) else {
-        return;
-    };
-    state.user_frame = OverlayFrame {
+    let (size, position) = (window.inner_size().ok()?, window.outer_position().ok()?);
+    Some(OverlayFrame {
         x: position.x as f64 / scale,
         y: position.y as f64 / scale,
         width: size.width as f64 / scale,
         height: size.height as f64 / scale,
-    };
+    })
 }
 
-/// Adopts only the OS window's position into `frame` (used while collapsed,
-/// where the size is a fixed 280×54 and must not overwrite the remembered
-/// expanded size).
-fn sync_position_from_window(app: &AppHandle, frame: &mut OverlayFrame) {
-    let Some(window) = app.get_webview_window("overlay") else {
-        return;
+/// Reads native geometry without holding the overlay mutex, then returns only
+/// when the state used to interpret that read is still current. This keeps
+/// Tokio command paths from waiting on the main event loop while main is
+/// waiting for the same mutex.
+fn lock_overlay_after_native_geometry_read<'a>(
+    app: &AppHandle,
+    state: &'a Arc<std::sync::Mutex<OverlayState>>,
+) -> (
+    std::sync::MutexGuard<'a, OverlayState>,
+    Option<OverlayFrame>,
+    Vec<LogicalWorkArea>,
+    Option<LogicalWorkArea>,
+) {
+    loop {
+        let (expected_state, expected_event) = {
+            let state = state.lock().unwrap();
+            (
+                OverlayGeometrySnapshot::from(&*state),
+                state.last_geometry_event,
+            )
+        };
+        let observed_frame = overlay_frame_from_window(app);
+        let (work_areas, primary_work_area) = available_work_areas(app);
+        let state = state.lock().unwrap();
+        if geometry_snapshot_is_current(&state, expected_state)
+            && state.last_geometry_event == expected_event
+        {
+            return (state, observed_frame, work_areas, primary_work_area);
+        }
+    }
+}
+
+fn presentation_frame_matches_observed(state: &OverlayState, observed: &OverlayFrame) -> bool {
+    let Some(presentation) = state.presentation_frame else {
+        return false;
     };
-    let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-    let Ok(position) = window.outer_position() else {
-        return;
+    let geometry = geometry_for(state.mode, &presentation);
+    let expected = OverlayFrame {
+        x: geometry.x,
+        y: geometry.y,
+        width: geometry.width,
+        height: geometry.height,
     };
-    frame.x = position.x as f64 / scale;
-    frame.y = position.y as f64 / scale;
+    frames_approximately_equal(&expected, observed)
+}
+
+/// Returns `true` when `observed` is user-authored geometry and promotes it to
+/// the canonical frame. A frame that exactly matches the active-Space
+/// presentation remains a runtime override and must not reach preferences.
+fn adopt_observed_frame(state: &mut OverlayState, observed: OverlayFrame) -> bool {
+    if presentation_frame_matches_observed(state, &observed) {
+        if state
+            .presentation_frame
+            .is_some_and(|frame| frames_approximately_equal(&frame, &state.user_frame))
+        {
+            // A return-to-saved-display move needs one matching event to
+            // suppress persistence, then no longer needs an override.
+            state.presentation_frame = None;
+        }
+        return false;
+    }
+    promote_observed_user_frame(state, observed);
+    true
+}
+
+fn promote_observed_user_frame(state: &mut OverlayState, observed: OverlayFrame) {
+    state.presentation_frame = None;
+    state.native_drag_start = None;
+    match state.mode {
+        OverlayMode::Expanded => state.user_frame = observed,
+        OverlayMode::Collapsed => {
+            state.user_frame.x = observed.x;
+            state.user_frame.y = observed.y;
+        }
+    }
+}
+
+/// Reconciles an outstanding native drag before another state transition can
+/// overwrite its frame. Returns whether fitting the promoted frame requires a
+/// corrective OS geometry write; promotion itself is persisted immediately.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct NativeDragReconcile {
+    promoted: bool,
+    fit_changed: bool,
+}
+
+fn reconcile_native_drag(
+    state: &mut OverlayState,
+    observed: Option<OverlayFrame>,
+    work_areas: &[LogicalWorkArea],
+    primary_work_area: Option<LogicalWorkArea>,
+) -> NativeDragReconcile {
+    let Some(start) = state.native_drag_start else {
+        return NativeDragReconcile::default();
+    };
+    let Some(observed) = observed else {
+        return NativeDragReconcile::default();
+    };
+    state.native_drag_start = None;
+    if !native_drag_changed_position(start, &observed) {
+        return NativeDragReconcile::default();
+    }
+    promote_observed_user_frame(state, observed);
+    let fit_changed = match state.mode {
+        OverlayMode::Expanded => {
+            fit_user_frame_to_work_areas(&mut state.user_frame, work_areas, primary_work_area)
+        }
+        OverlayMode::Collapsed => fit_collapsed_position_to_work_areas(
+            &mut state.user_frame,
+            work_areas,
+            primary_work_area,
+        ),
+    };
+    NativeDragReconcile {
+        promoted: true,
+        fit_changed,
+    }
+}
+
+fn positions_approximately_equal(left: (f64, f64), right: (f64, f64)) -> bool {
+    (left.0 - right.0).abs() < 1.0 && (left.1 - right.1).abs() < 1.0
+}
+
+fn native_drag_changed_position(start: (f64, f64), observed: &OverlayFrame) -> bool {
+    !positions_approximately_equal(start, (observed.x, observed.y))
+}
+
+fn should_sync_before_collapse(reconciliation: NativeDragReconcile, state: &OverlayState) -> bool {
+    !reconciliation.promoted && state.presentation_frame.is_none()
+}
+
+fn frames_approximately_equal(left: &OverlayFrame, right: &OverlayFrame) -> bool {
+    (left.x - right.x).abs() < 1.0
+        && (left.y - right.y).abs() < 1.0
+        && (left.width - right.width).abs() < 1.0
+        && (left.height - right.height).abs() < 1.0
+}
+
+fn active_space_follow_allowed(state: &OverlayState) -> bool {
+    state.resize_drag.is_none()
+}
+
+fn update_presentation_frame(state: &mut OverlayState, next: OverlayFrame) -> bool {
+    let changed = !frames_approximately_equal(&state.effective_frame(), &next);
+    if !changed && frames_approximately_equal(&next, &state.user_frame) {
+        state.presentation_frame = None;
+    } else {
+        state.presentation_frame = Some(next);
+    }
+    changed
 }
 
 /// Writes the user frame to preferences. Locked overlays are skipped (their
@@ -902,19 +1427,69 @@ fn persist_user_frame(settings: &SettingsStore, frame: &OverlayFrame) {
     }
 }
 
-/// Clamps the frame origin so the whole frame sits on the screen the overlay
-/// currently occupies (used on expand, when the screen may have changed).
-fn clamp_user_frame_to_screen(app: &AppHandle, frame: &mut OverlayFrame) {
-    let Some(window) = app.get_webview_window("overlay") else {
+/// Commits only the still-current user frame. Holding the overlay mutex during
+/// this small preferences transaction serializes competing manual placements;
+/// no Tauri/AppKit call is made here, so it cannot participate in the native
+/// main-thread lock cycle guarded elsewhere.
+fn persist_user_frame_if_current(
+    state: &Arc<std::sync::Mutex<OverlayState>>,
+    settings: &SettingsStore,
+    expected_frame: OverlayFrame,
+) {
+    let state = state.lock().unwrap();
+    if state.user_frame != expected_frame {
         return;
-    };
-    let work_area = current_work_area_logical(app, &window);
-    clamp_frame_origin_to_work_area(frame, work_area);
+    }
+    persist_user_frame(settings, &expected_frame);
 }
 
-/// Animated 180 ms ease-in-out size transition, followed by a settle pass.
+/// Fits the complete expanded frame inside the work area that contains most of
+/// it. This is intentionally called only on restore or after native movement
+/// settles; live dragging stays entirely in the window server.
+fn fit_user_frame_to_screen(app: &AppHandle, frame: &mut OverlayFrame) -> bool {
+    let (areas, primary) = available_work_areas(app);
+    fit_user_frame_to_work_areas(frame, &areas, primary)
+}
+
+fn fit_user_frame_to_work_areas(
+    frame: &mut OverlayFrame,
+    areas: &[LogicalWorkArea],
+    primary: Option<LogicalWorkArea>,
+) -> bool {
+    let Some(work_area) = choose_work_area_for_frame(frame, areas.iter().copied(), primary) else {
+        return false;
+    };
+    fit_frame_to_work_area(frame, work_area)
+}
+
+fn fit_collapsed_position_to_work_areas(
+    frame: &mut OverlayFrame,
+    areas: &[LogicalWorkArea],
+    primary: Option<LogicalWorkArea>,
+) -> bool {
+    let mut collapsed = OverlayFrame {
+        x: frame.x,
+        y: frame.y,
+        width: SubtitleOverlayMetrics::COLLAPSED_WIDTH,
+        height: SubtitleOverlayMetrics::COLLAPSED_HEIGHT,
+    };
+    let Some(work_area) = choose_work_area_for_frame(&collapsed, areas.iter().copied(), primary)
+    else {
+        return false;
+    };
+    clamp_frame_origin_to_work_area(&mut collapsed, work_area);
+    let changed = collapsed.x != frame.x || collapsed.y != frame.y;
+    frame.x = collapsed.x;
+    frame.y = collapsed.y;
+    changed
+}
+
+/// Animated 180 ms ease-in-out size transition. Every step re-enters the main
+/// queue and validates the geometry snapshot there, so a newer Space or mode
+/// transition cancels all remaining writes before they can overwrite it.
 fn animate_resize(
     window: &tauri::WebviewWindow,
+    guard: GeometryAnimationGuard,
     scale: f64,
     target_width: f64,
     target_height: f64,
@@ -934,15 +1509,31 @@ fn animate_resize(
         const STEPS: usize = 12;
         for step in 1..=STEPS {
             tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+            if !apply_snapshot_is_current(&guard.state.lock().unwrap(), guard.expected) {
+                return;
+            }
             let t = ease_in_out(step as f64 / STEPS as f64);
             let width = start.width as f64 + (end.width as f64 - start.width as f64) * t;
             let height = start.height as f64 + (end.height as f64 - start.height as f64) * t;
-            let _ = window.set_size(tauri::PhysicalSize::new(
-                width.round() as u32,
-                height.round() as u32,
-            ));
+            let size = tauri::PhysicalSize::new(width.round() as u32, height.round() as u32);
+            let dispatch_window = window.clone();
+            let target_window = window.clone();
+            let step_guard = guard.clone();
+            if dispatch_window
+                .run_on_main_thread(move || {
+                    if !apply_snapshot_is_current(
+                        &step_guard.state.lock().unwrap(),
+                        step_guard.expected,
+                    ) {
+                        return;
+                    }
+                    let _ = target_window.set_size(size);
+                })
+                .is_err()
+            {
+                return;
+            }
         }
-        let _ = window.set_size(end);
     });
 }
 
@@ -1004,7 +1595,7 @@ fn logical_work_area(monitor: &tauri::Monitor) -> LogicalWorkArea {
     }
 }
 
-fn work_area_for_saved_frame(app: &AppHandle, frame: &OverlayFrame) -> Option<LogicalWorkArea> {
+fn available_work_areas(app: &AppHandle) -> (Vec<LogicalWorkArea>, Option<LogicalWorkArea>) {
     let primary = app
         .primary_monitor()
         .ok()
@@ -1014,7 +1605,13 @@ fn work_area_for_saved_frame(app: &AppHandle, frame: &OverlayFrame) -> Option<Lo
         .available_monitors()
         .unwrap_or_default()
         .into_iter()
-        .map(|monitor| logical_work_area(&monitor));
+        .map(|monitor| logical_work_area(&monitor))
+        .collect();
+    (areas, primary)
+}
+
+fn work_area_for_saved_frame(app: &AppHandle, frame: &OverlayFrame) -> Option<LogicalWorkArea> {
+    let (areas, primary) = available_work_areas(app);
     choose_work_area_for_frame(frame, areas, primary)
 }
 
@@ -1032,6 +1629,43 @@ fn choose_work_area_for_frame(
         .or(fallback)
 }
 
+/// Maps a saved frame into another display's work area without changing its
+/// size or relative placement. Vertical placement preserves the bottom inset,
+/// which keeps subtitles near the video controls across differently sized
+/// displays; the final fit handles smaller destinations safely.
+fn map_frame_between_work_areas(
+    frame: OverlayFrame,
+    source: LogicalWorkArea,
+    target: LogicalWorkArea,
+) -> OverlayFrame {
+    let mut mapped = if work_areas_approximately_equal(source, target) {
+        frame
+    } else {
+        let horizontal_range = (source.width - frame.width).max(0.0);
+        let horizontal_fraction = if horizontal_range > 0.0 {
+            ((frame.x - source.x) / horizontal_range).clamp(0.0, 1.0)
+        } else {
+            0.5
+        };
+        let bottom_inset = (source.y + source.height - frame.y - frame.height).max(0.0);
+        let target_horizontal_range = (target.width - frame.width).max(0.0);
+        OverlayFrame {
+            x: target.x + horizontal_fraction * target_horizontal_range,
+            y: target.y + target.height - frame.height - bottom_inset,
+            ..frame
+        }
+    };
+    fit_frame_to_work_area(&mut mapped, target);
+    mapped
+}
+
+fn work_areas_approximately_equal(left: LogicalWorkArea, right: LogicalWorkArea) -> bool {
+    (left.x - right.x).abs() < 1.0
+        && (left.y - right.y).abs() < 1.0
+        && (left.width - right.width).abs() < 1.0
+        && (left.height - right.height).abs() < 1.0
+}
+
 fn frame_intersection_area(frame: &OverlayFrame, area: LogicalWorkArea) -> f64 {
     let width = (frame.x + frame.width).min(area.x + area.width) - frame.x.max(area.x);
     let height = (frame.y + frame.height).min(area.y + area.height) - frame.y.max(area.y);
@@ -1043,6 +1677,22 @@ fn clamp_frame_origin_to_work_area(frame: &mut OverlayFrame, area: LogicalWorkAr
     let max_y = (area.y + area.height - frame.height).max(area.y);
     frame.x = frame.x.clamp(area.x, max_x);
     frame.y = frame.y.clamp(area.y, max_y);
+}
+
+/// Normalizes dimensions first, then origin. Origin-only clamping cannot make
+/// an oversized frame fully visible after a display or resolution change.
+fn fit_frame_to_work_area(frame: &mut OverlayFrame, area: LogicalWorkArea) -> bool {
+    let previous = *frame;
+    let maximum_width = area.width.clamp(1.0, SubtitleOverlayMetrics::MAXIMUM_WIDTH);
+    let maximum_height = area
+        .height
+        .clamp(1.0, SubtitleOverlayMetrics::MAXIMUM_HEIGHT);
+    let minimum_width = SubtitleOverlayMetrics::MINIMUM_WIDTH.min(maximum_width);
+    let minimum_height = SubtitleOverlayMetrics::MINIMUM_HEIGHT.min(maximum_height);
+    frame.width = frame.width.clamp(minimum_width, maximum_width);
+    frame.height = frame.height.clamp(minimum_height, maximum_height);
+    clamp_frame_origin_to_work_area(frame, area);
+    *frame != previous
 }
 
 fn default_overlay_origin_in_work_area(
@@ -1265,7 +1915,7 @@ impl OverlayControlWindowManager {
         let _ = window.emit(OVERLAY_CONTROL_MODE_EVENT, mode);
         Self::apply_geometry(app, mode);
         if !window.is_visible().unwrap_or(false) {
-            show_overlay_window(&window);
+            show_overlay_control_window(app, &window);
         }
         if focus {
             focus_overlay_control(&window);
@@ -1481,7 +2131,21 @@ pub fn ensure_settings_window(app: &AppHandle) {
     let _ = window.set_focus();
 }
 
+#[cfg(target_os = "macos")]
+mod macos_space;
 pub mod resize;
+
+#[cfg(target_os = "macos")]
+pub fn install_active_space_observer(
+    app: &AppHandle,
+    overlay: &Arc<std::sync::Mutex<OverlayState>>,
+    settings: &Arc<SettingsStore>,
+) {
+    macos_space::install(app, overlay, settings);
+    // Seed the runtime presentation frame as well as observing later changes;
+    // Mimi may start while another application is already full-screen.
+    OverlayWindowManager::follow_active_space(app, overlay, settings);
+}
 
 #[cfg(test)]
 mod geometry_tests {
@@ -1502,6 +2166,20 @@ mod geometry_tests {
         width: 1512.0,
         height: 958.0,
     };
+
+    fn state_with_frame(user_frame: OverlayFrame) -> OverlayState {
+        OverlayState {
+            mode: OverlayMode::Expanded,
+            user_frame,
+            presentation_frame: None,
+            native_drag_start: None,
+            resize_drag: None,
+            resize_start: None,
+            last_geometry_event: None,
+            geometry_task_pending: false,
+            resize_log_at: None,
+        }
+    }
 
     #[test]
     fn expanded_passes_user_frame_through() {
@@ -1577,6 +2255,199 @@ mod geometry_tests {
     }
 
     #[test]
+    fn active_space_mapping_preserves_center_and_bottom_inset() {
+        let target = LogicalWorkArea {
+            x: -1728.0,
+            y: -120.0,
+            width: 1728.0,
+            height: 1080.0,
+        };
+        let saved = frame(436.0, 774.0, 640.0, 136.0);
+
+        let mapped = map_frame_between_work_areas(saved, WORK_AREA, target);
+
+        assert_eq!(mapped, frame(-1184.0, 752.0, 640.0, 136.0));
+    }
+
+    #[test]
+    fn active_space_mapping_fits_a_smaller_target_completely() {
+        let target = LogicalWorkArea {
+            x: 1600.0,
+            y: 100.0,
+            width: 520.0,
+            height: 200.0,
+        };
+        let saved = frame(400.0, 400.0, 640.0, 300.0);
+
+        let mapped = map_frame_between_work_areas(saved, WORK_AREA, target);
+
+        assert_eq!(mapped, frame(1600.0, 100.0, 520.0, 200.0));
+    }
+
+    #[test]
+    fn same_screen_mapping_still_fits_a_stale_offscreen_frame() {
+        let stale = frame(1400.0, 900.0, 900.0, 400.0);
+
+        let mapped = map_frame_between_work_areas(stale, WORK_AREA, WORK_AREA);
+
+        assert_eq!(mapped, frame(612.0, 582.0, 900.0, 400.0));
+    }
+
+    #[test]
+    fn matching_presentation_geometry_is_not_a_user_move() {
+        let saved = frame(400.0, 700.0, 640.0, 136.0);
+        let mut state = state_with_frame(saved);
+        state.presentation_frame = Some(frame(-1200.0, 700.0, 640.0, 136.0));
+
+        assert!(!adopt_observed_frame(
+            &mut state,
+            frame(-1200.0, 700.0, 640.0, 136.0)
+        ));
+        assert_eq!(state.user_frame, saved);
+        assert!(state.presentation_frame.is_some());
+    }
+
+    #[test]
+    fn return_to_saved_screen_clears_the_runtime_override_after_settle() {
+        let saved = frame(400.0, 700.0, 640.0, 136.0);
+        let mut state = state_with_frame(saved);
+        state.presentation_frame = Some(saved);
+
+        assert!(!adopt_observed_frame(&mut state, saved));
+        assert_eq!(state.user_frame, saved);
+        assert_eq!(state.presentation_frame, None);
+    }
+
+    #[test]
+    fn single_screen_follow_does_not_create_a_runtime_override() {
+        let saved = frame(400.0, 700.0, 640.0, 136.0);
+        let mut state = state_with_frame(saved);
+
+        assert!(!update_presentation_frame(&mut state, saved));
+        assert_eq!(state.presentation_frame, None);
+    }
+
+    #[test]
+    fn returning_from_another_screen_waits_for_the_matching_native_event() {
+        let saved = frame(400.0, 700.0, 640.0, 136.0);
+        let followed = frame(-1200.0, 700.0, 640.0, 136.0);
+        let mut state = state_with_frame(saved);
+        state.presentation_frame = Some(followed);
+
+        assert!(update_presentation_frame(&mut state, saved));
+        assert_eq!(state.presentation_frame, Some(saved));
+
+        assert!(!adopt_observed_frame(&mut state, saved));
+        assert_eq!(state.presentation_frame, None);
+    }
+
+    #[test]
+    fn manual_move_promotes_a_followed_frame_to_user_state() {
+        let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
+        state.presentation_frame = Some(frame(-1200.0, 700.0, 640.0, 136.0));
+        let moved = frame(-1160.0, 680.0, 640.0, 136.0);
+
+        assert!(adopt_observed_frame(&mut state, moved));
+        assert_eq!(state.user_frame, moved);
+        assert_eq!(state.presentation_frame, None);
+    }
+
+    #[test]
+    fn collapsed_presentation_compares_against_the_visual_bar() {
+        let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
+        state.mode = OverlayMode::Collapsed;
+        state.presentation_frame = Some(frame(-1200.0, 700.0, 640.0, 136.0));
+
+        assert!(presentation_frame_matches_observed(
+            &state,
+            &frame(-1200.0, 700.0, 280.0, 54.0)
+        ));
+    }
+
+    #[test]
+    fn collapsed_manual_move_preserves_the_expanded_size() {
+        let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
+        state.mode = OverlayMode::Collapsed;
+        state.presentation_frame = Some(frame(-1200.0, 700.0, 640.0, 136.0));
+
+        assert!(adopt_observed_frame(
+            &mut state,
+            frame(-1100.0, 680.0, 280.0, 54.0)
+        ));
+        assert_eq!(state.user_frame, frame(-1100.0, 680.0, 640.0, 136.0));
+        assert_eq!(state.presentation_frame, None);
+    }
+
+    #[test]
+    fn active_space_follow_never_overwrites_a_live_resize() {
+        let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
+        assert!(active_space_follow_allowed(&state));
+
+        state.resize_drag = Some(ResizeRegion::BottomRight);
+
+        assert!(!active_space_follow_allowed(&state));
+    }
+
+    #[test]
+    fn newer_space_follow_cancels_an_older_resize_animation() {
+        let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
+        let animation = OverlayApplySnapshot::from(&state);
+
+        state.presentation_frame = Some(frame(-1200.0, 700.0, 640.0, 136.0));
+
+        assert!(!apply_snapshot_is_current(&state, animation));
+    }
+
+    #[test]
+    fn native_drag_marker_does_not_strand_an_animation_mid_size() {
+        let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
+        state.mode = OverlayMode::Collapsed;
+        let animation = OverlayApplySnapshot::from(&state);
+
+        state.native_drag_start = Some((400.0, 700.0));
+
+        assert!(apply_snapshot_is_current(&state, animation));
+    }
+
+    #[test]
+    fn resize_end_cancels_a_queued_move_from_the_previous_gesture() {
+        let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
+        state.resize_drag = Some(ResizeRegion::BottomRight);
+        state.resize_start = Some((400.0, 700.0, state.user_frame));
+        let queued_move = OverlayApplySnapshot::from(&state);
+
+        state.resize_drag = None;
+        state.resize_start = None;
+
+        assert!(!apply_snapshot_is_current(&state, queued_move));
+    }
+
+    #[test]
+    fn native_drag_intent_ignores_intermediate_collapse_size() {
+        let start = (-1200.0, 700.0);
+        let intermediate_animation_frame = frame(-1200.0, 700.0, 430.0, 82.0);
+
+        assert!(!native_drag_changed_position(
+            start,
+            &intermediate_animation_frame
+        ));
+
+        let actually_moved = frame(-1160.0, 680.0, 430.0, 82.0);
+        assert!(native_drag_changed_position(start, &actually_moved));
+    }
+
+    #[test]
+    fn promoted_drag_is_not_resynced_over_its_fitted_user_frame() {
+        let state = state_with_frame(frame(872.0, 400.0, 640.0, 136.0));
+        let reconciliation = NativeDragReconcile {
+            promoted: true,
+            fit_changed: true,
+        };
+
+        assert!(!should_sync_before_collapse(reconciliation, &state));
+    }
+
+    #[test]
     fn frame_clamp_honors_negative_work_area_origin() {
         let left = LogicalWorkArea {
             x: -1728.0,
@@ -1590,6 +2461,54 @@ mod geometry_tests {
 
         assert_eq!(saved.x, -1728.0);
         assert_eq!(saved.y, -120.0);
+    }
+
+    #[test]
+    fn settled_frame_returns_fully_inside_the_right_edge() {
+        let mut moved = frame(1_200.0, 400.0, 640.0, 136.0);
+
+        assert!(fit_frame_to_work_area(&mut moved, WORK_AREA));
+
+        assert_eq!(moved, frame(872.0, 400.0, 640.0, 136.0));
+    }
+
+    #[test]
+    fn settled_oversized_frame_shrinks_before_origin_is_clamped() {
+        let narrow = LogicalWorkArea {
+            x: 100.0,
+            y: 50.0,
+            width: 520.0,
+            height: 320.0,
+        };
+        let mut oversized = frame(480.0, 260.0, 1_200.0, 600.0);
+
+        assert!(fit_frame_to_work_area(&mut oversized, narrow));
+
+        assert_eq!(oversized, frame(100.0, 50.0, 520.0, 320.0));
+    }
+
+    #[test]
+    fn settled_frame_respects_a_negative_origin_secondary_display() {
+        let left = LogicalWorkArea {
+            x: -1728.0,
+            y: -120.0,
+            width: 1728.0,
+            height: 1080.0,
+        };
+        let mut moved = frame(-400.0, 900.0, 640.0, 136.0);
+
+        assert!(fit_frame_to_work_area(&mut moved, left));
+
+        assert_eq!(moved, frame(-640.0, 824.0, 640.0, 136.0));
+    }
+
+    #[test]
+    fn settled_frame_that_is_already_visible_stays_exactly_unchanged() {
+        let mut visible = frame(400.0, 300.0, 640.0, 136.0);
+
+        assert!(!fit_frame_to_work_area(&mut visible, WORK_AREA));
+
+        assert_eq!(visible, frame(400.0, 300.0, 640.0, 136.0));
     }
 
     #[test]

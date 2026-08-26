@@ -359,7 +359,7 @@ fn apply_settings_draft_guarded(
     // or reloading; do not rely on a React effect to repair geometry later.
     if enables_background_blend && state.session.is_overlay_collapsed() {
         state.session.set_overlay_collapsed(false);
-        OverlayWindowManager::set_collapsed(app, &state.overlay, false);
+        OverlayWindowManager::set_collapsed(app, &state.overlay, &state.settings, false);
         state.session.publish_state();
     }
     if draft.is_overlay_locked.is_some() || draft.subtitle_blends_with_background.is_some() {
@@ -568,7 +568,7 @@ pub fn overlay_set_collapsed(
     let collapsed =
         normalize_overlay_collapsed(collapsed, preferences.subtitle_blends_with_background);
     state.session.set_overlay_collapsed(collapsed);
-    OverlayWindowManager::set_collapsed(&app, &state.overlay, collapsed);
+    OverlayWindowManager::set_collapsed(&app, &state.overlay, &state.settings, collapsed);
     OverlayWindowManager::sync_presentation(
         &app,
         state.session.is_active(),
@@ -622,7 +622,22 @@ pub fn overlay_show(app: AppHandle, state: State<'_, AppState>) -> Result<(), St
             preferences.overlay_locked || preferences.subtitle_blends_with_background,
             preferences.subtitle_blends_with_background,
         );
-        OverlayWindowManager::reassert_on_active_space(&app);
+        OverlayWindowManager::follow_active_space(&app, &state.overlay, &state.settings);
+    }
+    Ok(())
+}
+
+/// Marks an explicit user drag before Tauri hands the gesture to AppKit.
+#[tauri::command]
+pub fn overlay_move_start(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    OverlayWindowManager::move_start(&app, &state.overlay);
+    if window.start_dragging().is_err() {
+        OverlayWindowManager::move_cancel(&state.overlay);
+        return Err("Could not start overlay drag.".to_string());
     }
     Ok(())
 }

@@ -56,10 +56,13 @@ inside the clamped native window instead of making its lower actions unreachable
 
 On macOS, AppKit's native child-window relationship is the live source of truth
 while the subtitle window moves; handling the later `Moved` event with another
-manual position write would make the control island trail the canvas. Windows
-owned windows and Linux transient windows continue to follow explicitly. Every
-platform performs one final derived-position clamp after movement settles, so
-monitor, scale, and work-area changes remain correct without adding drag lag.
+manual position write would make the control island trail the canvas. AppKit
+automatically detaches a child when hiding it with `orderOut:`, so every control
+show restores the parent relationship immediately before ordering the panel
+front, in the same main-thread transaction. Windows owned windows and Linux
+transient windows continue to follow explicitly. Every platform performs one
+final derived-position clamp after movement settles, so monitor, scale, and
+work-area changes remain correct without adding drag lag.
 
 ## Geometry and interaction
 
@@ -68,6 +71,15 @@ transitions, resize bounds, work-area clamping, click-through lock state, and
 control anchoring. Geometry writes are versioned and atomic. Layout uses each
 monitor's work-area origin as well as its size, including left/above monitors
 with negative coordinates.
+
+Native move and resize gestures remain unconstrained while the pointer is down
+so the window server can render them without a one-event-late correction. When
+the gesture settles, native state fits the complete subtitle frame into the
+work area that contains most of it: oversized dimensions are reduced first and
+then the origin is clamped. The corrective position/size write is skipped when
+the frame is already valid. This prevents partially visible frames from being
+persisted without adding per-frame work that would make the separate control
+island trail the subtitle canvas.
 
 The native window remains above ordinary windows and joins every desktop space.
 On macOS 13 and later it also opts into joining other applications' window sets

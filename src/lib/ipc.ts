@@ -115,6 +115,10 @@ export function overlayShow(): Promise<void> {
   return invoke("overlay_show");
 }
 
+export function overlayMoveStart(): Promise<void> {
+  return invoke("overlay_move_start");
+}
+
 export type OverlayControlMode = "hidden" | "island" | "panel";
 
 /** Toggles the child overlay control between its compact island and panel.

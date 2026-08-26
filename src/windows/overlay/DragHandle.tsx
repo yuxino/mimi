@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { I18N } from "../../lib/i18n";
-import { isTauri } from "../../lib/ipc";
+import { isTauri, overlayMoveStart } from "../../lib/ipc";
 
 interface DragHandleProps {
   onToggleCollapsed: () => void;
@@ -14,8 +13,8 @@ interface DragHandleProps {
 
 /**
  * The drag handle, mirroring `WindowDragArea`: a primary-button press drags
- * the overlay window (via `startDragging`, regardless of which child receives
- * the press), and a double-click collapses or expands it.
+ * the overlay window (through the native drag command, regardless of which
+ * child receives the press), and a double-click collapses or expands it.
  */
 export function DragHandle({
   onToggleCollapsed,
@@ -35,7 +34,10 @@ export function DragHandle({
       return;
     }
     if (!isTauri) return;
-    void getCurrentWindow().startDragging();
+    // Record explicit user intent before AppKit takes over the native drag.
+    // This prevents an immediately following collapse or Space transition
+    // from confusing the new origin with programmatic presentation geometry.
+    void overlayMoveStart().catch(() => {});
   };
 
   return (

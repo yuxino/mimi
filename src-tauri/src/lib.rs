@@ -88,6 +88,8 @@ pub fn run() {
             app.manage(windows::OverlayControlState::default());
             app.manage(windows::OverlayPresentationState::default());
             windows::OverlayWindowManager::ensure_overlay(&app_handle, &overlay);
+            #[cfg(target_os = "macos")]
+            windows::install_active_space_observer(&app_handle, &overlay, &settings);
             let preferences = settings.preferences();
             windows::OverlayWindowManager::update_locked(
                 &app_handle,
@@ -180,6 +182,7 @@ pub fn run() {
             commands::overlay_set_collapsed,
             commands::overlay_set_locked,
             commands::overlay_show,
+            commands::overlay_move_start,
             commands::overlay_popover_toggle,
             commands::overlay_popover_hide,
             commands::overlay_control_state,
