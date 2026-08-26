@@ -1395,10 +1395,12 @@ fn frames_approximately_equal(left: &OverlayFrame, right: &OverlayFrame) -> bool
         && (left.height - right.height).abs() < 1.0
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn active_space_follow_allowed(state: &OverlayState) -> bool {
     state.resize_drag.is_none()
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn update_presentation_frame(state: &mut OverlayState, next: OverlayFrame) -> bool {
     let changed = !frames_approximately_equal(&state.effective_frame(), &next);
     if !changed && frames_approximately_equal(&next, &state.user_frame) {
@@ -1633,6 +1635,7 @@ fn choose_work_area_for_frame(
 /// size or relative placement. Vertical placement preserves the bottom inset,
 /// which keeps subtitles near the video controls across differently sized
 /// displays; the final fit handles smaller destinations safely.
+#[cfg(any(target_os = "macos", test))]
 fn map_frame_between_work_areas(
     frame: OverlayFrame,
     source: LogicalWorkArea,
@@ -1659,6 +1662,7 @@ fn map_frame_between_work_areas(
     mapped
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn work_areas_approximately_equal(left: LogicalWorkArea, right: LogicalWorkArea) -> bool {
     (left.x - right.x).abs() < 1.0
         && (left.y - right.y).abs() < 1.0
