@@ -281,9 +281,12 @@ export function languageStatus(
 
 export function sourceLanguageButtonTitle(
   sourceLanguage: SettingsSnapshot["sourceLanguage"],
+  chineseIsOriginalOnly = true,
 ): string {
   return sourceLanguage === "zh"
-    ? I18N.overlay.chineseSource
+    ? chineseIsOriginalOnly
+      ? I18N.overlay.chineseSource
+      : SOURCE_LANGUAGE_DISPLAY_NAMES.zh
     : SOURCE_LANGUAGE_DISPLAY_NAMES[sourceLanguage];
 }
 

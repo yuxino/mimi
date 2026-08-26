@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { SubtitleSnapshot } from "../../lib/types";
-import { visibleLiveSubtitle } from "./overlayModel";
+import { I18N } from "../../lib/i18n";
+import {
+  SOURCE_LANGUAGE_DISPLAY_NAMES,
+  type SubtitleSnapshot,
+} from "../../lib/types";
+import {
+  sourceLanguageButtonTitle,
+  visibleLiveSubtitle,
+} from "./overlayModel";
 
 const settings = {
   sourceLanguage: "auto" as const,
@@ -147,5 +154,16 @@ describe("live subtitle fallback", () => {
         true,
       ),
     ).toEqual({ text: "repeated lyric", isFinal: false, kind: "source" });
+  });
+});
+
+describe("source language labels", () => {
+  it("labels Chinese as original-only only when the active provider supports that mode", () => {
+    expect(sourceLanguageButtonTitle("zh", true)).toBe(
+      I18N.overlay.chineseSource,
+    );
+    expect(sourceLanguageButtonTitle("zh", false)).toBe(
+      SOURCE_LANGUAGE_DISPLAY_NAMES.zh,
+    );
   });
 });

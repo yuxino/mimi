@@ -439,6 +439,12 @@
   background: var(--settings-text);
 }
 
+.settings-button--danger {
+  border-color: var(--settings-border-strong);
+  color: var(--settings-text);
+  background: var(--settings-control);
+}
+
 .settings-link {
   display: inline-flex;
   align-items: center;
@@ -622,9 +628,7 @@
 }
 
 .credential-panel--saved {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: stretch;
   gap: 12px;
 }
 
@@ -637,6 +641,7 @@
 
 .credential-panel__saved-actions {
   flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 .credential-panel__heading {
@@ -664,6 +669,37 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 8px 10px;
+}
+
+.credential-form__fields {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+
+.destructive-confirmation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--settings-border-strong);
+  border-radius: 9px;
+  color: var(--settings-text-muted);
+  background: var(--settings-control);
+}
+
+.destructive-confirmation small {
+  max-width: 430px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.destructive-confirmation__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .settings-field {
@@ -1223,9 +1259,14 @@
   }
 
   .profile-management__toolbar,
-  .profile-editor__footer {
+  .profile-editor__footer,
+  .destructive-confirmation {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .destructive-confirmation__actions {
+    justify-content: flex-end;
   }
 
   .settings-field__inline {

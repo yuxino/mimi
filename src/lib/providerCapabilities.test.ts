@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { SettingsSnapshot } from "./types";
 import {
+  SERVICE_PROVIDERS,
   activeServiceProfile,
   effectiveTranslationModeForSettings,
   sourceLanguagesForSettings,
   subtitlePreferencesChanged,
+  targetLanguageAfterSourceSwitch,
   targetLanguagesForSettings,
   translationModesForSettings,
 } from "./providerCapabilities";
@@ -87,6 +89,47 @@ describe("provider capabilities", () => {
     expect(effectiveTranslationModeForSettings(settings)).toBe("turbo");
   });
 
+  it("keeps the full target set for Alibaba and OpenAI automatic input", () => {
+    expect(targetLanguagesForSettings(BASE_SETTINGS)).toEqual([
+      "original",
+      "zh",
+      "en",
+      "ja",
+    ]);
+    expect(
+      targetLanguagesForSettings({
+        ...BASE_SETTINGS,
+        activeProfileId: "openai",
+        sourceLanguage: "auto",
+      }),
+    ).toEqual(["zh", "en", "ja"]);
+  });
+
+  it.each([
+    ["zh", ["en", "ja"]],
+    ["en", ["zh", "ja"]],
+    ["ja", ["zh", "en"]],
+  ] as const)(
+    "removes the %s target for providers with an explicit source",
+    (sourceLanguage, expectedTargets) => {
+      expect(
+        targetLanguagesForSettings({
+          ...BASE_SETTINGS,
+          profiles: [
+            {
+              id: "tencent",
+              name: "Tencent Cloud",
+              provider: "tencentCloud",
+              credentialState: "missing",
+            },
+          ],
+          activeProfileId: "tencent",
+          sourceLanguage,
+        }),
+      ).toEqual(expectedTargets);
+    },
+  );
+
   it("keeps OpenAI's effective mode on turbo for a stale stored mode", () => {
     const settings = {
       ...BASE_SETTINGS,
@@ -95,6 +138,82 @@ describe("provider capabilities", () => {
     };
 
     expect(effectiveTranslationModeForSettings(settings)).toBe("turbo");
+  });
+
+  it("registers every built-in provider exactly once", () => {
+    expect(new Set(SERVICE_PROVIDERS).size).toBe(8);
+    expect(SERVICE_PROVIDERS).toEqual([
+      "alibabaCloud",
+      "openAIRealtime",
+      "googleGeminiLive",
+      "azureOpenAIRealtime",
+      "volcanoEngine",
+      "tencentCloud",
+      "baiduTranslate",
+      "xAIRealtime",
+    ]);
+  });
+
+  it("uses automatic recognition only where the official protocol supports it", () => {
+    const automatic = {
+      ...BASE_SETTINGS,
+      profiles: [
+        {
+          id: "google",
+          name: "Google Gemini",
+          provider: "googleGeminiLive" as const,
+          credentialState: "missing" as const,
+        },
+      ],
+      activeProfileId: "google",
+    };
+    expect(sourceLanguagesForSettings(automatic)).toEqual(["auto"]);
+    expect(effectiveTranslationModeForSettings(automatic)).toBe("turbo");
+
+    const explicit = {
+      ...automatic,
+      profiles: [
+        {
+          ...automatic.profiles[0],
+          provider: "volcanoEngine" as const,
+        },
+      ],
+    };
+    expect(sourceLanguagesForSettings(explicit)).toEqual(["ja", "en", "zh"]);
+
+    for (const provider of ["tencentCloud", "baiduTranslate"] as const) {
+      expect(
+        sourceLanguagesForSettings({
+          ...automatic,
+          profiles: [{ ...automatic.profiles[0], provider }],
+        }),
+      ).toEqual(["ja", "en", "ko", "zh"]);
+    }
+  });
+
+  it("keeps translation enabled when an explicit provider switches to Chinese", () => {
+    const settings = {
+      ...BASE_SETTINGS,
+      profiles: [
+        {
+          id: "tencent",
+          name: "Tencent Cloud",
+          provider: "tencentCloud" as const,
+          credentialState: "missing" as const,
+        },
+      ],
+      activeProfileId: "tencent",
+      sourceLanguage: "ja" as const,
+      targetLanguage: "en" as const,
+    };
+
+    expect(targetLanguageAfterSourceSwitch(settings, "zh")).toBe("en");
+    expect(
+      targetLanguageAfterSourceSwitch(
+        { ...settings, targetLanguage: "zh" },
+        "zh",
+      ),
+    ).toBe("en");
   });
 
   it("falls back to Alibaba capabilities when the active id is stale", () => {

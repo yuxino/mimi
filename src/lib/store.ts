@@ -19,7 +19,7 @@ import {
   profileCreate,
   profileDelete,
   profileDeleteAPIKey,
-  profileSaveAPIKey,
+  profileSaveCredentials,
   profileSelect,
   profileUpdate,
   sessionClearSubtitles,
@@ -36,7 +36,9 @@ import {
 } from "./ipc";
 import { effectiveUiLanguage, setStoredUiLanguage } from "./i18n";
 import {
+  capabilitiesForProvider,
   sourceLanguagesForSettings,
+  targetLanguageAfterSourceSwitch,
   translationModesForSettings,
 } from "./providerCapabilities";
 import {
@@ -46,6 +48,7 @@ import {
   SnapshotResponseGate,
 } from "./settingsState";
 import type {
+  ProviderCredentialsInput,
   SessionStateEvent,
   SettingsDraft,
   SettingsSnapshot,
@@ -54,7 +57,6 @@ import type {
   SubtitleSnapshot,
   TranslationMode,
 } from "./types";
-import { targetLanguageAfterQuickSwitch } from "./types";
 
 const EMPTY_SUBTITLES: SubtitleSnapshot = {
   source: { text: "", isFinal: false },
@@ -115,9 +117,9 @@ interface StoreState {
   ) => Promise<SettingsSnapshot>;
   selectProfile: (profileId: string) => Promise<SettingsSnapshot>;
   deleteProfile: (profileId: string) => Promise<SettingsSnapshot>;
-  saveProfileAPIKey: (
+  saveProfileCredentials: (
     profileId: string,
-    apiKey: string,
+    credentials: ProviderCredentialsInput,
   ) => Promise<SettingsSnapshot>;
   deleteProfileAPIKey: (profileId: string) => Promise<SettingsSnapshot>;
   setOverlayCollapsed: (collapsed: boolean) => Promise<void>;
@@ -296,10 +298,9 @@ export const useStore = create<StoreState>()((set, get) => ({
       settings: {
         ...state.settings,
         sourceLanguage: language,
-        targetLanguage: targetLanguageAfterQuickSwitch(
+        targetLanguage: targetLanguageAfterSourceSwitch(
+          state.settings,
           language,
-          state.settings.sourceLanguage,
-          state.settings.targetLanguage,
         ),
       },
     }));
@@ -430,11 +431,11 @@ export const useStore = create<StoreState>()((set, get) => ({
     return snapshot;
   },
 
-  saveProfileAPIKey: async (profileId, apiKey) => {
+  saveProfileCredentials: async (profileId, credentials) => {
     ensureProfileMutationsAllowed(get().session);
     if (isTauri) {
       const revision = settingsResponseGate.capture();
-      const snapshot = await profileSaveAPIKey(profileId, apiKey);
+      const snapshot = await profileSaveCredentials(profileId, credentials);
       if (settingsResponseGate.applyIfCurrent(revision)) {
         settingsSaveCoordinator.invalidate();
         set({ settings: snapshot });
@@ -442,7 +443,13 @@ export const useStore = create<StoreState>()((set, get) => ({
       }
       return get().settings;
     }
-    if (!apiKey.trim()) throw new Error("credential-empty");
+    if (
+      Object.entries(credentials).some(
+        ([field, value]) => field !== "kind" && !value.trim(),
+      )
+    ) {
+      throw new Error("credential-empty");
+    }
     const current = get().settings;
     const snapshot: SettingsSnapshot = {
       ...current,
@@ -534,9 +541,19 @@ function settingsAfterMockProfileSelection(
   provider: ServiceProvider,
 ): SettingsSnapshot {
   if (provider === "alibabaCloud") return { ...current };
+  const capabilities = capabilitiesForProvider(provider);
+  const sourceLanguage =
+    capabilities.sourceLanguages.find(
+      (source) =>
+        !(
+          (source === "zh" && current.targetLanguage === "zh") ||
+          (source === "en" && current.targetLanguage === "en") ||
+          (source === "ja" && current.targetLanguage === "ja")
+        ),
+    ) ?? capabilities.sourceLanguages[0];
   return {
     ...current,
-    sourceLanguage: "auto",
+    sourceLanguage: sourceLanguage ?? current.sourceLanguage,
     targetLanguage:
       current.targetLanguage === "original" ? "zh" : current.targetLanguage,
     translationMode: "turbo",

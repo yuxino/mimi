@@ -39,17 +39,23 @@ mimiは、日本語の「耳（みみ）」に由来する名前です。デバ�
 ## はじめ方
 
 1. [Releases](https://github.com/yuxino/mimi/releases/latest) からお使いのプラットフォーム版をダウンロードします。
-2. 「サービス設定」を開いて API Key を保存します。既定はアリババクラウドで、OpenAI Realtime も利用できます。
+2. 「サービス設定」を開き、プロバイダーを選んで接続認証情報を保存します。既定はアリババクラウドです。
 3. 動画などを再生し、「開始」をクリックします。
 
-各サービス設定の API Key は OS の安全な認証情報ストレージ（macOS キーチェーン / Windows 資格情報マネージャー）へ個別に保存され、設定画面へ読み戻されることはありません。アリババクラウドの共有 API は API Key のみで利用でき、Workspace ID は不要です。既存のアリババクラウド設定は既定のサービス設定へ自動移行されます。各サービスの利用には料金がかかる場合があります。
+各サービス設定の認証情報は OS の安全な認証情報ストレージ（macOS キーチェーン / Windows 資格情報マネージャー）へ個別に保存され、設定画面へ読み戻されることはありません。単一キーのサービスは API Key だけを使います。Azure ではリソースエンドポイントと翻訳・文字起こし用の別々のデプロイ名が必要で、Tencent と Baidu では各公式 API の項目を表示します。既存のアリババクラウド設定は既定のサービス設定へ自動移行されます。各サービスの利用には料金がかかる場合があります。
 
-[アリババクラウド API キーを作成](https://help.aliyun.com/zh/model-studio/get-api-key) · [OpenAI API キーを作成](https://platform.openai.com/api-keys)
+[Alibaba Cloud](https://help.aliyun.com/zh/model-studio/get-api-key) · [OpenAI](https://platform.openai.com/api-keys) · [Google Gemini](https://aistudio.google.com/app/apikey) · [Azure OpenAI](https://learn.microsoft.com/ja-jp/azure/foundry/openai/concepts/gpt-realtime-translate) · [Volcano Engine](https://docs.volcengine.com/docs/6561/1631605) · [Tencent Cloud](https://cloud.tencent.com/document/api/1093/127565) · [Baidu Translate](https://cloud.baidu.com/doc/MT/s/Sl9p2h5k9) · [xAI](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech)
 
 | プロバイダー | 入力音声 | 字幕の出力先 | モード |
 | --- | --- | --- | --- |
 | アリババクラウド Model Studio | 自動、中国語、英語、日本語、韓国語 | 原文、簡体中国語、英語、日本語 | 超高速、低遅延、高品質 |
 | OpenAI Realtime | 自動 | 簡体中国語、英語、日本語 | 超高速 |
+| Google Gemini Live Translate（プレビュー） | 自動 | 簡体中国語、英語、日本語 | 超高速 |
+| Azure OpenAI Realtime Translate | 自動 | 簡体中国語、英語、日本語 | 超高速 |
+| Volcano Engine 同時通訳 2.0 | 中国語、英語、日本語 | 簡体中国語、英語、日本語 | 超高速 |
+| Tencent Cloud リアルタイム音声翻訳 | 中国語、英語、日本語、韓国語 | 簡体中国語、英語、日本語 | 超高速 |
+| Baidu リアルタイム音声翻訳 | 中国語、英語、日本語、韓国語 | 簡体中国語、英語、日本語 | 超高速 |
+| xAI Grok Voice | 自動 | 簡体中国語、英語、日本語 | 超高速、ターン制 |
 
 ### プラットフォームについて
 

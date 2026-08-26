@@ -3,6 +3,7 @@
 
 pub mod committer;
 pub mod configuration;
+pub mod credentials;
 pub mod diagnostics;
 pub mod models;
 pub mod openai_transcript_committer;

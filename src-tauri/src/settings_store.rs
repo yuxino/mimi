@@ -5,6 +5,7 @@
 //! account in the operating-system credential store.
 
 use crate::core::configuration::LiveTranslationConfiguration;
+use crate::core::credentials::ProviderCredentials;
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
 use crate::core::provider::{
     ProviderKind, ProviderPreferences, ServiceProfile, DEFAULT_ALIBABA_PROFILE_ID,
@@ -554,8 +555,13 @@ impl SettingsStore {
 
     pub fn credential_state(&self, profile: &ServiceProfile) -> CredentialState {
         match self.load_api_key_for_profile(profile) {
-            Ok(Some(value)) if !value.is_empty() => CredentialState::Present,
-            Ok(Some(_)) | Ok(None) => CredentialState::Missing,
+            Ok(Some(value)) => {
+                match ProviderCredentials::decode_from_keychain(profile.provider, &value) {
+                    Ok(_) => CredentialState::Present,
+                    Err(_) => CredentialState::Unavailable,
+                }
+            }
+            Ok(None) => CredentialState::Missing,
             Err(_) => CredentialState::Unavailable,
         }
     }
@@ -568,12 +574,19 @@ impl SettingsStore {
     }
 
     pub fn save_api_key(&self, profile_id: &str, api_key: &str) -> Result<(), String> {
+        self.save_credentials(profile_id, &ProviderCredentials::api_key(api_key))
+    }
+
+    pub fn save_credentials(
+        &self,
+        profile_id: &str,
+        credentials: &ProviderCredentials,
+    ) -> Result<(), String> {
         let profile = self.profile(profile_id)?;
-        let value = api_key.trim();
-        if value.is_empty() {
-            return Err("The API key is required.".to_string());
-        }
-        self.save_api_key_for_profile(&profile, value)
+        let value = credentials
+            .encode_for_keychain(profile.provider)
+            .map_err(|error| error.to_string())?;
+        self.save_api_key_for_profile(&profile, &value)
     }
 
     pub fn delete_api_key(&self, profile_id: &str) -> Result<(), String> {
@@ -590,9 +603,11 @@ impl SettingsStore {
             .load_api_key_for_profile(&profile)
             .map_err(|_| CREDENTIAL_STORE_UNAVAILABLE.to_string())?
             .unwrap_or_default();
-        LiveTranslationConfiguration::for_provider(
+        let credentials = ProviderCredentials::decode_from_keychain(profile.provider, &api_key)
+            .map_err(|error| error.to_string())?;
+        LiveTranslationConfiguration::with_credentials(
             profile.provider,
-            api_key,
+            credentials,
             prefs.source_language,
             prefs.target_language,
             prefs.translation_mode,
@@ -928,7 +943,8 @@ fn is_default_alibaba(profile: &ServiceProfile) -> bool {
 }
 
 fn normalize_preferences_value(prefs: &mut Preferences, provider: ProviderKind) {
-    let normalized = provider.capabilities().normalize(ProviderPreferences {
+    let capabilities = provider.capabilities();
+    let normalized = capabilities.normalize(ProviderPreferences {
         source_language: prefs.source_language,
         target_language: prefs.target_language,
         translation_mode: prefs.translation_mode,
@@ -936,7 +952,11 @@ fn normalize_preferences_value(prefs: &mut Preferences, provider: ProviderKind) 
     prefs.source_language = normalized.source_language;
     prefs.target_language = normalized.target_language;
     prefs.translation_mode = normalized.translation_mode;
-    if prefs.source_language == SourceLanguage::Chinese {
+    if prefs.source_language == SourceLanguage::Chinese
+        && capabilities
+            .target_languages
+            .contains(&TargetLanguage::Original)
+    {
         prefs.target_language = TargetLanguage::Original;
     }
 }
@@ -1464,6 +1484,48 @@ mod tests {
     }
 
     #[test]
+    fn deleting_a_profile_without_a_saved_credential_is_idempotent() {
+        let fake = FakeSecretStore::default();
+        let store = settings(&fake);
+        let profile = openai_profile(&store, "No credential");
+
+        store.delete_profile(&profile.id).unwrap();
+
+        assert!(store
+            .profile_catalog()
+            .unwrap()
+            .1
+            .iter()
+            .all(|candidate| candidate.id != profile.id));
+    }
+
+    #[test]
+    fn structured_credentials_remain_keychain_only_and_resolve_configuration() {
+        let fake = FakeSecretStore::default();
+        let store = settings(&fake);
+        let profile = store
+            .create_profile(ProviderKind::AzureOpenAIRealtime, "Azure")
+            .unwrap();
+        let secret = "azure-private-value";
+        let credentials = ProviderCredentials::AzureOpenAI {
+            endpoint: "https://mimi.openai.azure.com".into(),
+            deployment: "translate".into(),
+            transcription_deployment: "transcribe".into(),
+            api_key: secret.into(),
+        };
+
+        store.save_credentials(&profile.id, &credentials).unwrap();
+        assert_eq!(store.credential_state(&profile), CredentialState::Present);
+        store.select_profile(&profile.id).unwrap();
+        let configuration = store.configuration().unwrap();
+        assert_eq!(configuration.credentials, credentials);
+
+        let catalog = serde_json::to_string(&store.profile_catalog().unwrap()).unwrap();
+        assert!(!catalog.contains(secret));
+        assert!(!catalog.contains("mimi.openai.azure.com"));
+    }
+
+    #[test]
     fn profile_count_is_bounded() {
         let fake = FakeSecretStore::default();
         let store = settings(&fake);
@@ -1692,6 +1754,23 @@ mod tests {
         assert_eq!(persisted, normalized);
 
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn explicit_provider_preserves_chinese_translation_target() {
+        let mut preferences = Preferences {
+            source_language: SourceLanguage::Chinese,
+            target_language: TargetLanguage::English,
+            ..Preferences::default()
+        };
+
+        normalize_preferences_value(&mut preferences, ProviderKind::TencentCloud);
+        assert_eq!(preferences.source_language, SourceLanguage::Chinese);
+        assert_eq!(preferences.target_language, TargetLanguage::English);
+
+        preferences.target_language = TargetLanguage::SimplifiedChinese;
+        normalize_preferences_value(&mut preferences, ProviderKind::TencentCloud);
+        assert_eq!(preferences.target_language, TargetLanguage::English);
     }
 
     #[test]

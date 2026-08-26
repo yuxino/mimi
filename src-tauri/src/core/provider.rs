@@ -19,6 +19,18 @@ pub enum ProviderKind {
     AlibabaCloud,
     #[serde(rename = "openAIRealtime")]
     OpenAIRealtime,
+    #[serde(rename = "googleGeminiLive")]
+    GoogleGeminiLive,
+    #[serde(rename = "azureOpenAIRealtime")]
+    AzureOpenAIRealtime,
+    #[serde(rename = "volcanoEngine")]
+    VolcanoEngine,
+    #[serde(rename = "tencentCloud")]
+    TencentCloud,
+    #[serde(rename = "baiduTranslate")]
+    BaiduTranslate,
+    #[serde(rename = "xAIRealtime")]
+    XAIRealtime,
 }
 
 impl ProviderKind {
@@ -26,6 +38,12 @@ impl ProviderKind {
         match self {
             Self::AlibabaCloud => "alibabaCloud",
             Self::OpenAIRealtime => "openAIRealtime",
+            Self::GoogleGeminiLive => "googleGeminiLive",
+            Self::AzureOpenAIRealtime => "azureOpenAIRealtime",
+            Self::VolcanoEngine => "volcanoEngine",
+            Self::TencentCloud => "tencentCloud",
+            Self::BaiduTranslate => "baiduTranslate",
+            Self::XAIRealtime => "xAIRealtime",
         }
     }
 
@@ -33,6 +51,12 @@ impl ProviderKind {
         match self {
             Self::AlibabaCloud => "Alibaba Cloud",
             Self::OpenAIRealtime => "OpenAI Realtime",
+            Self::GoogleGeminiLive => "Google Gemini",
+            Self::AzureOpenAIRealtime => "Azure OpenAI",
+            Self::VolcanoEngine => "Volcano Engine",
+            Self::TencentCloud => "Tencent Cloud",
+            Self::BaiduTranslate => "Baidu Translate",
+            Self::XAIRealtime => "xAI Grok",
         }
     }
 
@@ -59,17 +83,57 @@ impl ProviderKind {
                 ],
                 input_sample_rate_hz: 16_000,
             },
-            Self::OpenAIRealtime => ProviderCapabilities {
-                source_languages: vec![SourceLanguage::Automatic],
-                target_languages: vec![
-                    TargetLanguage::SimplifiedChinese,
-                    TargetLanguage::English,
-                    TargetLanguage::Japanese,
+            Self::OpenAIRealtime | Self::AzureOpenAIRealtime | Self::XAIRealtime => {
+                realtime_capabilities(vec![SourceLanguage::Automatic], 24_000)
+            }
+            Self::GoogleGeminiLive => {
+                realtime_capabilities(vec![SourceLanguage::Automatic], 16_000)
+            }
+            Self::VolcanoEngine => realtime_capabilities(
+                vec![
+                    SourceLanguage::Japanese,
+                    SourceLanguage::English,
+                    SourceLanguage::Chinese,
                 ],
-                translation_modes: vec![TranslationMode::Turbo],
-                input_sample_rate_hz: 24_000,
-            },
+                16_000,
+            ),
+            Self::TencentCloud | Self::BaiduTranslate => realtime_capabilities(
+                vec![
+                    SourceLanguage::Japanese,
+                    SourceLanguage::English,
+                    SourceLanguage::Korean,
+                    SourceLanguage::Chinese,
+                ],
+                16_000,
+            ),
         }
+    }
+
+    pub const fn uses_api_key_only(self) -> bool {
+        matches!(
+            self,
+            Self::AlibabaCloud
+                | Self::OpenAIRealtime
+                | Self::GoogleGeminiLive
+                | Self::VolcanoEngine
+                | Self::XAIRealtime
+        )
+    }
+}
+
+fn realtime_capabilities(
+    source_languages: Vec<SourceLanguage>,
+    input_sample_rate_hz: u32,
+) -> ProviderCapabilities {
+    ProviderCapabilities {
+        source_languages,
+        target_languages: vec![
+            TargetLanguage::SimplifiedChinese,
+            TargetLanguage::English,
+            TargetLanguage::Japanese,
+        ],
+        translation_modes: vec![TranslationMode::Turbo],
+        input_sample_rate_hz,
     }
 }
 
@@ -94,7 +158,13 @@ impl ProviderCapabilities {
         let mut normalized = preferences;
 
         if !self.source_languages.contains(&normalized.source_language) {
-            if let Some(fallback) = self.source_languages.first().copied() {
+            if let Some(fallback) = self
+                .source_languages
+                .iter()
+                .copied()
+                .find(|source| !source_matches_target(*source, normalized.target_language))
+                .or_else(|| self.source_languages.first().copied())
+            {
                 normalized.source_language = fallback;
             }
         }
@@ -112,8 +182,58 @@ impl ProviderCapabilities {
             }
         }
 
+        // Dedicated translation services require different explicit source
+        // and target languages. Avoid persisting a no-op pair after a source
+        // switch or when loading stale preferences. Alibaba keeps its
+        // separate Original-subtitle mode, so its established behavior is
+        // intentionally left unchanged here.
+        if !self.target_languages.contains(&TargetLanguage::Original)
+            && source_matches_target(normalized.source_language, normalized.target_language)
+        {
+            if let Some(fallback) = self
+                .target_languages
+                .iter()
+                .copied()
+                .find(|target| !source_matches_target(normalized.source_language, *target))
+            {
+                normalized.target_language = fallback;
+            }
+        }
+
         normalized
     }
+
+    pub fn target_language_after_source_switch(
+        &self,
+        source_language: SourceLanguage,
+        previous_source: SourceLanguage,
+        current_target: TargetLanguage,
+    ) -> TargetLanguage {
+        if self.target_languages.contains(&TargetLanguage::Original) {
+            return source_language
+                .target_language_after_quick_switch(previous_source, current_target);
+        }
+
+        self.normalize(ProviderPreferences {
+            source_language,
+            target_language: current_target,
+            translation_mode: self
+                .translation_modes
+                .first()
+                .copied()
+                .unwrap_or(TranslationMode::Turbo),
+        })
+        .target_language
+    }
+}
+
+fn source_matches_target(source: SourceLanguage, target: TargetLanguage) -> bool {
+    matches!(
+        (source, target),
+        (SourceLanguage::Chinese, TargetLanguage::SimplifiedChinese)
+            | (SourceLanguage::English, TargetLanguage::English)
+            | (SourceLanguage::Japanese, TargetLanguage::Japanese)
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,18 +316,24 @@ mod tests {
 
     #[test]
     fn provider_wire_values_are_stable() {
-        assert_eq!(
-            serde_json::to_value(ProviderKind::AlibabaCloud).unwrap(),
-            json!("alibabaCloud")
-        );
-        assert_eq!(
-            serde_json::to_value(ProviderKind::OpenAIRealtime).unwrap(),
-            json!("openAIRealtime")
-        );
-        assert_eq!(
-            serde_json::from_value::<ProviderKind>(json!("openAIRealtime")).unwrap(),
-            ProviderKind::OpenAIRealtime
-        );
+        let cases = [
+            (ProviderKind::AlibabaCloud, "alibabaCloud"),
+            (ProviderKind::OpenAIRealtime, "openAIRealtime"),
+            (ProviderKind::GoogleGeminiLive, "googleGeminiLive"),
+            (ProviderKind::AzureOpenAIRealtime, "azureOpenAIRealtime"),
+            (ProviderKind::VolcanoEngine, "volcanoEngine"),
+            (ProviderKind::TencentCloud, "tencentCloud"),
+            (ProviderKind::BaiduTranslate, "baiduTranslate"),
+            (ProviderKind::XAIRealtime, "xAIRealtime"),
+        ];
+        for (provider, wire_value) in cases {
+            assert_eq!(serde_json::to_value(provider).unwrap(), json!(wire_value));
+            assert_eq!(
+                serde_json::from_value::<ProviderKind>(json!(wire_value)).unwrap(),
+                provider
+            );
+            assert_eq!(provider.wire_value(), wire_value);
+        }
     }
 
     #[test]
@@ -230,6 +356,54 @@ mod tests {
         );
         assert_eq!(openai.translation_modes, vec![TranslationMode::Turbo]);
         assert_eq!(openai.input_sample_rate_hz, 24_000);
+
+        for provider in [
+            ProviderKind::GoogleGeminiLive,
+            ProviderKind::AzureOpenAIRealtime,
+            ProviderKind::VolcanoEngine,
+            ProviderKind::TencentCloud,
+            ProviderKind::BaiduTranslate,
+            ProviderKind::XAIRealtime,
+        ] {
+            let capabilities = provider.capabilities();
+            assert_eq!(capabilities.target_languages.len(), 3);
+            assert_eq!(capabilities.translation_modes, vec![TranslationMode::Turbo]);
+        }
+        assert_eq!(
+            ProviderKind::GoogleGeminiLive
+                .capabilities()
+                .input_sample_rate_hz,
+            16_000
+        );
+        assert_eq!(
+            ProviderKind::AzureOpenAIRealtime
+                .capabilities()
+                .input_sample_rate_hz,
+            24_000
+        );
+        assert_eq!(
+            ProviderKind::VolcanoEngine.capabilities().source_languages,
+            vec![
+                SourceLanguage::Japanese,
+                SourceLanguage::English,
+                SourceLanguage::Chinese
+            ]
+        );
+        for provider in [ProviderKind::TencentCloud, ProviderKind::BaiduTranslate] {
+            let capabilities = provider.capabilities();
+            assert_eq!(
+                capabilities.source_languages,
+                vec![
+                    SourceLanguage::Japanese,
+                    SourceLanguage::English,
+                    SourceLanguage::Korean,
+                    SourceLanguage::Chinese
+                ]
+            );
+            assert!(!capabilities
+                .source_languages
+                .contains(&SourceLanguage::Automatic));
+        }
     }
 
     #[test]
@@ -249,6 +423,41 @@ mod tests {
                 target_language: TargetLanguage::SimplifiedChinese,
                 translation_mode: TranslationMode::Turbo,
             }
+        );
+    }
+
+    #[test]
+    fn explicit_source_providers_do_not_fallback_to_the_target_language() {
+        let normalized =
+            ProviderKind::VolcanoEngine
+                .capabilities()
+                .normalize(ProviderPreferences {
+                    source_language: SourceLanguage::Automatic,
+                    target_language: TargetLanguage::Japanese,
+                    translation_mode: TranslationMode::HighQuality,
+                });
+        assert_eq!(normalized.source_language, SourceLanguage::English);
+        assert_eq!(normalized.translation_mode, TranslationMode::Turbo);
+    }
+
+    #[test]
+    fn explicit_source_providers_keep_chinese_translation_enabled() {
+        let capabilities = ProviderKind::TencentCloud.capabilities();
+        assert_eq!(
+            capabilities.target_language_after_source_switch(
+                SourceLanguage::Chinese,
+                SourceLanguage::Japanese,
+                TargetLanguage::English,
+            ),
+            TargetLanguage::English
+        );
+        assert_eq!(
+            capabilities.target_language_after_source_switch(
+                SourceLanguage::Chinese,
+                SourceLanguage::Japanese,
+                TargetLanguage::SimplifiedChinese,
+            ),
+            TargetLanguage::English
         );
     }
 

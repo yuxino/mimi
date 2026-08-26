@@ -7,6 +7,7 @@ import {
   activeServiceProfile,
   effectiveTranslationModeForSettings,
   sourceLanguagesForSettings,
+  targetLanguagesForSettings,
 } from "../../lib/providerCapabilities";
 import { useStore } from "../../lib/store";
 import {
@@ -71,6 +72,8 @@ export function TrayPanel() {
 
   const activeProfile = activeServiceProfile(settings);
   const sourceLanguages = sourceLanguagesForSettings(settings);
+  const chineseIsOriginalOnly =
+    targetLanguagesForSettings(settings).includes("original");
   const presentation = deriveTrayPresentation({
     status: sessionStatus,
     isPaused,
@@ -200,7 +203,12 @@ export function TrayPanel() {
         >
           <Icon
             name={
-              activeProfile?.provider === "openAIRealtime" ? "waves" : "cloud"
+              activeProfile?.provider === "xAIRealtime"
+                ? "waves"
+                : activeProfile?.provider === "alibabaCloud" ||
+                    activeProfile?.provider === "azureOpenAIRealtime"
+                  ? "cloud"
+                  : "languages"
             }
           />
           <span>{activeProfile?.name ?? I18N.settings.noActiveProfile}</span>
@@ -251,7 +259,7 @@ export function TrayPanel() {
             >
               {sourceLanguages.map((language) => (
                 <option key={language} value={language}>
-                  {sourceLanguageButtonTitle(language)}
+                  {sourceLanguageButtonTitle(language, chineseIsOriginalOnly)}
                 </option>
               ))}
             </select>

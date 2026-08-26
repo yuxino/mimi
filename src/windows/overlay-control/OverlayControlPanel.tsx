@@ -5,6 +5,7 @@ import {
   isTauri,
   overlayControlSetPanelHeight,
 } from "../../lib/ipc";
+import { targetLanguagesForSettings } from "../../lib/providerCapabilities";
 import {
   TRANSLATION_MODE_DISPLAY_NAMES,
   type OverlayActivityPhaseKind,
@@ -66,6 +67,8 @@ export function OverlayControlPanel({
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const canChangeSessionSettings = !isChangingSession && pendingAction === null;
+  const chineseIsOriginalOnly =
+    targetLanguagesForSettings(settings).includes("original");
 
   useLayoutEffect(() => {
     if (!isTauri || !panelRef.current || !contentRef.current) return;
@@ -170,7 +173,12 @@ export function OverlayControlPanel({
                       );
                     }}
                   >
-                    <span>{sourceLanguageButtonTitle(language)}</span>
+                    <span>
+                      {sourceLanguageButtonTitle(
+                        language,
+                        chineseIsOriginalOnly,
+                      )}
+                    </span>
                     {selected && <Icon name="checkmark" />}
                   </button>
                 );

@@ -8,7 +8,19 @@ import {
   type SourceLanguage,
   type TargetLanguage,
   type TranslationMode,
+  targetLanguageAfterQuickSwitch,
 } from "./types";
+
+export const SERVICE_PROVIDERS: readonly ServiceProvider[] = [
+  "alibabaCloud",
+  "openAIRealtime",
+  "googleGeminiLive",
+  "azureOpenAIRealtime",
+  "volcanoEngine",
+  "tencentCloud",
+  "baiduTranslate",
+  "xAIRealtime",
+];
 
 const PROVIDER_CAPABILITIES: Readonly<
   Record<ServiceProvider, ProviderCapabilities>
@@ -23,7 +35,43 @@ const PROVIDER_CAPABILITIES: Readonly<
     targetLanguages: ["zh", "en", "ja"],
     translationModes: ["turbo"],
   },
+  googleGeminiLive: {
+    sourceLanguages: ["auto"],
+    targetLanguages: ["zh", "en", "ja"],
+    translationModes: ["turbo"],
+  },
+  azureOpenAIRealtime: {
+    sourceLanguages: ["auto"],
+    targetLanguages: ["zh", "en", "ja"],
+    translationModes: ["turbo"],
+  },
+  volcanoEngine: {
+    sourceLanguages: ["ja", "en", "zh"],
+    targetLanguages: ["zh", "en", "ja"],
+    translationModes: ["turbo"],
+  },
+  tencentCloud: {
+    sourceLanguages: ["ja", "en", "ko", "zh"],
+    targetLanguages: ["zh", "en", "ja"],
+    translationModes: ["turbo"],
+  },
+  baiduTranslate: {
+    sourceLanguages: ["ja", "en", "ko", "zh"],
+    targetLanguages: ["zh", "en", "ja"],
+    translationModes: ["turbo"],
+  },
+  xAIRealtime: {
+    sourceLanguages: ["auto"],
+    targetLanguages: ["zh", "en", "ja"],
+    translationModes: ["turbo"],
+  },
 };
+
+export function capabilitiesForProvider(
+  provider: ServiceProvider,
+): ProviderCapabilities {
+  return PROVIDER_CAPABILITIES[provider];
+}
 
 export function activeServiceProfile(
   settings: Pick<SettingsSnapshot, "profiles" | "activeProfileId">,
@@ -37,7 +85,7 @@ function capabilitiesForSettings(
   settings: Pick<SettingsSnapshot, "profiles" | "activeProfileId">,
 ): ProviderCapabilities {
   const provider = activeServiceProfile(settings)?.provider ?? "alibabaCloud";
-  return PROVIDER_CAPABILITIES[provider];
+  return capabilitiesForProvider(provider);
 }
 
 export function sourceLanguagesForSettings(
@@ -47,9 +95,65 @@ export function sourceLanguagesForSettings(
 }
 
 export function targetLanguagesForSettings(
-  settings: Pick<SettingsSnapshot, "profiles" | "activeProfileId">,
+  settings: Pick<
+    SettingsSnapshot,
+    "profiles" | "activeProfileId" | "sourceLanguage"
+  >,
 ): readonly TargetLanguage[] {
-  return capabilitiesForSettings(settings).targetLanguages;
+  const targetLanguages = capabilitiesForSettings(settings).targetLanguages;
+  if (
+    settings.sourceLanguage === "auto" ||
+    targetLanguages.includes("original")
+  ) {
+    return targetLanguages;
+  }
+  return targetLanguages.filter(
+    (target) => !sourceMatchesTarget(settings.sourceLanguage, target),
+  );
+}
+
+function sourceMatchesTarget(
+  source: SourceLanguage,
+  target: TargetLanguage,
+): boolean {
+  return (
+    (source === "zh" && target === "zh") ||
+    (source === "en" && target === "en") ||
+    (source === "ja" && target === "ja")
+  );
+}
+
+export function targetLanguageAfterSourceSwitch(
+  settings: Pick<
+    SettingsSnapshot,
+    | "profiles"
+    | "activeProfileId"
+    | "sourceLanguage"
+    | "targetLanguage"
+  >,
+  sourceLanguage: SourceLanguage,
+): TargetLanguage {
+  const capabilities = capabilitiesForSettings(settings);
+  if (capabilities.targetLanguages.includes("original")) {
+    return targetLanguageAfterQuickSwitch(
+      sourceLanguage,
+      settings.sourceLanguage,
+      settings.targetLanguage,
+    );
+  }
+
+  if (
+    capabilities.targetLanguages.includes(settings.targetLanguage) &&
+    !sourceMatchesTarget(sourceLanguage, settings.targetLanguage)
+  ) {
+    return settings.targetLanguage;
+  }
+
+  return (
+    capabilities.targetLanguages.find(
+      (target) => !sourceMatchesTarget(sourceLanguage, target),
+    ) ?? settings.targetLanguage
+  );
 }
 
 export function translationModesForSettings(
@@ -66,9 +170,9 @@ export function translationModesForSettings(
 }
 
 /**
- * Mirrors the backend's effective-mode priority: OpenAI always uses turbo;
- * Alibaba preserves an explicitly selected turbo mode, then falls back to
- * low latency for automatic detection.
+ * Mirrors the backend's effective-mode priority: every non-Alibaba adapter
+ * uses turbo; Alibaba preserves an explicitly selected turbo mode, then falls
+ * back to low latency for automatic detection.
  */
 export function effectiveTranslationModeForSettings(
   settings: Pick<
@@ -82,7 +186,7 @@ export function effectiveTranslationModeForSettings(
   const provider = activeServiceProfile(settings)?.provider ?? "alibabaCloud";
   const supportedModes = translationModesForSettings(settings);
 
-  if (provider === "openAIRealtime") return "turbo";
+  if (provider !== "alibabaCloud") return "turbo";
   if (settings.translationMode === "turbo") return "turbo";
   if (settings.sourceLanguage === "auto") {
     return "lowLatency";

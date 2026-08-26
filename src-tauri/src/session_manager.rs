@@ -100,8 +100,8 @@ fn translation_mode_after_source_switch(
                 TranslationMode::LowLatency
             }
         }
-        (ProviderKind::OpenAIRealtime, _) => TranslationMode::Turbo,
-        _ => current_mode,
+        (ProviderKind::AlibabaCloud, _) => current_mode,
+        (_, _) => TranslationMode::Turbo,
     }
 }
 
@@ -1093,8 +1093,11 @@ impl SessionManager {
         }
         let (target_language, next_mode, needs_reconnect) = {
             let prefs = self.settings.preferences();
-            let target = language
-                .target_language_after_quick_switch(prefs.source_language, prefs.target_language);
+            let target = provider.capabilities().target_language_after_source_switch(
+                language,
+                prefs.source_language,
+                prefs.target_language,
+            );
             let mode =
                 translation_mode_after_source_switch(provider, language, prefs.translation_mode);
             let needs_reconnect = source_switch_requires_reconnect(
@@ -2787,6 +2790,14 @@ mod lifecycle_tests {
             translation_mode_after_source_switch(
                 ProviderKind::OpenAIRealtime,
                 SourceLanguage::Automatic,
+                TranslationMode::HighQuality,
+            ),
+            TranslationMode::Turbo
+        );
+        assert_eq!(
+            translation_mode_after_source_switch(
+                ProviderKind::VolcanoEngine,
+                SourceLanguage::Japanese,
                 TranslationMode::HighQuality,
             ),
             TranslationMode::Turbo

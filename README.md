@@ -39,17 +39,23 @@ Turn Chinese, Japanese, English, or Korean audio playing on your device into liv
 ## Get started
 
 1. Download the latest version for your platform from [Releases](https://github.com/yuxino/mimi/releases/latest).
-2. Open **Service configurations** and save an API key. Alibaba Cloud is selected by default; OpenAI Realtime is also supported.
+2. Open **Service configurations**, choose a provider, and save its connection credentials. Alibaba Cloud remains selected by default.
 3. Play something and select **Start**.
 
-Each service configuration's API key is stored separately in the operating system's secure credential storage (macOS Keychain / Windows Credential Manager) and is never read back into the settings page. Alibaba Cloud's shared API requires only an API key—no Workspace ID. Existing Alibaba Cloud settings migrate to the default service configuration automatically. Provider usage may incur charges.
+Each service configuration's credentials are stored separately in the operating system's secure credential storage (macOS Keychain / Windows Credential Manager) and are never read back into the settings page. Single-key providers need only an API key; Azure asks for the resource endpoint plus separate translation and transcription deployment names, while Tencent and Baidu show their own official fields. Existing Alibaba Cloud settings migrate to the default service configuration automatically. Provider usage may incur charges.
 
-[Create an Alibaba Cloud API key](https://help.aliyun.com/en/model-studio/get-api-key) · [Create an OpenAI API key](https://platform.openai.com/api-keys)
+[Alibaba Cloud](https://help.aliyun.com/en/model-studio/get-api-key) · [OpenAI](https://platform.openai.com/api-keys) · [Google Gemini](https://aistudio.google.com/app/apikey) · [Azure OpenAI](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/gpt-realtime-translate) · [Volcano Engine](https://docs.volcengine.com/docs/6561/1631605) · [Tencent Cloud](https://cloud.tencent.com/document/api/1093/127565) · [Baidu Translate](https://cloud.baidu.com/doc/MT/s/Sl9p2h5k9) · [xAI](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech)
 
 | Provider | Source audio | Subtitle targets | Modes |
 | --- | --- | --- | --- |
 | Alibaba Cloud Model Studio | Auto, Chinese, English, Japanese, Korean | Original, Simplified Chinese, English, Japanese | Turbo, Low latency, High quality |
 | OpenAI Realtime | Auto | Simplified Chinese, English, Japanese | Turbo |
+| Google Gemini Live Translate (Preview) | Auto | Simplified Chinese, English, Japanese | Turbo |
+| Azure OpenAI Realtime Translate | Auto | Simplified Chinese, English, Japanese | Turbo |
+| Volcano Engine Simultaneous Interpretation 2.0 | Chinese, English, Japanese | Simplified Chinese, English, Japanese | Turbo |
+| Tencent Cloud Realtime Speech Translation | Chinese, English, Japanese, Korean | Simplified Chinese, English, Japanese | Turbo |
+| Baidu Realtime Speech Translation | Chinese, English, Japanese, Korean | Simplified Chinese, English, Japanese | Turbo |
+| xAI Grok Voice | Auto | Simplified Chinese, English, Japanese | Turbo, turn based |
 
 ### Platform notes
 

@@ -39,17 +39,23 @@
 ## 开始使用
 
 1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载对应平台版本。
-2. 打开「服务配置」并保存 API Key。默认仍使用阿里云百炼，也支持 OpenAI Realtime。
+2. 打开「服务配置」，选择服务商并保存对应连接凭证。默认仍使用阿里云百炼。
 3. 播放内容，点击 **开始**。
 
-每个服务配置的 API Key 都独立保存在操作系统的安全凭据存储中（macOS 钥匙串 / Windows 凭据管理器），设置页不会把已保存的 Key 读回显示。阿里云百炼共享 API 只需 API Key，无需 Workspace ID。已有阿里云设置会自动迁移为默认服务配置。服务商调用可能产生费用。
+每个服务配置的凭证都独立保存在操作系统的安全凭据存储中（macOS 钥匙串 / Windows 凭据管理器），设置页不会把已保存内容读回显示。单 Key 服务只需 API Key；Azure 需要资源端点以及独立的翻译、转写部署名称，腾讯和百度则显示各自官方要求的字段。已有阿里云设置会自动迁移为默认服务配置。服务商调用可能产生费用。
 
-[创建阿里云 API Key](https://help.aliyun.com/zh/model-studio/get-api-key) · [创建 OpenAI API Key](https://platform.openai.com/api-keys)
+[阿里云](https://help.aliyun.com/zh/model-studio/get-api-key) · [OpenAI](https://platform.openai.com/api-keys) · [Google Gemini](https://aistudio.google.com/app/apikey) · [Azure OpenAI](https://learn.microsoft.com/zh-cn/azure/foundry/openai/concepts/gpt-realtime-translate) · [火山引擎](https://docs.volcengine.com/docs/6561/1631605) · [腾讯云](https://cloud.tencent.com/document/api/1093/127565) · [百度翻译](https://cloud.baidu.com/doc/MT/s/Sl9p2h5k9) · [xAI](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech)
 
 | 服务商 | 音频源语言 | 字幕目标 | 模式 |
 | --- | --- | --- | --- |
 | 阿里云百炼 | 自动、中文、英语、日语、韩语 | 原文、简体中文、英语、日语 | 极速、低延迟、高质量 |
 | OpenAI Realtime | 自动 | 简体中文、英语、日语 | 极速 |
+| Google Gemini Live Translate（预览） | 自动 | 简体中文、英语、日语 | 极速 |
+| Azure OpenAI Realtime Translate | 自动 | 简体中文、英语、日语 | 极速 |
+| 火山引擎豆包同传 2.0 | 中文、英语、日语 | 简体中文、英语、日语 | 极速 |
+| 腾讯云实时语音翻译 | 中文、英语、日语、韩语 | 简体中文、英语、日语 | 极速 |
+| 百度实时语音翻译 | 中文、英语、日语、韩语 | 简体中文、英语、日语 | 极速 |
+| xAI Grok Voice | 自动 | 简体中文、英语、日语 | 极速、回合式 |
 
 ### 平台说明
 

@@ -1,5 +1,6 @@
 //! Immutable, provider-resolved live-translation configuration.
 
+use crate::core::credentials::{ProviderCredentials, ProviderCredentialsError};
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
 use crate::core::provider::ProviderKind;
 use std::fmt;
@@ -7,8 +8,8 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LiveTranslationConfigurationError {
-    #[error("Add the API key for {0} in Settings.")]
-    MissingAPIKey(ProviderKind),
+    #[error("{0}")]
+    Credentials(#[from] ProviderCredentialsError),
     #[error("The selected service does not support this source language.")]
     UnsupportedSourceLanguage,
     #[error("The selected service does not support this target language.")]
@@ -20,7 +21,7 @@ pub enum LiveTranslationConfigurationError {
 #[derive(Clone, PartialEq, Eq)]
 pub struct LiveTranslationConfiguration {
     pub provider: ProviderKind,
-    pub api_key: String,
+    pub credentials: ProviderCredentials,
     pub source_language: SourceLanguage,
     pub target_language: TargetLanguage,
     pub translation_mode: TranslationMode,
@@ -31,7 +32,7 @@ impl fmt::Debug for LiveTranslationConfiguration {
         formatter
             .debug_struct("LiveTranslationConfiguration")
             .field("provider", &self.provider)
-            .field("api_key", &"[REDACTED]")
+            .field("credentials", &"[REDACTED]")
             .field("source_language", &self.source_language)
             .field("target_language", &self.target_language)
             .field("translation_mode", &self.translation_mode)
@@ -40,6 +41,7 @@ impl fmt::Debug for LiveTranslationConfiguration {
 }
 
 impl LiveTranslationConfiguration {
+    #[cfg(test)]
     pub fn for_provider(
         provider: ProviderKind,
         api_key: impl Into<String>,
@@ -49,18 +51,34 @@ impl LiveTranslationConfiguration {
     ) -> Self {
         Self {
             provider,
-            api_key: api_key.into(),
+            credentials: ProviderCredentials::api_key(api_key),
             source_language,
             target_language,
             translation_mode,
         }
     }
 
-    /// The mode actually used for a session: OpenAI always uses turbo;
-    /// Alibaba preserves turbo and otherwise routes automatic recognition to
-    /// its low-latency pipeline.
+    pub fn with_credentials(
+        provider: ProviderKind,
+        credentials: ProviderCredentials,
+        source_language: SourceLanguage,
+        target_language: TargetLanguage,
+        translation_mode: TranslationMode,
+    ) -> Self {
+        Self {
+            provider,
+            credentials,
+            source_language,
+            target_language,
+            translation_mode,
+        }
+    }
+
+    /// The mode actually used for a session: every non-Alibaba realtime
+    /// adapter uses its one supported turbo path. Alibaba preserves turbo and
+    /// otherwise routes automatic recognition to its low-latency pipeline.
     pub fn effective_translation_mode(&self) -> TranslationMode {
-        if self.provider == ProviderKind::OpenAIRealtime {
+        if self.provider != ProviderKind::AlibabaCloud {
             return TranslationMode::Turbo;
         }
         if self.translation_mode == TranslationMode::Turbo {
@@ -74,13 +92,7 @@ impl LiveTranslationConfiguration {
 
     /// Returns a trimmed, validated copy of the configuration.
     pub fn validated(&self) -> Result<Self, LiveTranslationConfigurationError> {
-        let api_key = self.api_key.trim().to_string();
-
-        if api_key.is_empty() {
-            return Err(LiveTranslationConfigurationError::MissingAPIKey(
-                self.provider,
-            ));
-        }
+        let credentials = self.credentials.validated_for(self.provider)?;
 
         let capabilities = self.provider.capabilities();
         if !capabilities
@@ -104,7 +116,7 @@ impl LiveTranslationConfiguration {
 
         Ok(Self {
             provider: self.provider,
-            api_key,
+            credentials,
             source_language: self.source_language,
             target_language: self.target_language,
             translation_mode: self.translation_mode,
@@ -184,8 +196,8 @@ mod tests {
         let configuration = config("   ", SourceLanguage::English);
         assert!(matches!(
             configuration.validated(),
-            Err(LiveTranslationConfigurationError::MissingAPIKey(
-                ProviderKind::AlibabaCloud
+            Err(LiveTranslationConfigurationError::Credentials(
+                ProviderCredentialsError::Missing(ProviderKind::AlibabaCloud)
             ))
         ));
     }
@@ -195,14 +207,14 @@ mod tests {
         // The unified DashScope endpoints authenticate with the API key only.
         let configuration = config("sk-test", SourceLanguage::English);
         let validated = configuration.validated().unwrap();
-        assert_eq!(validated.api_key, "sk-test");
+        assert_eq!(validated.credentials.direct_api_key(), Some("sk-test"));
     }
 
     #[test]
     fn configuration_trims_valid_credentials() {
         let configuration = config("  sk-test  ", SourceLanguage::Korean);
         let validated = configuration.validated().unwrap();
-        assert_eq!(validated.api_key, "sk-test");
+        assert_eq!(validated.credentials.direct_api_key(), Some("sk-test"));
         assert_eq!(validated.source_language, SourceLanguage::Korean);
     }
 
@@ -256,6 +268,27 @@ mod tests {
             TranslationMode::Turbo,
         );
         assert_eq!(openai.provider.capabilities().input_sample_rate_hz, 24_000);
+    }
+
+    #[test]
+    fn structured_provider_credentials_are_validated_without_disclosure() {
+        let secret = "azure-private-value";
+        let configuration = LiveTranslationConfiguration::with_credentials(
+            ProviderKind::AzureOpenAIRealtime,
+            ProviderCredentials::AzureOpenAI {
+                endpoint: "https://mimi.openai.azure.com".into(),
+                deployment: "translate".into(),
+                transcription_deployment: "transcribe".into(),
+                api_key: secret.into(),
+            },
+            SourceLanguage::Automatic,
+            TargetLanguage::English,
+            TranslationMode::Turbo,
+        )
+        .validated()
+        .unwrap();
+        assert_eq!(configuration.provider, ProviderKind::AzureOpenAIRealtime);
+        assert!(!format!("{configuration:?}").contains(secret));
     }
 
     #[test]

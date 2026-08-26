@@ -1,6 +1,7 @@
 //! Tauri command handlers exposed to the frontend. The IPC contract is
 //! documented in docs/plans/2026-08-22-multi-provider-professional-settings-design.md.
 
+use crate::core::credentials::ProviderCredentials;
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
 use crate::core::provider::{ProviderKind, ServiceProfile};
 use crate::session_manager::{SessionManager, SessionStateEvent};
@@ -499,6 +500,19 @@ pub async fn profile_save_api_key(
     let _lifecycle = state.session.settings_mutation_guard(true).await?;
     ensure_profile_mutation_allowed(state.session.has_active_session())?;
     state.settings.save_api_key(&profile_id, &api_key)?;
+    emit_settings_snapshot(&app, &state.settings)
+}
+
+#[tauri::command]
+pub async fn profile_save_credentials(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+    credentials: ProviderCredentials,
+) -> Result<SettingsSnapshotPayload, String> {
+    let _lifecycle = state.session.settings_mutation_guard(true).await?;
+    ensure_profile_mutation_allowed(state.session.has_active_session())?;
+    state.settings.save_credentials(&profile_id, &credentials)?;
     emit_settings_snapshot(&app, &state.settings)
 }
 

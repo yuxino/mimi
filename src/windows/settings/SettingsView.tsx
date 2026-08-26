@@ -85,6 +85,7 @@ export function SettingsView() {
 
   const sourceLanguages = sourceLanguagesForSettings(settings);
   const targetLanguages = targetLanguagesForSettings(settings);
+  const chineseIsOriginalOnly = targetLanguages.includes("original");
   const translationModes = translationModesForSettings(settings);
   const effectiveTranslationMode =
     effectiveTranslationModeForSettings(settings);
@@ -208,6 +209,7 @@ export function SettingsView() {
                           key={language}
                           language={language}
                           selected={settings.sourceLanguage === language}
+                          chineseIsOriginalOnly={chineseIsOriginalOnly}
                           disabled={
                             isChangingSession || sourceLanguages.length === 1
                           }
@@ -216,7 +218,11 @@ export function SettingsView() {
                       ))}
                     </div>
                     <p className="settings-help">
-                      {sourceLanguageHelp(sessionStatus, settings)}
+                      {sourceLanguageHelp(
+                        sessionStatus,
+                        settings,
+                        chineseIsOriginalOnly,
+                      )}
                     </p>
                   </div>
 
@@ -226,7 +232,9 @@ export function SettingsView() {
                     <SettingsSelect
                       value={settings.targetLanguage}
                       disabled={
-                        sessionIsActive || settings.sourceLanguage === "zh"
+                        sessionIsActive ||
+                        (settings.sourceLanguage === "zh" &&
+                          targetLanguages.includes("original"))
                       }
                       label={I18N.settings.translateTo}
                       onChange={(value) =>
@@ -454,11 +462,13 @@ function settingsCategoryFromHash(hash: string): SettingsCategory | null {
 function SourceLanguageButton({
   language,
   selected,
+  chineseIsOriginalOnly,
   disabled,
   onSelect,
 }: {
   language: SourceLanguage;
   selected: boolean;
+  chineseIsOriginalOnly: boolean;
   disabled: boolean;
   onSelect: () => void;
 }) {
@@ -469,10 +479,12 @@ function SourceLanguageButton({
       data-selected={selected}
       aria-pressed={selected}
       disabled={disabled}
-      title={sourceLanguageButtonHelp(language)}
+      title={sourceLanguageButtonHelp(language, chineseIsOriginalOnly)}
       onClick={onSelect}
     >
-      <span>{sourceLanguageButtonTitle(language)}</span>
+      <span>
+        {sourceLanguageButtonTitle(language, chineseIsOriginalOnly)}
+      </span>
       {selected && <Icon name="checkmark-circle" />}
     </button>
   );
@@ -492,8 +504,14 @@ function translationModeHelp(mode: TranslationMode): string {
 function sourceLanguageHelp(
   status: SessionStateEvent["status"],
   settings: SettingsSnapshot,
+  chineseIsOriginalOnly: boolean,
 ): string {
   if (settings.sourceLanguage === "zh") {
+    if (!chineseIsOriginalOnly) {
+      return status.kind === "listening"
+        ? I18N.settings.recognizingChineseTranslatedListening
+        : I18N.settings.recognizingChineseTranslatedIdle;
+    }
     return status.kind === "listening"
       ? I18N.settings.recognizingChineseListening
       : I18N.settings.recognizingChineseIdle;
@@ -504,8 +522,11 @@ function sourceLanguageHelp(
   return I18N.settings.sourceHelpIdle;
 }
 
-function sourceLanguageButtonHelp(language: SourceLanguage): string {
-  return language === "zh"
+function sourceLanguageButtonHelp(
+  language: SourceLanguage,
+  chineseIsOriginalOnly: boolean,
+): string {
+  return language === "zh" && chineseIsOriginalOnly
     ? I18N.settings.switchToChineseHelp
     : I18N.settings.switchToLanguageHelp(
         SOURCE_LANGUAGE_DISPLAY_NAMES[language],

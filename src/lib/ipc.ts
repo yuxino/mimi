@@ -8,6 +8,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  ProviderCredentialsInput,
   SessionStateEvent,
   ServiceProvider,
   SettingsDraft,
@@ -94,6 +95,16 @@ export function profileSaveAPIKey(
   return invoke<SettingsSnapshot>("profile_save_api_key", {
     profileId,
     apiKey,
+  });
+}
+
+export function profileSaveCredentials(
+  profileId: string,
+  credentials: ProviderCredentialsInput,
+): Promise<SettingsSnapshot> {
+  return invoke<SettingsSnapshot>("profile_save_credentials", {
+    profileId,
+    credentials,
   });
 }
 

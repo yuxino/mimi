@@ -83,7 +83,33 @@ export interface SettingsDraft {
   uiLanguage?: UiLanguage;
 }
 
-export type ServiceProvider = "alibabaCloud" | "openAIRealtime";
+export type ServiceProvider =
+  | "alibabaCloud"
+  | "openAIRealtime"
+  | "googleGeminiLive"
+  | "azureOpenAIRealtime"
+  | "volcanoEngine"
+  | "tencentCloud"
+  | "baiduTranslate"
+  | "xAIRealtime";
+
+/** Write-only payload sent to the native secure credential store. */
+export type ProviderCredentialsInput =
+  | { kind: "apiKey"; apiKey: string }
+  | {
+      kind: "azureOpenAI";
+      endpoint: string;
+      deployment: string;
+      transcriptionDeployment: string;
+      apiKey: string;
+    }
+  | {
+      kind: "tencentCloud";
+      appId: string;
+      secretId: string;
+      secretKey: string;
+    }
+  | { kind: "baiduTranslate"; appId: string; appKey: string };
 
 /**
  * Sanitized keychain state returned by native snapshots. A replacement key
