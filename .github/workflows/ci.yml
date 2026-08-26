@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: mimi-${{ github.workflow }}-${{ github.ref }}
+  group: mimi-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
