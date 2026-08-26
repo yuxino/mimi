@@ -2,19 +2,14 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [--github-release|--ci-adhoc] /absolute/path/to/mimi.app" >&2
+  echo "Usage: $0 [--github-release] /absolute/path/to/mimi.app" >&2
   exit 2
 }
 
 GITHUB_RELEASE=0
-CI_ADHOC=0
 case "${1:-}" in
   --github-release)
     GITHUB_RELEASE=1
-    shift
-    ;;
-  --ci-adhoc)
-    CI_ADHOC=1
     shift
     ;;
 esac
@@ -68,21 +63,10 @@ grep -Fq "Identifier=app.yuxino.mimi" <<<"$SIGNATURE_DETAILS" || {
   echo "The signing identifier is not app.yuxino.mimi." >&2
   exit 1
 }
-if [[ "$CI_ADHOC" == "1" ]]; then
-  grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" || {
-    echo "The CI branch bundle must use the expected ad-hoc signature." >&2
-    exit 1
-  }
-  [[ "$REQUIREMENT" == cdhash\ * ]] || {
-    echo "The CI branch bundle must have a build-specific requirement." >&2
-    exit 1
-  }
-else
-  if grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" \
-    || [[ -z "$REQUIREMENT" || "$REQUIREMENT" == cdhash\ * ]]; then
-    echo "Ad-hoc or build-specific signatures are forbidden for formal mimi app bundles." >&2
-    exit 1
-  fi
+if grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" \
+  || [[ -z "$REQUIREMENT" || "$REQUIREMENT" == cdhash\ * ]]; then
+  echo "Ad-hoc or build-specific signatures are forbidden for mimi app bundles." >&2
+  exit 1
 fi
 
 if [[ "$GITHUB_RELEASE" == "1" ]]; then

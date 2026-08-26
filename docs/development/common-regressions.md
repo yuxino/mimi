@@ -29,9 +29,9 @@ Rules:
   deliberate, one-time certificate migration whose extra prompts are expected.
 - Never use ad-hoc signing for a runnable macOS bundle. Never use `tccutil
   reset`, delete Keychain entries, or rotate a certificate as a routine fix.
-- The one exception is the read-only branch/PR packaging probe in CI. It must
-  call `verify-macos-app.sh --ci-adhoc` explicitly; local packages and GitHub
-  releases use the strict modes and continue to reject build-specific identity.
+- Branch and pull-request CI compiles macOS with `--no-bundle`; it must not
+  create or upload a runnable ad-hoc `.app` or `.dmg`. Only the protected
+  stable-identity release job may publish a macOS bundle.
 - Keep only one live mimi copy while testing. Confirm its executable path, not
   just the process name, before diagnosing shortcuts, windows, or permissions.
 

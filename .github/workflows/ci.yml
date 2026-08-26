@@ -66,25 +66,18 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Build native bundles on branches and pull requests so packaging
-  # regressions surface before a tag. This job has read-only repository
-  # access and never receives a release token.
+  # Compile macOS without producing a runnable artifact. Windows still builds
+  # an installer because it has no equivalent persistent privacy identity.
+  # Formal macOS packages are produced only by the stable release identity.
   bundle:
     if: ${{ github.ref_type != 'tag' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            args: ""
-          - os: windows-latest
-            args: ""
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.os == 'macos-latest' && '13.0' || '' }}
-      # Branch artifacts are never formal releases, but the outer app bundle
-      # must still be completely signed so packaging defects are observable.
-      APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
     needs: [rust, frontend]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -102,33 +95,19 @@ jobs:
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
-        with:
-          args: ${{ matrix.args }}
-
-      - name: Verify macOS branch bundle
+      - name: Compile macOS without a runnable bundle
         if: ${{ matrix.os == 'macos-latest' }}
-        run: |
-          app_paths=()
-          while IFS= read -r -d '' candidate; do
-            app_paths+=("$candidate")
-          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print0)
-          if [[ "${#app_paths[@]}" != "1" ]]; then
-            echo "Expected exactly one macOS app bundle; found ${#app_paths[@]}." >&2
-            exit 1
-          fi
-          app_path="${app_paths[0]}"
-          # Branch artifacts are packaging probes only. Keep this opt-in
-          # explicit so local/formal verification still rejects ad-hoc apps.
-          ./scripts/verify-macos-app.sh --ci-adhoc "$app_path"
+        run: npm run tauri -- build --no-bundle
+
+      - uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
+        if: ${{ matrix.os == 'windows-latest' }}
 
       - name: Upload bundles
+        if: ${{ matrix.os == 'windows-latest' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mimi-${{ matrix.os }}
           path: |
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.app.tar.gz
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
           if-no-files-found: error
