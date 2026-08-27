@@ -46,7 +46,7 @@ Each service configuration's credentials are stored separately in the operating 
 
 ### Platform notes
 
-- **macOS 13 or later on Apple silicon**: the current source has been packaged, installed, and launched locally with the repository's stable self-signed development identity. It is not Apple-notarized, and this developer-install result does not certify every GitHub Release asset. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Listening requests Screen & System Audio Recording access; mimi captures system audio only, never the screen, and excludes its own sound.
+- **macOS 13 or later on Apple silicon**: GitHub Releases provide a developer-installable, ad-hoc-signed DMG without Apple notarization. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Updates may require approving Screen & System Audio Recording or Keychain access again. Local permission-sensitive QA uses the repository's separate stable development identity. mimi captures system audio only, never the screen, and excludes its own sound.
 - **Windows preview**: the source implements WASAPI loopback capture and CI produces x64 MSI and EXE packages. Real-device installation, trust prompts, credential storage, system-audio capture, overlay behavior, and the complete live-subtitle flow have not yet been accepted on Windows. CI success is not a substitute for that verification.
 
 ## Build from source

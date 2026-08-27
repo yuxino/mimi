@@ -67,9 +67,8 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Compile macOS without producing a runnable artifact. Windows still builds
-  # an installer because it has no equivalent persistent privacy identity.
-  # Formal macOS packages are produced only by the stable release identity.
+  # Compile macOS without producing an extra branch artifact. Tag builds below
+  # produce the developer-installable macOS and Windows packages.
   bundle:
     if: ${{ github.ref_type != 'tag' }}
     strategy:
@@ -141,21 +140,16 @@ jobs:
             exit 1
           fi
 
-  # GitHub macOS releases use one persistent self-signed identity. It does not
-  # bypass Gatekeeper, but its stable designated requirement lets TCC recognize
-  # the same app across updates. File-based Keychain access has an additional
-  # partition check and this self-signed certificate has no Apple Team ID, so
-  # password-free credential access across every binary update is not promised.
-  # The certificate is pinned in source. Its CI-accessible private-key copy
-  # exists only in the protected github-release environment; any offline
-  # encrypted backup remains outside CI.
+  # GitHub macOS releases are developer-installable packages. They use an
+  # explicit ad-hoc signature so no private signing credential is required.
+  # Gatekeeper may require Open Anyway and macOS may treat each update as a new
+  # privacy/Keychain identity; stable local signing remains the QA path.
   release-macos:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-latest
-    environment: github-release
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
-      MIMI_RELEASE_CERT_SHA256: "25c45861a0f4455fd6ac6161ae3e65035c83b7447e2b2092d93eae26b548d9e6"
+      APPLE_SIGNING_IDENTITY: "-"
     needs: [rust, frontend, release-preflight]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -179,103 +173,8 @@ jobs:
           rm -rf "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos"
           rm -rf "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg"
 
-      - name: Import persistent GitHub release identity
-        env:
-          MACOS_RELEASE_CERTIFICATE: ${{ secrets.MACOS_RELEASE_CERTIFICATE }}
-          MACOS_RELEASE_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_RELEASE_CERTIFICATE_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "$MACOS_RELEASE_CERTIFICATE" || -z "$MACOS_RELEASE_CERTIFICATE_PASSWORD" ]]; then
-            echo "Missing the persistent macOS GitHub release identity." >&2
-            exit 1
-          fi
-
-          umask 077
-          certificate_path="$RUNNER_TEMP/mimi-github-release.p12"
-          certificate_bundle="$RUNNER_TEMP/mimi-github-release-certificates.pem"
-          certificate_pem="$RUNNER_TEMP/mimi-github-release.pem"
-          keychain_path="$RUNNER_TEMP/mimi-github-release.keychain-db"
-          keychain_password="$(openssl rand -hex 32)"
-          printf '%s' "$MACOS_RELEASE_CERTIFICATE" | base64 --decode > "$certificate_path"
-          openssl pkcs12 \
-            -in "$certificate_path" \
-            -nokeys \
-            -passin env:MACOS_RELEASE_CERTIFICATE_PASSWORD \
-            -out "$certificate_bundle"
-          certificate_count="$(awk '/BEGIN CERTIFICATE/{count++} END{print count+0}' "$certificate_bundle")"
-          if [[ "$certificate_count" != "1" ]]; then
-            echo "The release identity must contain exactly one certificate." >&2
-            exit 1
-          fi
-          openssl x509 -in "$certificate_bundle" -out "$certificate_pem"
-
-          actual_sha256="$(
-            openssl x509 -in "$certificate_pem" -noout -fingerprint -sha256 \
-              | sed 's/.*=//;s/://g' \
-              | tr '[:upper:]' '[:lower:]'
-          )"
-          if [[ "$actual_sha256" != "$MIMI_RELEASE_CERT_SHA256" ]]; then
-            echo "The macOS release certificate does not match the pinned identity." >&2
-            exit 1
-          fi
-
-          security create-keychain -p "$keychain_password" "$keychain_path"
-          security set-keychain-settings -lut 21600 "$keychain_path"
-          security unlock-keychain -p "$keychain_password" "$keychain_path"
-          security import "$certificate_path" \
-            -k "$keychain_path" \
-            -P "$MACOS_RELEASE_CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign \
-            -T /usr/bin/security
-          rm -f "$certificate_path"
-          sudo -n security add-trusted-cert \
-            -d \
-            -r trustRoot \
-            -p codeSign \
-            -k /Library/Keychains/System.keychain \
-            "$certificate_pem"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
-          security list-keychains -d user -s "$keychain_path" login.keychain-db
-          security default-keychain -d user -s "$keychain_path"
-
-          certificate_sha1="$(
-            openssl x509 -in "$certificate_pem" -noout -fingerprint -sha1 \
-              | sed 's/.*=//;s/://g' \
-              | tr '[:lower:]' '[:upper:]'
-          )"
-          if ! security find-identity -v -p codesigning "$keychain_path" | grep -Fq "$certificate_sha1"; then
-            echo "The certificate is not a valid code-signing identity." >&2
-            exit 1
-          fi
-          {
-            echo "APPLE_SIGNING_IDENTITY=$certificate_sha1"
-            echo "MIMI_EXPECTED_CERT_SHA1=$(printf '%s' "$certificate_sha1" | tr '[:upper:]' '[:lower:]')"
-            echo "MIMI_SIGNING_KEYCHAIN=$keychain_path"
-          } >> "$GITHUB_ENV"
-
-      - name: Build signed macOS GitHub package
+      - name: Build developer-installable macOS package
         run: npm run tauri build
-
-      - name: Sign final disk image
-        shell: bash
-        run: |
-          set -euo pipefail
-          dmg_paths=()
-          while IFS= read -r -d '' candidate; do
-            dmg_paths+=("$candidate")
-          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print0)
-          if [[ "${#dmg_paths[@]}" != "1" ]]; then
-            echo "Expected exactly one macOS DMG artifact; found ${#dmg_paths[@]}." >&2
-            exit 1
-          fi
-          dmg_path="${dmg_paths[0]}"
-          codesign \
-            --force \
-            --timestamp=none \
-            --keychain "$MIMI_SIGNING_KEYCHAIN" \
-            --sign "$APPLE_SIGNING_IDENTITY" \
-            "$dmg_path"
 
       - name: Verify and stage the macOS release asset
         shell: bash
@@ -299,28 +198,6 @@ jobs:
           staging_dir="$RUNNER_TEMP/mimi-release-assets"
           mkdir -p "$staging_dir"
           cp "$dmg_path" "$staging_dir/"
-
-      - name: Remove temporary signing material
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          cleanup_failed=0
-          security default-keychain -d user -s login.keychain-db >/dev/null 2>&1 || cleanup_failed=1
-          security list-keychains -d user -s login.keychain-db >/dev/null 2>&1 || cleanup_failed=1
-          if [[ -f "$RUNNER_TEMP/mimi-github-release.pem" ]]; then
-            sudo -n security remove-trusted-cert -d "$RUNNER_TEMP/mimi-github-release.pem" >/dev/null 2>&1 || cleanup_failed=1
-          fi
-          if [[ -f "$RUNNER_TEMP/mimi-github-release.keychain-db" ]]; then
-            security delete-keychain "$RUNNER_TEMP/mimi-github-release.keychain-db" >/dev/null 2>&1 || cleanup_failed=1
-          fi
-          rm -f \
-            "$RUNNER_TEMP/mimi-github-release.p12" \
-            "$RUNNER_TEMP/mimi-github-release-certificates.pem" \
-            "$RUNNER_TEMP/mimi-github-release.pem"
-          if [[ -e "$RUNNER_TEMP/mimi-github-release.p12" || -e "$RUNNER_TEMP/mimi-github-release.keychain-db" ]]; then
-            cleanup_failed=1
-          fi
-          exit "$cleanup_failed"
 
       - name: Upload verified macOS release asset
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -394,8 +271,7 @@ jobs:
           if-no-files-found: error
 
   # This is the only job with release authority. It runs only after both
-  # platform builds and the pinned macOS identity checks have passed, so a
-  # malformed or one-off privacy identity cannot become a public release.
+  # platform packages pass their structural and digest checks.
   publish-release:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
@@ -484,4 +360,4 @@ jobs:
             exit 1
           fi
 
-          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "GitHub packages for macOS (Apple Silicon) and Windows. On first launch, macOS may require Open Anyway in System Settings → Privacy & Security. Users upgrading from a build signed with a different identity may need to approve Screen & System Audio Recording once. Because this distribution is self-signed without an Apple Team ID, macOS may still ask once for Keychain access after a binary update." --draft=false --latest
+          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "Developer-installable packages for macOS (Apple Silicon) and Windows. The macOS package is ad-hoc signed and not notarized; on first launch, choose Open Anyway in System Settings → Privacy & Security if macOS blocks it. Updates may require approving Screen & System Audio Recording and Keychain access again." --draft=false --latest

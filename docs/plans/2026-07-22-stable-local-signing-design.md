@@ -20,4 +20,4 @@ mimi 需要 ScreenCaptureKit 的屏幕与系统音频录制权限。临时签名
 - 开发启动前会拒绝仍在运行的其他 mimi 正式版或开发版，避免旧副本继续占用全局快捷键并以另一身份触发权限请求。
 - `--ui-only` 仍使用同一个稳定 bundle，但应用层保证不访问凭证、网络或系统音频，因此可用于无授权 UI 检查。
 - 不再建议在 macOS 上运行任何 `tauri dev` 命令或裸 `target/*/mimi`；这些 ad-hoc 二进制的指定要求随构建变化。Windows 使用 `npm run tauri:dev` 取得同样的数据隔离。
-- 本地 `app.yuxino.mimi` 包仍由 `mimi Local Development` 签名，不是 GitHub 正式版的兼容升级包。日常预发布验证固定使用 `/Applications/mimi-dev.app`，避免在两个正式身份之间来回覆盖并反复触发系统授权。
+- 本地 `app.yuxino.mimi` 包仍由 `mimi Local Development` 签名，不是 GitHub ad-hoc 安装包的兼容升级包。日常预发布验证固定使用 `/Applications/mimi-dev.app`，避免在稳定开发身份和构建特定的发布身份之间来回覆盖并反复触发系统授权。

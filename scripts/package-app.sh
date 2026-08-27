@@ -9,10 +9,10 @@ set -euo pipefail
 # On macOS the signing identity is selected before Tauri creates either the
 # .app or .dmg. This is essential: re-signing only the loose .app afterwards
 # leaves the copy already embedded in the DMG with its original identity.
-# Local builds require the stable "mimi Local Development" identity. Public
-# GitHub releases use a separate persistent self-signed identity in CI. These
-# identities are intentionally not interchangeable: replacing an installed
-# GitHub release with a local package resets macOS privacy/keychain trust.
+# Local builds require the stable "mimi Local Development" identity for
+# permission-sensitive QA. Public GitHub releases are separate developer-
+# installable packages and may use ad-hoc signing, so replacing either package
+# can reset macOS privacy or Keychain authorization.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -54,8 +54,8 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   if [[ -e /Applications/mimi.app ]]; then
     cat <<EOF
 An existing /Applications/mimi.app was left untouched. This local package uses
-the development signing identity and is not expected to match a GitHub Release
-installation. Before any deliberate replacement, run:
+the stable development identity and is not expected to match an ad-hoc GitHub
+Release installation. Before any deliberate replacement, run:
 
   ./scripts/verify-macos-install-identity.sh "$APP" /Applications/mimi.app
 EOF
@@ -63,6 +63,7 @@ EOF
   cat <<EOF
 Local package identity checked. For normal pre-push testing use
 ./scripts/dev-app.sh. A local package is not an identity-compatible update for
-a GitHub Release build; package creation never replaces the installed app.
+an ad-hoc GitHub Release build; package creation never replaces the installed
+app.
 EOF
 fi

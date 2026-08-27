@@ -9,13 +9,12 @@ prompts. The visible app name and version are not enough to establish identity.
 | --- | --- | --- | --- |
 | Pre-push development and UI checks | `/Applications/mimi-dev.app` | `app.yuxino.mimi.dev` | `mimi Local Development` |
 | Local release-shaped bundle | `src-tauri/target/release/bundle/macos/mimi.app` | `app.yuxino.mimi` | `mimi Local Development` |
-| Published GitHub release | `/Applications/mimi.app` | `app.yuxino.mimi` | `mimi GitHub Release` |
+| Published GitHub release | `/Applications/mimi.app` | `app.yuxino.mimi` | Ad-hoc (build-specific) |
 
-The two formal-looking bundles have the same bundle identifier but different
-certificate roots. They are not compatible updates. Replacing one with the
-other changes the designated requirement and macOS legitimately asks for
-Screen & System Audio Recording and Keychain authorization again. Switching
-back causes another migration.
+The two release-shaped bundles have the same bundle identifier but different
+designated requirements. They are not identity-compatible updates. Replacing
+one with the other can make macOS ask for Screen & System Audio Recording and
+Keychain authorization again. A later GitHub ad-hoc build may do the same.
 
 Rules:
 
@@ -27,11 +26,12 @@ Rules:
   `./scripts/verify-macos-install-identity.sh NEW_APP /Applications/mimi.app`.
   A mismatch fails closed. `MIMI_ALLOW_IDENTITY_CHANGE=1` is reserved for a
   deliberate, one-time certificate migration whose extra prompts are expected.
-- Never use ad-hoc signing for a runnable macOS bundle. Never use `tccutil
-  reset`, delete Keychain entries, or rotate a certificate as a routine fix.
-- Branch and pull-request CI compiles macOS with `--no-bundle`; it must not
-  create or upload a runnable ad-hoc `.app` or `.dmg`. Only the protected
-  stable-identity release job may publish a macOS bundle.
+- Never use ad-hoc signing for permission-sensitive local QA. GitHub Releases
+  are the explicit developer-installable exception and may require users to
+  approve permissions again. Never use `tccutil reset`, delete Keychain entries,
+  or rotate a certificate as a routine fix.
+- Branch and pull-request CI compiles macOS with `--no-bundle`; tag CI is the
+  only path that creates and publishes the developer-installable `.dmg`.
 - Keep only one live mimi copy while testing. Confirm its executable path, not
   just the process name, before diagnosing shortcuts, windows, or permissions.
 
@@ -53,18 +53,18 @@ These prompts have different causes and fixes:
   API-key access. Grant persistent access only when the dialog names that exact
   private key and tool; do not automate a login-keychain password or widen the
   whole keychain ACL in build scripts.
-- **Gatekeeper / Open Anyway:** the GitHub package is self-signed and not
+- **Gatekeeper / Open Anyway:** the GitHub package is ad-hoc signed and not
   notarized. This is separate from capture and Keychain authorization.
 
-The current local and GitHub certificates are self-signed and have no Apple
-Team ID. Their stable certificate-root requirement is sufficient for TCC to
-recognize later builds, but the file-based Keychain also applies a partition
+The local development certificate is self-signed and has no Apple Team ID. It
+provides a stable requirement for local TCC testing, while GitHub's ad-hoc
+signature is build-specific. The file-based Keychain also applies a partition
 check that can fall back to the build's CDHash. Therefore:
 
 - eliminating the duplicate migration-item read reduces a normal startup to
   one API-key authorization after an identity migration;
-- do not promise that a rebuilt self-signed binary will never ask for Keychain
-  access again, even when its designated requirement is unchanged;
+- do not promise that a rebuilt self-signed local binary will never ask for
+  Keychain access again, and expect GitHub updates to require approval again;
 - do not solve this by deleting/recreating a credential, using an allow-all
   ACL, scripting the login password, or assigning a made-up Team ID. Those
   approaches either lose data or weaken code identity;

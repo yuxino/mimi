@@ -108,8 +108,8 @@ height stays measured so moving it to a larger display restores the full panel.
   are absent from formal release builds.
 - Ordinary CI and pull-request bundle jobs have read-only repository access;
   tag builds stage private artifacts, and only the final publication job
-  receives `contents: write` after the pinned macOS release identity, privacy
-  metadata, and embedded-app checks have passed.
+  receives `contents: write` after the developer-installable macOS package,
+  privacy metadata, and embedded-app checks have passed.
 - The Rust library emits only the desktop `rlib`; the release profile uses LTO,
   one codegen unit, size optimization, panic abort, and symbol stripping.
 

@@ -15,30 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   exit 1
 }
 
-EXPECTED_CERT_SHA1="${MIMI_EXPECTED_CERT_SHA1:-}"
-[[ "$EXPECTED_CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]] || {
-  echo "MIMI_EXPECTED_CERT_SHA1 must be a 40-character certificate fingerprint." >&2
-  exit 1
-}
-EXPECTED_CERT_SHA1="$(printf '%s' "$EXPECTED_CERT_SHA1" | tr '[:upper:]' '[:lower:]')"
-
-"$SCRIPT_DIR/verify-macos-app.sh" --github-release "$APP"
-
-codesign --verify --strict "$DMG"
-DMG_SIGNATURE="$(codesign --display --verbose=4 "$DMG" 2>&1)"
-if grep -Fq "Signature=adhoc" <<<"$DMG_SIGNATURE"; then
-  echo "The DMG has an ad-hoc signature." >&2
-  exit 1
-fi
-DMG_REQUIREMENT="$(
-  codesign --display --requirements - "$DMG" 2>&1 \
-    | sed -n 's/^designated => //p'
-)"
-[[ "$DMG_REQUIREMENT" == *" and certificate root = H\"$EXPECTED_CERT_SHA1\"" ]] || {
-  echo "The DMG does not use the pinned GitHub release identity." >&2
-  exit 1
-}
-codesign --verify --strict -R="certificate root = H\"$EXPECTED_CERT_SHA1\"" "$DMG"
+"$SCRIPT_DIR/verify-macos-app.sh" --developer-release "$APP"
 
 MOUNT_DIR="$(mktemp -d "${TMPDIR%/}/mimi-release-dmg.XXXXXX")"
 cleanup_mount() {
@@ -61,11 +38,11 @@ EMBEDDED_APP="${EMBEDDED_APPS[0]}"
   echo "The DMG contains an unexpected app bundle." >&2
   exit 1
 }
-"$SCRIPT_DIR/verify-macos-app.sh" --github-release "$EMBEDDED_APP"
+"$SCRIPT_DIR/verify-macos-app.sh" --developer-release "$EMBEDDED_APP"
 
 designated_requirement() {
   codesign --display --requirements - "$1" 2>&1 \
-    | sed -n 's/^designated => //p'
+    | sed -n 's/^#*[[:space:]]*designated => //p'
 }
 
 LOOSE_REQUIREMENT="$(designated_requirement "$APP")"
@@ -98,4 +75,4 @@ EMBEDDED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionStrin
 cleanup_mount
 trap - EXIT
 
-echo "Verified stable-identity macOS GitHub release: $DMG"
+echo "Verified developer-installable macOS GitHub release: $DMG"

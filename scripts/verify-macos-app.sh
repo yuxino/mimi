@@ -2,14 +2,14 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [--github-release] /absolute/path/to/mimi.app" >&2
+  echo "Usage: $0 [--developer-release] /absolute/path/to/mimi.app" >&2
   exit 2
 }
 
-GITHUB_RELEASE=0
+DEVELOPER_RELEASE=0
 case "${1:-}" in
-  --github-release)
-    GITHUB_RELEASE=1
+  --developer-release)
+    DEVELOPER_RELEASE=1
     shift
     ;;
 esac
@@ -63,26 +63,12 @@ grep -Fq "Identifier=app.yuxino.mimi" <<<"$SIGNATURE_DETAILS" || {
   echo "The signing identifier is not app.yuxino.mimi." >&2
   exit 1
 }
-if grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" \
-  || [[ -z "$REQUIREMENT" || "$REQUIREMENT" == cdhash\ * ]]; then
+if [[ "$DEVELOPER_RELEASE" != "1" ]] && { \
+  grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" \
+    || [[ -z "$REQUIREMENT" || "$REQUIREMENT" == cdhash\ * ]]; \
+}; then
   echo "Ad-hoc or build-specific signatures are forbidden for mimi app bundles." >&2
   exit 1
-fi
-
-if [[ "$GITHUB_RELEASE" == "1" ]]; then
-  EXPECTED_CERT_SHA1="${MIMI_EXPECTED_CERT_SHA1:-}"
-  [[ "$EXPECTED_CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]] || {
-    echo "MIMI_EXPECTED_CERT_SHA1 must be a 40-character certificate fingerprint." >&2
-    exit 1
-  }
-  EXPECTED_CERT_SHA1="$(printf '%s' "$EXPECTED_CERT_SHA1" | tr '[:upper:]' '[:lower:]')"
-  EXPECTED_REQUIREMENT="identifier \"app.yuxino.mimi\" and certificate root = H\"$EXPECTED_CERT_SHA1\""
-
-  [[ "$REQUIREMENT" == "$EXPECTED_REQUIREMENT" ]] || {
-    echo "The app does not use the pinned GitHub release identity." >&2
-    exit 1
-  }
-  codesign --verify --deep --strict -R="$EXPECTED_REQUIREMENT" "$APP"
 fi
 
 echo "Verified macOS app: $APP"
