@@ -159,6 +159,7 @@ export function SettingsView() {
 
           <div className="settings-workspace">
             <nav
+              key={activeCategory}
               className="settings-category-nav"
               aria-label={I18N.settings.windowTitle}
             >
@@ -182,11 +183,11 @@ export function SettingsView() {
             </nav>
 
             <div className="settings-layout">
-              <div
-                id="subtitle-settings-panel"
-                className="settings-category-panel"
-                hidden={activeCategory !== "subtitles"}
-              >
+              {activeCategory === "subtitles" && (
+                <div
+                  id="subtitle-settings-panel"
+                  className="settings-category-panel"
+                >
                 <SettingsSection
                   id="subtitle-settings"
                   title={I18N.settings.subtitleTitle}
@@ -343,25 +344,27 @@ export function SettingsView() {
                       }}
                     />
                   </SettingsRow>
-                </SettingsSection>
-              </div>
+                  </SettingsSection>
+                </div>
+              )}
 
-              <div
-                id="service-profiles-panel"
-                className="settings-category-panel"
-                hidden={activeCategory !== "service"}
-              >
-                <ServiceProfiles
-                  settings={settings}
-                  sessionIsActive={sessionIsActive}
-                />
-              </div>
+              {activeCategory === "service" && (
+                <div
+                  id="service-profiles-panel"
+                  className="settings-category-panel"
+                >
+                  <ServiceProfiles
+                    settings={settings}
+                    sessionIsActive={sessionIsActive}
+                  />
+                </div>
+              )}
 
-              <div
-                id="application-settings-panel"
-                className="settings-category-panel"
-                hidden={activeCategory !== "general"}
-              >
+              {activeCategory === "general" && (
+                <div
+                  id="application-settings-panel"
+                  className="settings-category-panel"
+                >
                 <SettingsSection
                   id="application-settings"
                   title={I18N.settings.applicationTitle}
@@ -398,8 +401,9 @@ export function SettingsView() {
                   <div className="settings-divider" />
 
                   <SoftwareUpdate />
-                </SettingsSection>
-              </div>
+                  </SettingsSection>
+                </div>
+              )}
             </div>
           </div>
         </div>

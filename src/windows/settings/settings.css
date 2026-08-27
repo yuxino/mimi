@@ -183,10 +183,6 @@
   min-width: 0;
 }
 
-.settings-category-panel[hidden] {
-  display: none;
-}
-
 .settings-card {
   min-width: 0;
   overflow: hidden;

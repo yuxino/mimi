@@ -101,6 +101,12 @@ audio.
   visuals through explicit React class names. macOS WKWebView has previously
   left attribute-selector styling stale after the underlying state changed;
   verify the selected class visibly moves in the signed development app.
+- Category navigation needs a stronger boundary. Do not depend on a dynamic
+  `[hidden]` selector or leave inactive panels mounted: WKWebView has shown
+  stale pixels from both the previous panel and the previous selected item.
+  Mount only the active panel and remount the compact category navigation when
+  the category changes. Verify that the highlighted category and visible
+  heading agree after the initial settings snapshot arrives.
 - Use `./scripts/dev-app.sh --ui-only` for visual states that do not require a
   provider. UI-only mode must never read Keychain items, open provider sockets,
   or start system-audio capture.
