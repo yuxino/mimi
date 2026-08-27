@@ -18,10 +18,11 @@ const MAXIMUM_ACTION_ROW_WIDTH =
   (MAXIMUM_ACTION_COUNT - 1) * ACTION_BUTTON_GAP;
 
 /**
- * Places the overlay's three independent top surfaces without overlap. The
- * native control island occupies the left side in a separate child window, so
- * narrow overlays temporarily yield the redundant right-side actions and keep
- * the only drag target reachable in the remaining strip.
+ * Places the overlay's three independent top surfaces. When the full chrome
+ * fits, the drag affordance stays visually centered on the subtitle window;
+ * the native control island must not shift it to the right. Narrow overlays
+ * temporarily yield the redundant actions and move the drag target into the
+ * remaining reachable strip.
  */
 export function overlayTopChromeLayout(
   overlayWidth: number,
@@ -60,7 +61,9 @@ export function overlayTopChromeLayout(
   const maximumCenter = rightBoundary - CHROME_GAP - dragHandleWidth / 2;
 
   return {
-    dragHandleCenterX: clamp(width / 2, minimumCenter, maximumCenter),
+    dragHandleCenterX: showActions
+      ? width / 2
+      : clamp(width / 2, minimumCenter, maximumCenter),
     dragHandleWidth,
     showActions,
   };

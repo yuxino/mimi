@@ -33,16 +33,12 @@ describe("overlay top chrome layout", () => {
     }
   });
 
-  it("restores actions once the island, handle, and full row fit", () => {
+  it("restores actions without shifting the handle off the window center", () => {
     const layout = overlayTopChromeLayout(520, true);
-    const handle = handleEdges(layout);
-    const actionRowLeft = 520 - 10 - 164;
 
     expect(layout.showActions).toBe(true);
-    expect(handle.left).toBeGreaterThanOrEqual(
-      CONTROL_ISLAND_RIGHT + CHROME_GAP,
-    );
-    expect(handle.right).toBeLessThanOrEqual(actionRowLeft - CHROME_GAP);
+    expect(layout.dragHandleCenterX).toBe(260);
+    expect(layout.dragHandleWidth).toBe(80);
   });
 
   it("preserves the centered 120px handle and all actions at 640px", () => {

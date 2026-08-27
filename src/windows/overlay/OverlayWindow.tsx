@@ -23,6 +23,7 @@ import {
 } from "./overlayModel";
 
 const ACCENT = "#7AA8FF";
+const OVERLAY_INSET = 6;
 
 /** Floating subtitle overlay driven by native session and geometry state. */
 export function OverlayWindow() {
@@ -42,7 +43,7 @@ export function OverlayWindow() {
       typeof window === "undefined" || !isTauri ? 136 : window.innerHeight,
   }));
   const topChromeLayout = overlayTopChromeLayout(
-    overlaySize.width,
+    Math.max(0, overlaySize.width - OVERLAY_INSET * 2),
     session.isActive,
   );
 
@@ -147,7 +148,7 @@ export function OverlayWindow() {
 
   const content = (
     <>
-      <div className="h-full w-full" style={{ padding: 6 }}>
+      <div className="h-full w-full" style={{ padding: OVERLAY_INSET }}>
         <div
           key={presentationCollapsed ? "collapsed" : "expanded"}
           className={
