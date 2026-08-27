@@ -1,9 +1,9 @@
 <div align="center">
   <img src="src-tauri/icons/128x128@2x.png" width="96" alt="mimi">
   <h1>mimi</h1>
-  <p>给 Mac 或 Windows 上正在播放的声音加上实时翻译字幕。</p>
+  <p>给系统声音加实时字幕；macOS 开发版已验收，Windows 仍为预览。</p>
   <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载 mimi</strong></a>
+    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>查看构建</strong></a>
     · <a href="README.md">English</a>
     · <a href="README_JA.md">日本語</a>
   </p>
@@ -11,7 +11,7 @@
 
 `mimi` 取自日语「耳（みみ）」。
 
-把设备上正在播放的中文、日语、英语或韩语实时变成字幕，也可以翻译成简体中文、英语或日语。基于 Tauri v2（Rust + React），同一份代码同时支持 macOS 与 Windows。
+把设备上正在播放的中文、日语、英语或韩语实时变成字幕，也可以翻译成简体中文、英语或日语。基于 Tauri v2（Rust + React），同一份代码面向 macOS 与 Windows；Windows 在完成真机验收前仍是预览。
 
 ## 功能
 
@@ -25,7 +25,7 @@
 
 ## 开始使用
 
-1. 从 [Releases](https://github.com/yuxino/mimi/releases/latest) 下载对应平台版本。
+1. 先阅读下面的平台状态，再核对对应 [Release](https://github.com/yuxino/mimi/releases/latest) 的说明或从源码构建。公开资产可能落后于当前源码。
 2. 打开「服务配置」，选择服务商并保存对应连接凭证。默认仍使用阿里云百炼。
 3. 播放内容，点击 **开始**。
 
@@ -46,8 +46,8 @@
 
 ### 平台说明
 
-- **macOS 13 或更高版本**：如果首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。从 v1.3.1 起，使用同一发布身份的后续版本通常会沿用「屏幕与系统音频录制」权限；旧版升级可能需再授权一次。mimi 只采集系统音频，不录制屏幕，也会排除自身声音。
-- **Windows**：使用 WASAPI 环回采集默认播放设备的整体混音，无需任何权限授权；mimi 不播放声音，因此没有回声问题。
+- **Apple 芯片上的 macOS 13 或更高版本**：当前源码已经使用仓库稳定的自签开发身份完成本地打包、安装和启动验证，但没有 Apple 公证；开发版安装成功不能替每个 GitHub Release 资产背书。如果首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。监听会申请「屏幕与系统音频录制」权限；mimi 只采集系统音频，不录制屏幕，也会排除自身声音。
+- **Windows 预览**：源码已实现 WASAPI 环回采集，CI 也能生成 x64 MSI 和 EXE。Windows 真机安装、信任提示、凭据存储、系统音频采集、浮窗行为和完整实时字幕流程尚未验收；CI 成功不能代替这些验证。
 
 ## 从源码构建
 

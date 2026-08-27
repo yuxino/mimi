@@ -1,9 +1,9 @@
 <div align="center">
   <img src="src-tauri/icons/128x128@2x.png" width="96" alt="mimi">
   <h1>mimi</h1>
-  <p>Live translated subtitles for anything playing on your Mac or PC.</p>
+  <p>Live subtitles for system audio. macOS developer-tested; Windows preview.</p>
   <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download mimi</strong></a>
+    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>View builds</strong></a>
     · <a href="README_ZH.md">简体中文</a>
     · <a href="README_JA.md">日本語</a>
   </p>
@@ -11,7 +11,7 @@
 
 `mimi` comes from the Japanese word 耳（みみ, “ear”）.
 
-Turn Chinese, Japanese, English, or Korean audio playing on your device into live subtitles, with optional translation into Simplified Chinese, English, or Japanese. Built on Tauri v2 (Rust + React); the same codebase targets macOS and Windows.
+Turn Chinese, Japanese, English, or Korean audio playing on your device into live subtitles, with optional translation into Simplified Chinese, English, or Japanese. Built on Tauri v2 (Rust + React); the same codebase targets macOS and Windows, but the Windows target remains a preview until real-device acceptance is complete.
 
 ## Features
 
@@ -25,7 +25,7 @@ Turn Chinese, Japanese, English, or Korean audio playing on your device into liv
 
 ## Get started
 
-1. Download the latest version for your platform from [Releases](https://github.com/yuxino/mimi/releases/latest).
+1. Read the platform status below, then check the matching [Release](https://github.com/yuxino/mimi/releases/latest) notes or build from source. Public assets may lag behind the current source tree.
 2. Open **Service configurations**, choose a provider, and save its connection credentials. Alibaba Cloud remains selected by default.
 3. Play something and select **Start**.
 
@@ -46,8 +46,8 @@ Each service configuration's credentials are stored separately in the operating 
 
 ### Platform notes
 
-- **macOS 13 or later**: if the first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. From v1.3.1, updates using the same release identity normally keep Screen & System Audio Recording access; upgrading from an older version may require one more approval. mimi captures system audio only, never the screen, and excludes its own sound.
-- **Windows**: captures the default playback device's full mix through WASAPI loopback — no permissions needed; mimi plays no audio, so there is no echo.
+- **macOS 13 or later on Apple silicon**: the current source has been packaged, installed, and launched locally with the repository's stable self-signed development identity. It is not Apple-notarized, and this developer-install result does not certify every GitHub Release asset. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Listening requests Screen & System Audio Recording access; mimi captures system audio only, never the screen, and excludes its own sound.
+- **Windows preview**: the source implements WASAPI loopback capture and CI produces x64 MSI and EXE packages. Real-device installation, trust prompts, credential storage, system-audio capture, overlay behavior, and the complete live-subtitle flow have not yet been accepted on Windows. CI success is not a substitute for that verification.
 
 ## Build from source
 
