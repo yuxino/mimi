@@ -819,8 +819,7 @@ function ProfileListItem({
   return (
     <button
       type="button"
-      className="profile-list-item"
-      data-selected={selected}
+      className={`profile-list-item${selected ? " is-selected" : ""}`}
       aria-pressed={selected}
       aria-current={active ? "true" : undefined}
       disabled={disabled}

@@ -435,7 +435,7 @@
   background: var(--tray-surface-pressed);
 }
 
-.tray-alignment-control button[data-selected="true"] {
+.tray-alignment-control button.is-selected {
   color: var(--tray-primary-text);
   background: var(--tray-primary-bg);
 }

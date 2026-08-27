@@ -161,12 +161,12 @@
   font-size: 14px;
 }
 
-.settings-category-nav__item:hover:not(:disabled):not([data-selected="true"]) {
+.settings-category-nav__item:hover:not(:disabled):not(.is-selected) {
   color: var(--settings-text-muted);
   background: rgba(255, 255, 255, 0.04);
 }
 
-.settings-category-nav__item[data-selected="true"] {
+.settings-category-nav__item.is-selected {
   border-color: rgba(255, 255, 255, 0.88);
   color: #0b0b0b;
   background: var(--settings-text);
@@ -262,7 +262,7 @@
   white-space: nowrap;
 }
 
-.source-language-button[data-selected="true"] {
+.source-language-button.is-selected {
   border-color: var(--settings-text);
   color: var(--settings-canvas);
   background: var(--settings-text);
@@ -318,6 +318,18 @@
   min-width: 0;
   align-items: center;
   justify-content: flex-end;
+}
+
+.software-update-live-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .settings-select-wrap {
@@ -398,7 +410,7 @@
   background: rgba(255, 255, 255, 0.055);
 }
 
-.subtitle-alignment-control button[data-selected="true"] {
+.subtitle-alignment-control button.is-selected {
   color: var(--settings-canvas);
   background: var(--settings-text);
 }
@@ -932,7 +944,7 @@
   background: rgba(255, 255, 255, 0.035);
 }
 
-.profile-list-item[data-selected="true"] {
+.profile-list-item.is-selected {
   border-color: var(--settings-border-strong);
   color: var(--settings-text);
   background: var(--settings-selection-soft);
@@ -1035,7 +1047,7 @@
   transition: background-color 160ms ease;
 }
 
-.mimi-switch[data-checked="true"] {
+.mimi-switch.is-checked {
   background: var(--settings-text);
 }
 
@@ -1054,7 +1066,7 @@
   transition: transform 160ms ease;
 }
 
-.mimi-switch[data-checked="true"] .mimi-switch__thumb {
+.mimi-switch.is-checked .mimi-switch__thumb {
   background: var(--settings-canvas);
   transform: translateX(16px);
 }
@@ -1106,15 +1118,15 @@
     --settings-selection-soft: Canvas;
   }
 
-  .settings-category-nav__item[data-selected="true"],
-  .source-language-button[data-selected="true"] {
+  .settings-category-nav__item.is-selected,
+  .source-language-button.is-selected {
     forced-color-adjust: none;
     border-color: Highlight;
     color: HighlightText;
     background: Highlight;
   }
 
-  .profile-list-item[data-selected="true"],
+  .profile-list-item.is-selected,
   .profile-active-badge,
   .settings-card,
   .settings-select,
@@ -1151,7 +1163,7 @@
     background: Canvas;
   }
 
-  .mimi-switch[data-checked="true"] {
+  .mimi-switch.is-checked {
     border-color: Highlight;
     background: Highlight;
   }
@@ -1161,7 +1173,7 @@
     box-shadow: none;
   }
 
-  .mimi-switch[data-checked="true"] .mimi-switch__thumb {
+  .mimi-switch.is-checked .mimi-switch__thumb {
     background: HighlightText;
   }
 
@@ -1198,6 +1210,10 @@
   .settings-select-wrap {
     width: 100%;
     min-width: 0;
+  }
+
+  .software-update-button {
+    width: 100%;
   }
 
   .profiles-workspace {

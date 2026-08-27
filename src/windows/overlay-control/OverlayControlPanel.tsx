@@ -159,8 +159,7 @@ export function OverlayControlPanel({
                     key={language}
                     ref={selected ? selectedSourceRef : undefined}
                     type="button"
-                    className="overlay-control-option"
-                    data-selected={selected || undefined}
+                    className={`overlay-control-option${selected ? " is-selected" : ""}`}
                     aria-pressed={selected}
                     disabled={!canChangeSessionSettings}
                     onClick={() => {
@@ -198,8 +197,7 @@ export function OverlayControlPanel({
                     key={mode}
                     ref={selected ? selectedModeRef : undefined}
                     type="button"
-                    className="overlay-control-option"
-                    data-selected={selected || undefined}
+                    className={`overlay-control-option${selected ? " is-selected" : ""}`}
                     aria-pressed={selected}
                     disabled={!canChangeSessionSettings}
                     onClick={() => {

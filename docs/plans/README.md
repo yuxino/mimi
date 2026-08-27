@@ -36,6 +36,8 @@ Git history, not on the active documentation path.
 
 - `2026-08-23-simplified-settings-and-tray-design.md` — current settings and
   tray information architecture.
+- `2026-08-26-manual-update-check-design.md` — user-initiated GitHub release
+  checks and the explicit handoff to the system browser.
 - `2026-08-26-fullscreen-space-following-design.md` — macOS active-Space
   reassertion and non-persistent cross-display overlay following.
 

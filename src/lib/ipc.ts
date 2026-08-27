@@ -62,6 +62,20 @@ export function settingsGet(): Promise<SettingsSnapshot> {
   return invoke<SettingsSnapshot>("settings_get");
 }
 
+export interface AppUpdateCheck {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+}
+
+export function appCheckForUpdates(): Promise<AppUpdateCheck> {
+  return invoke<AppUpdateCheck>("app_check_for_updates");
+}
+
+export function appOpenReleases(): Promise<void> {
+  return invoke("app_open_releases");
+}
+
 export function settingsSave(draft: SettingsDraft): Promise<SettingsSnapshot> {
   return invoke<SettingsSnapshot>("settings_save", { draft });
 }

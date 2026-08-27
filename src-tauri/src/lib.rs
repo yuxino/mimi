@@ -28,6 +28,7 @@ pub fn run() {
         .init();
 
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
     #[cfg(target_os = "macos")]
@@ -166,6 +167,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::settings_get,
+            commands::app_check_for_updates,
+            commands::app_open_releases,
             commands::settings_save,
             commands::profile_create,
             commands::profile_update,

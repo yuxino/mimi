@@ -226,7 +226,7 @@
   background: var(--control-surface-pressed);
 }
 
-.overlay-control-option[data-selected="true"] {
+.overlay-control-option.is-selected {
   background: var(--control-surface-pressed);
   font-weight: 600;
 }
@@ -388,7 +388,7 @@
   }
 
   .overlay-control-option:hover:not(:disabled),
-  .overlay-control-option[data-selected="true"],
+  .overlay-control-option.is-selected,
   .overlay-control-setting:hover:not(:disabled),
   .overlay-control-settings-link:hover:not(:disabled) {
     color: HighlightText;

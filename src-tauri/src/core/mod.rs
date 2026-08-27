@@ -12,3 +12,4 @@ pub mod protocols;
 pub mod provider;
 pub mod session;
 pub mod subtitle_reducer;
+pub mod update;

@@ -426,7 +426,7 @@ function TrayAlignmentControl({
           key={alignment}
           type="button"
           disabled={disabled}
-          data-selected={value === alignment}
+          className={value === alignment ? "is-selected" : undefined}
           aria-label={labels[alignment]}
           aria-pressed={value === alignment}
           title={labels[alignment]}

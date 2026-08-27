@@ -20,8 +20,7 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       aria-label={rest["aria-label"]}
-      className="mimi-switch"
-      data-checked={checked}
+      className={`mimi-switch${checked ? " is-checked" : ""}`}
     >
       <span className="mimi-switch__thumb" aria-hidden="true" />
     </button>

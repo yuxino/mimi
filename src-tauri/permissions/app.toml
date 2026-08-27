@@ -8,9 +8,11 @@ commands.allow = [
 
 [[permission]]
 identifier = "app-settings"
-description = "Allows the settings window to mutate preferences, profiles, and write-only credentials."
+description = "Allows the settings window to manage preferences and profiles, check the fixed public release source, and open its fixed release page."
 commands.allow = [
   "settings_save",
+  "app_check_for_updates",
+  "app_open_releases",
   "profile_create",
   "profile_update",
   "profile_select",

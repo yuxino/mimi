@@ -97,6 +97,10 @@ audio.
 - Streaming drafts are replaceable previews; finals are durable. If a source
   transcript exists while translation is delayed or absent, the bounded source
   fallback remains visible until the translated final replaces it.
+- Keep accessibility state in `aria-*`, but drive changing selected/checked
+  visuals through explicit React class names. macOS WKWebView has previously
+  left attribute-selector styling stale after the underlying state changed;
+  verify the selected class visibly moves in the signed development app.
 - Use `./scripts/dev-app.sh --ui-only` for visual states that do not require a
   provider. UI-only mode must never read Keychain items, open provider sockets,
   or start system-audio capture.

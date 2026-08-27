@@ -27,6 +27,7 @@ import {
 } from "../../lib/types";
 import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
 import { ServiceProfiles } from "./ServiceProfiles";
+import { SoftwareUpdate } from "./SoftwareUpdate";
 import {
   SettingsRow,
   SettingsSection,
@@ -168,8 +169,7 @@ export function SettingsView() {
                     key={category.id}
                     id={`settings-category-${category.id}`}
                     type="button"
-                    className="settings-category-nav__item"
-                    data-selected={selected}
+                    className={`settings-category-nav__item${selected ? " is-selected" : ""}`}
                     aria-current={selected ? "page" : undefined}
                     aria-controls={`${CATEGORY_SECTION_IDS[category.id]}-panel`}
                     onClick={() => selectCategory(category.id)}
@@ -394,6 +394,10 @@ export function SettingsView() {
                       ]}
                     />
                   </SettingsRow>
+
+                  <div className="settings-divider" />
+
+                  <SoftwareUpdate />
                 </SettingsSection>
               </div>
             </div>
@@ -433,7 +437,7 @@ function SubtitleAlignmentControl({
         <button
           key={alignment}
           type="button"
-          data-selected={value === alignment}
+          className={value === alignment ? "is-selected" : undefined}
           aria-label={labels[alignment]}
           aria-pressed={value === alignment}
           title={labels[alignment]}
@@ -475,8 +479,7 @@ function SourceLanguageButton({
   return (
     <button
       type="button"
-      className="source-language-button"
-      data-selected={selected}
+      className={`source-language-button${selected ? " is-selected" : ""}`}
       aria-pressed={selected}
       disabled={disabled}
       title={sourceLanguageButtonHelp(language, chineseIsOriginalOnly)}
