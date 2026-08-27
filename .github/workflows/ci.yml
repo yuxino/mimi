@@ -348,7 +348,7 @@ jobs:
           for asset in "${assets[@]}"; do
             asset_name="${asset##*/}"
             local_digest="sha256:$(sha256sum "$asset" | cut -d ' ' -f 1)"
-            remote_digest="$(gh api "repos/$GH_REPO/releases/tags/$GITHUB_REF_NAME" --jq ".assets[] | select(.name == \"$asset_name\") | .digest")"
+            remote_digest="$(gh release view "$GITHUB_REF_NAME" --json assets --jq ".assets[] | select(.name == \"$asset_name\") | .digest")"
             if [[ "$remote_digest" != "$local_digest" ]]; then
               echo "The uploaded digest does not match $asset_name." >&2
               exit 1
