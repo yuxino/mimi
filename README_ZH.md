@@ -4,7 +4,7 @@
   <p>给系统声音加实时字幕；macOS 开发版已验收，Windows 仍为预览。</p>
   <p>
     <a href="https://github.com/yuxino/mimi/releases/latest"><strong>查看构建</strong></a>
-    · <a href="README.md">English</a>
+    · <a href="README_EN.md">English</a>
     · <a href="README_JA.md">日本語</a>
   </p>
 </div>
@@ -46,7 +46,7 @@
 
 ### 平台说明
 
-- **Apple 芯片上的 macOS 13 或更高版本**：当前源码已经使用仓库稳定的自签开发身份完成本地打包、安装和启动验证，但没有 Apple 公证；开发版安装成功不能替每个 GitHub Release 资产背书。如果首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。监听会申请「屏幕与系统音频录制」权限；mimi 只采集系统音频，不录制屏幕，也会排除自身声音。
+- **Apple 芯片上的 macOS 13 或更高版本**：GitHub Releases 提供可供开发者安装、使用临时签名且未经 Apple 公证的 DMG。如果首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。更新后可能需要重新允许「屏幕与系统音频录制」或钥匙串访问。本地权限相关测试使用仓库独立的稳定开发身份。mimi 只采集系统音频，不录制屏幕，也会排除自身声音。
 - **Windows 预览**：源码已实现 WASAPI 环回采集，CI 也能生成 x64 MSI 和 EXE。Windows 真机安装、信任提示、凭据存储、系统音频采集、浮窗行为和完整实时字幕流程尚未验收；CI 成功不能代替这些验证。
 
 ## 从源码构建
