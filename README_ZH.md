@@ -13,19 +13,6 @@
 
 把设备上正在播放的中文、日语、英语或韩语实时变成字幕，也可以翻译成简体中文、英语或日语。基于 Tauri v2（Rust + React），同一份代码同时支持 macOS 与 Windows。
 
-<table>
-  <tr>
-    <td width="33.33%"><img src="docs/images/mimi-film-real.jpg" alt="mimi 为影视显示实时字幕"></td>
-    <td width="33.33%"><img src="docs/images/mimi-game-real.jpg" alt="mimi 为游戏显示实时字幕"></td>
-    <td width="33.33%"><img src="docs/images/mimi-meeting-real.jpg" alt="mimi 为线上会议显示实时字幕"></td>
-  </tr>
-  <tr>
-    <td align="center">影视与视频</td>
-    <td align="center">游戏与直播</td>
-    <td align="center">会议与网课</td>
-  </tr>
-</table>
-
 ## 功能
 
 - **实时字幕** — 浏览器、播放器、游戏、会议和桌面应用都能用。

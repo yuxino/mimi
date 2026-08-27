@@ -11,19 +11,6 @@
 
 mimiは、日本語の「耳（みみ）」に由来する名前です。デバイスで再生中の中国語・日本語・英語・韓国語を原文字幕として表示したり、簡体字中国語・英語・日本語へリアルタイム翻訳したりできます。Tauri v2（Rust + React）製で、同じコードベースが macOS と Windows の両方に対応しています。
 
-<table>
-  <tr>
-    <td width="33.33%"><img src="docs/images/mimi-film-real-ja.jpg" alt="ドラマに字幕を重ねた mimi"></td>
-    <td width="33.33%"><img src="docs/images/mimi-game-real-ja.jpg" alt="ノベルゲームに字幕を重ねた mimi"></td>
-    <td width="33.33%"><img src="docs/images/mimi-meeting-real-ja.jpg" alt="オンライン会議に字幕を重ねた mimi"></td>
-  </tr>
-  <tr>
-    <td align="center">映画・動画</td>
-    <td align="center">ゲーム・ライブ配信</td>
-    <td align="center">会議・オンライン授業</td>
-  </tr>
-</table>
-
 ブラウザ、動画プレイヤー、オンライン会議、オンライン授業、デスクトップアプリで使えます。
 
 ## 機能

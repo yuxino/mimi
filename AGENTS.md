@@ -20,7 +20,9 @@ Preserve these product constraints:
 - `src-tauri/src/settings_store.rs`: preferences/profile JSON in the app config directory + provider/profile-scoped keychain credential storage.
 - `src-tauri/src/{commands,windows,lib}.rs`: IPC commands, overlay/tray-panel window management, tray/shortcut wiring.
 - `src/`: React frontend — `src/windows/{overlay,tray-panel,settings}/` contain the three product surfaces; `src/lib/{ipc,store,types,i18n}.ts` define the IPC contract.
-- `mimi-web/`: the product website (marketing site, not the app).
+- The product website lives in the separate `yuxino-labs/mimi-web`
+  repository. Never add a website copy, subtree, or generated site assets to
+  this application repository.
 - `docs/plans/`: current accepted design records; completed checklists and
   superseded designs stay in Git history.
 - `docs/development/common-regressions.md`: required macOS signing, permission,

@@ -13,19 +13,6 @@
 
 Turn Chinese, Japanese, English, or Korean audio playing on your device into live subtitles, with optional translation into Simplified Chinese, English, or Japanese. Built on Tauri v2 (Rust + React); the same codebase targets macOS and Windows.
 
-<table>
-  <tr>
-    <td width="33.33%"><img src="docs/images/mimi-film-real-en.jpg" alt="mimi over a Japanese drama"></td>
-    <td width="33.33%"><img src="docs/images/mimi-game-real-en.jpg" alt="mimi over a narrative game"></td>
-    <td width="33.33%"><img src="docs/images/mimi-meeting-real-en.jpg" alt="mimi during an online meeting"></td>
-  </tr>
-  <tr>
-    <td align="center">Films & videos</td>
-    <td align="center">Games & livestreams</td>
-    <td align="center">Meetings & courses</td>
-  </tr>
-</table>
-
 ## Features
 
 - **Live subtitles** — works with browsers, players, games, meetings, and desktop apps.
