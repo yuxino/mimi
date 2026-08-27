@@ -243,20 +243,21 @@ jobs:
             "$bundleDir/msi/mimi_${version}_x64_en-US.msi",
             "$bundleDir/nsis/mimi_${version}_x64-setup.exe"
           )
-          $actualPaths = @(
+          $actualFiles = @(
             Get-ChildItem $bundleDir -Recurse -File |
-              Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*-setup.exe' } |
-              ForEach-Object { $_.FullName }
+              Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*-setup.exe' }
           )
-          if ($actualPaths.Count -ne 2) {
-            throw "Expected exactly one MSI and one setup EXE; found $($actualPaths.Count) package files."
+          if ($actualFiles.Count -ne 2) {
+            throw "Expected exactly one MSI and one setup EXE; found $($actualFiles.Count) package files."
           }
           foreach ($expectedPath in $expectedPaths) {
             if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) {
               throw "Missing expected Windows package: $expectedPath"
             }
           }
-          if (Compare-Object ($actualPaths | Sort-Object) ($expectedPaths | Sort-Object)) {
+          $expectedNames = @($expectedPaths | ForEach-Object { Split-Path $_ -Leaf } | Sort-Object)
+          $actualNames = @($actualFiles | ForEach-Object { $_.Name } | Sort-Object)
+          if (Compare-Object $actualNames $expectedNames) {
             throw "Windows package output contains an unexpected installer."
           }
           $stagingDir = "$env:RUNNER_TEMP/mimi-release-assets"
