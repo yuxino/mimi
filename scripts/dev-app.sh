@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 BUILD_APP="$PROJECT_DIR/src-tauri/target/release/mimi-dev.app"
 DEV_TAURI_CONFIG="$PROJECT_DIR/src-tauri/tauri.dev.conf.json"
+RELEASE_TAURI_CONFIG="$PROJECT_DIR/src-tauri/tauri.conf.json"
 CANONICAL_APP="${MIMI_DEV_APP_PATH:-/Applications/mimi-dev.app}"
 BUNDLE_IDENTIFIER="app.yuxino.mimi.dev"
 RELEASE_BUNDLE_IDENTIFIER="app.yuxino.mimi"
@@ -58,6 +59,12 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "error: scripts/dev-app.sh is the stable macOS launcher." >&2
   echo "Use npm run tauri:dev on Windows." >&2
   exit 2
+fi
+
+APP_VERSION="$(/usr/bin/plutil -extract version raw "$RELEASE_TAURI_CONFIG")"
+if [[ ! "$APP_VERSION" =~ ^[0-9]+([.][0-9]+){2}([-+][0-9A-Za-z.-]+)?$ ]]; then
+  echo "error: invalid application version in $RELEASE_TAURI_CONFIG" >&2
+  exit 1
 fi
 
 designated_requirement() {
@@ -298,7 +305,7 @@ cp "$PROJECT_DIR/src-tauri/target/release/mimi" "$BUILD_APP/Contents/MacOS/mimi"
 cp "$PROJECT_DIR/src-tauri/icons/icon.icns" "$BUILD_APP/Contents/Resources/icon.icns"
 chmod 755 "$BUILD_APP/Contents/MacOS/mimi"
 
-cat > "$BUILD_APP/Contents/Info.plist" <<'PLIST'
+cat > "$BUILD_APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -316,7 +323,7 @@ cat > "$BUILD_APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.1.0-dev</string>
+  <string>${APP_VERSION}-dev</string>
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>CFBundleIconFile</key>
