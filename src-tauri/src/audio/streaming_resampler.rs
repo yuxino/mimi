@@ -145,8 +145,10 @@ mod tests {
             .flatten()
             .copied()
             .collect::<Vec<_>>()
-            .chunks_exact(2)
-            .map(|sample| i32::from(i16::from_le_bytes([sample[0], sample[1]])).abs())
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|sample| i32::from(i16::from_le_bytes(*sample)).abs())
             .max()
             .unwrap_or(0);
 

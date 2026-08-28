@@ -181,8 +181,8 @@ impl AudioSendPipeline {
 /// Absolute peak of a little-endian i16 PCM buffer.
 fn peak_pcm16_sample(data: &[u8]) -> i32 {
     let mut peak = 0i32;
-    for chunk in data.chunks_exact(2) {
-        let sample = i16::from_le_bytes([chunk[0], chunk[1]]) as i32;
+    for chunk in data.as_chunks::<2>().0 {
+        let sample = i16::from_le_bytes(*chunk) as i32;
         peak = peak.max(sample.abs());
     }
     peak
