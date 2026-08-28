@@ -26,7 +26,7 @@ use objc2_core_audio_types::{
     kAudioFormatFlagIsFloat, kAudioFormatFlagIsSignedInteger, AudioStreamBasicDescription,
 };
 use objc2_foundation::{NSArray, NSObjectProtocol};
-use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+use rubato::audioadapter_buffers::direct::SequentialSlice;
 use rubato::Resampler;
 use screen_capture_kit::shareable_content::{SCDisplay, SCRunningApplication, SCShareableContent};
 use screen_capture_kit::stream::{
@@ -885,14 +885,21 @@ fn capture_to_pcm16(
         let mut out = Vec::new();
         let resampler = resampler_guard.as_mut().unwrap();
         while pending.len() >= RESAMPLE_CHUNK_FRAMES {
-            let chunk: Vec<f32> = pending.drain(..RESAMPLE_CHUNK_FRAMES).collect();
-            let chunk_refs = [chunk];
-            let input = SequentialSliceOfVecs::new(&chunk_refs, 1, RESAMPLE_CHUNK_FRAMES)
-                .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed)?;
-            let output = resampler
-                .process(&input, None)
-                .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed)?;
-            out.extend_from_slice(&output.take_data());
+            let output = match SequentialSlice::new(
+                &pending[..RESAMPLE_CHUNK_FRAMES],
+                1,
+                RESAMPLE_CHUNK_FRAMES,
+            ) {
+                Ok(input) => resampler
+                    .process(&input, None)
+                    .map(|output| output.take_data())
+                    .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed),
+                Err(_) => Err(SystemAudioCaptureError::AudioProcessingFailed),
+            };
+            // Match the previous drain-before-process behavior on both success
+            // and failure while avoiding an owned input copy.
+            pending.drain(..RESAMPLE_CHUNK_FRAMES);
+            out.extend_from_slice(&output?);
         }
         if out.is_empty() {
             return Ok(None);

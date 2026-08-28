@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Canonical automated check for the mimi Tauri application:
 # Rust formatting + clippy (warnings as errors) + the full unit-test suite,
-# then the frontend typecheck/lint/test/build pipeline, and finally a
+# then the frontend lint/test pipeline and typechecked production build, then a
 # whitespace/error check on the diff.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,16 +38,13 @@ else
   echo "==> skipping windows-msvc check (set MIMI_CHECK_WINDOWS=1 to enable)"
 fi
 
-echo "==> frontend typecheck"
-npx tsc -b
-
 echo "==> frontend lint"
 npm run lint
 
 echo "==> frontend tests"
 npm run test
 
-echo "==> frontend build"
+echo "==> frontend typecheck and build"
 npm run build
 
 echo "==> git diff --check"

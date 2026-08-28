@@ -3,7 +3,7 @@
 
 use crate::audio::SystemAudioCaptureError;
 use crate::core::pcm16::PCM16Encoder;
-use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+use rubato::audioadapter_buffers::direct::SequentialSlice;
 use rubato::{FixedSync, Resampler};
 
 const RESAMPLE_CHUNK_FRAMES: usize = 1024;
@@ -60,23 +60,22 @@ impl StreamingPcm16Resampler {
         let complete_sample_count =
             self.pending_interleaved.len() / self.channel_count * self.channel_count;
         if complete_sample_count > 0 {
-            let complete: Vec<f32> = self
-                .pending_interleaved
-                .drain(..complete_sample_count)
-                .collect();
+            let channel_count = self.channel_count;
             self.pending_mono.extend(
-                complete
-                    .chunks_exact(self.channel_count)
-                    .map(|frame| frame.iter().copied().sum::<f32>() / self.channel_count as f32),
+                self.pending_interleaved[..complete_sample_count]
+                    .chunks_exact(channel_count)
+                    .map(|frame| frame.iter().copied().sum::<f32>() / channel_count as f32),
             );
+            self.pending_interleaved.drain(..complete_sample_count);
         }
 
         if self.input_sample_rate_hz == self.target_sample_rate_hz {
             if self.pending_mono.is_empty() {
                 return Ok(Vec::new());
             }
-            let mono = std::mem::take(&mut self.pending_mono);
-            return Ok(vec![PCM16Encoder::encode(&[mono])]);
+            let pcm = PCM16Encoder::encode(std::slice::from_ref(&self.pending_mono));
+            self.pending_mono.clear();
+            return Ok(vec![pcm]);
         }
 
         let Some(resampler) = self.resampler.as_mut() else {
@@ -84,14 +83,21 @@ impl StreamingPcm16Resampler {
         };
         let mut buffers = Vec::new();
         while self.pending_mono.len() >= RESAMPLE_CHUNK_FRAMES {
-            let chunk: Vec<f32> = self.pending_mono.drain(..RESAMPLE_CHUNK_FRAMES).collect();
-            let channels = [chunk];
-            let input = SequentialSliceOfVecs::new(&channels, 1, RESAMPLE_CHUNK_FRAMES)
-                .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed)?;
-            let output = resampler
-                .process(&input, None)
-                .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed)?
-                .take_data();
+            let output = match SequentialSlice::new(
+                &self.pending_mono[..RESAMPLE_CHUNK_FRAMES],
+                1,
+                RESAMPLE_CHUNK_FRAMES,
+            ) {
+                Ok(input) => resampler
+                    .process(&input, None)
+                    .map(|output| output.take_data())
+                    .map_err(|_| SystemAudioCaptureError::AudioProcessingFailed),
+                Err(_) => Err(SystemAudioCaptureError::AudioProcessingFailed),
+            };
+            // Match the previous drain-before-process behavior on both success
+            // and failure while avoiding an owned input copy.
+            self.pending_mono.drain(..RESAMPLE_CHUNK_FRAMES);
+            let output = output?;
             let pcm = PCM16Encoder::encode(&[output]);
             if !pcm.is_empty() {
                 buffers.push(pcm);
@@ -162,5 +168,26 @@ mod tests {
         let output = resampler.push_interleaved(&[0.5]).unwrap();
         assert_eq!(output.len(), 1);
         assert_eq!(output[0].len(), 2);
+    }
+
+    #[test]
+    fn same_rate_callbacks_reuse_the_mono_buffer_allocation() {
+        let mut resampler = StreamingPcm16Resampler::new(24_000, 24_000, 2).unwrap();
+        let first = stereo_sine(0, 256);
+        let output = resampler.push_interleaved(&first).unwrap();
+
+        assert_eq!(output.len(), 1);
+        assert!(resampler.pending_mono.is_empty());
+        assert!(resampler.pending_mono.capacity() >= 256);
+        let allocation = resampler.pending_mono.as_ptr();
+        let capacity = resampler.pending_mono.capacity();
+
+        let second = stereo_sine(256, 256);
+        let output = resampler.push_interleaved(&second).unwrap();
+
+        assert_eq!(output.len(), 1);
+        assert!(resampler.pending_mono.is_empty());
+        assert_eq!(resampler.pending_mono.capacity(), capacity);
+        assert_eq!(resampler.pending_mono.as_ptr(), allocation);
     }
 }

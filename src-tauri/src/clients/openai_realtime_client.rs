@@ -382,15 +382,18 @@ fn take_complete_audio_messages(
 ) -> Result<Vec<String>, OpenAIRealtimeClientError> {
     let frame_size = OpenAIRealtimeEndpoint::AUDIO_FRAME_BYTE_COUNT;
     let complete_bytes = pending.len() / frame_size * frame_size;
-    let complete: Vec<u8> = pending.drain(..complete_bytes).collect();
-    complete
+    let result = pending[..complete_bytes]
         .chunks_exact(frame_size)
         .map(|frame| {
             OpenAIRealtimeRequestEncoder::audio_append(frame)
                 .map(|value| value.to_string())
                 .map_err(|_| OpenAIRealtimeClientError::TransportFailure)
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>();
+    // Preserve the existing failure semantics: a complete batch is consumed
+    // even if encoding one of its frames fails.
+    pending.drain(..complete_bytes);
+    result
 }
 
 fn take_padded_audio_message(

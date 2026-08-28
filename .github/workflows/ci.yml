@@ -74,16 +74,13 @@ jobs:
 
       - run: npm ci
 
-      - name: Typecheck
-        run: npx tsc -b
-
       - name: Lint
         run: npm run lint
 
       - name: Test
         run: npm run test
 
-      - name: Build
+      - name: Typecheck and build
         run: npm run build
 
   # Compile macOS without producing an extra branch artifact. Tag builds below
@@ -97,7 +94,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.os == 'macos-latest' && '13.0' || '' }}
-    needs: [rust, msrv, frontend]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -130,6 +126,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
           if-no-files-found: error
+          retention-days: 7
 
   release-preflight:
     if: ${{ github.ref_type == 'tag' }}
@@ -225,6 +222,7 @@ jobs:
           name: mimi-release-macos
           path: ${{ runner.temp }}/mimi-release-assets/*.dmg
           if-no-files-found: error
+          retention-days: 7
 
   release-windows:
     if: ${{ github.ref_type == 'tag' }}
@@ -290,6 +288,7 @@ jobs:
           name: mimi-release-windows
           path: ${{ runner.temp }}/mimi-release-assets/*
           if-no-files-found: error
+          retention-days: 7
 
   # This is the only job with release authority. It runs only after both
   # platform packages pass their structural and digest checks.

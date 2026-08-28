@@ -1,20 +1,38 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { isTauri } from "./lib/ipc";
 import { useStore } from "./lib/store";
-import { OverlayWindow } from "./windows/overlay/OverlayWindow";
-import { OverlayControlWindow } from "./windows/overlay-control/OverlayControlWindow";
-import { SettingsView } from "./windows/settings/SettingsView";
-import { TrayPanel } from "./windows/tray-panel/TrayPanel";
+
+const OverlayWindow = lazy(() =>
+  import("./windows/overlay/OverlayWindow").then((module) => ({
+    default: module.OverlayWindow,
+  })),
+);
+const OverlayControlWindow = lazy(() =>
+  import("./windows/overlay-control/OverlayControlWindow").then((module) => ({
+    default: module.OverlayControlWindow,
+  })),
+);
+const SettingsView = lazy(() =>
+  import("./windows/settings/SettingsView").then((module) => ({
+    default: module.SettingsView,
+  })),
+);
+const TrayPanel = lazy(() =>
+  import("./windows/tray-panel/TrayPanel").then((module) => ({
+    default: module.TrayPanel,
+  })),
+);
 
 type WindowLabel = "overlay" | "overlay-control" | "tray-panel" | "settings";
 
 /**
- * Every window loads the same bundle and renders the component matching its
- * label: "overlay" (floating subtitles), "tray-panel" (menu-bar style control
- * panel), "settings" (main settings window), or "overlay-control" (the
- * child status island and control panel). Outside Tauri a `?window=` query
- * parameter selects the preview (defaults to "settings").
+ * Every window loads the shared entry, then lazily loads only the component
+ * matching its label: "overlay" (floating subtitles), "tray-panel" (menu-bar
+ * style control panel), "settings" (main settings window), or
+ * "overlay-control" (the child status island and control panel). Outside
+ * Tauri a `?window=` query parameter selects the preview (defaults to
+ * "settings").
  */
 export default function App() {
   const [label] = useState<WindowLabel>(resolveInitialLabel);
@@ -28,10 +46,13 @@ export default function App() {
     document.body.classList.toggle("settings-body", label === "settings");
   }, [label]);
 
-  if (label === "overlay") return <OverlayWindow />;
-  if (label === "overlay-control") return <OverlayControlWindow />;
-  if (label === "tray-panel") return <TrayPanel />;
-  return <SettingsView />;
+  let windowContent;
+  if (label === "overlay") windowContent = <OverlayWindow />;
+  else if (label === "overlay-control") windowContent = <OverlayControlWindow />;
+  else if (label === "tray-panel") windowContent = <TrayPanel />;
+  else windowContent = <SettingsView />;
+
+  return <Suspense fallback={null}>{windowContent}</Suspense>;
 }
 
 function resolveInitialLabel(): WindowLabel {

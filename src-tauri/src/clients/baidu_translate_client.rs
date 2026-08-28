@@ -401,11 +401,12 @@ fn map_protocol_configuration_error(
 fn take_complete_frames(pending: &mut Vec<u8>) -> Vec<Vec<u8>> {
     let frame_size = BaiduTranslateEndpoint::AUDIO_FRAME_BYTE_COUNT;
     let complete_bytes = pending.len() / frame_size * frame_size;
-    let complete: Vec<u8> = pending.drain(..complete_bytes).collect();
-    complete
+    let frames = pending[..complete_bytes]
         .chunks_exact(frame_size)
         .map(<[u8]>::to_vec)
-        .collect()
+        .collect::<Vec<_>>();
+    pending.drain(..complete_bytes);
+    frames
 }
 
 fn take_padded_frame(pending: &mut Vec<u8>) -> Option<Vec<u8>> {

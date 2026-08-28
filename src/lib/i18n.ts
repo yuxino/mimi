@@ -137,8 +137,6 @@ const OVERLAY_ZH = {
   chineseSource: "中文原文",
   resume: "继续翻译",
   pause: "暂停翻译",
-  pickerHelpTranslating: "切换识别语言和翻译模式",
-  pickerHelpOriginal: "切换识别语言",
   controlPanel: "字幕控制",
   openControls: "打开字幕控制",
   closeControls: "收起字幕控制",
@@ -146,7 +144,6 @@ const OVERLAY_ZH = {
   immersiveModeOn: "已开启",
   immersiveModeOff: "已关闭",
   enterImmersiveMode: "开启沉浸模式",
-  exitImmersiveMode: "退出沉浸模式",
   lockPosition: "锁定字幕位置",
   unlockPosition: "解锁字幕位置",
   positionLocked: "已锁定",
@@ -163,8 +160,6 @@ const OVERLAY_ZH = {
   phaseTranslating: "正在翻译",
   phasePaused: "已暂停",
   accessibilityCurrentLanguagePrefix: "，当前语言：",
-  accessibilityOpenToSwitch: "。打开以切换识别语言。",
-  translationSuffix: "翻译",
 };
 
 const OVERLAY_EN = {
@@ -189,8 +184,6 @@ const OVERLAY_EN = {
   chineseSource: "Chinese (Original)",
   resume: "Resume translating",
   pause: "Pause translating",
-  pickerHelpTranslating: "Switch recognition language and translation mode",
-  pickerHelpOriginal: "Switch recognition language",
   controlPanel: "Subtitle Controls",
   openControls: "Open subtitle controls",
   closeControls: "Collapse subtitle controls",
@@ -198,7 +191,6 @@ const OVERLAY_EN = {
   immersiveModeOn: "On",
   immersiveModeOff: "Off",
   enterImmersiveMode: "Enter Immersive Mode",
-  exitImmersiveMode: "Exit Immersive Mode",
   lockPosition: "Lock Subtitle Position",
   unlockPosition: "Unlock Subtitle Position",
   positionLocked: "Locked",
@@ -215,8 +207,6 @@ const OVERLAY_EN = {
   phaseTranslating: "Translating",
   phasePaused: "Paused",
   accessibilityCurrentLanguagePrefix: ", current: ",
-  accessibilityOpenToSwitch: ". Open to switch recognition language.",
-  translationSuffix: " translation",
 };
 
 const OVERLAY_JA = {
@@ -241,8 +231,6 @@ const OVERLAY_JA = {
   chineseSource: "中国語（原文）",
   resume: "翻訳を再開",
   pause: "翻訳を一時停止",
-  pickerHelpTranslating: "認識言語と翻訳モードを切り替え",
-  pickerHelpOriginal: "認識言語を切り替え",
   controlPanel: "字幕コントロール",
   openControls: "字幕コントロールを開く",
   closeControls: "字幕コントロールを折りたたむ",
@@ -250,7 +238,6 @@ const OVERLAY_JA = {
   immersiveModeOn: "オン",
   immersiveModeOff: "オフ",
   enterImmersiveMode: "没入モードをオン",
-  exitImmersiveMode: "没入モードを終了",
   lockPosition: "字幕の位置を固定",
   unlockPosition: "字幕の位置固定を解除",
   positionLocked: "固定中",
@@ -267,8 +254,6 @@ const OVERLAY_JA = {
   phaseTranslating: "翻訳中",
   phasePaused: "一時停止中",
   accessibilityCurrentLanguagePrefix: "、現在の言語：",
-  accessibilityOpenToSwitch: "。開いて認識言語を切り替え。",
-  translationSuffix: "翻訳",
 };
 
 const SETTINGS_ZH = {
@@ -325,8 +310,6 @@ const SETTINGS_ZH = {
   deleteProfileConfirm: (name: string): string =>
     `确定删除“${name}”及其专属凭证吗？凭证不会显示或导出。`,
   profileCount: (count: number): string => `${count} 个配置`,
-  defaultAlibabaProfileName: "Alibaba Cloud",
-  defaultOpenAIProfileName: "OpenAI Realtime",
   providerAlibaba: "Alibaba Cloud",
   providerOpenAI: "OpenAI Realtime",
   providerGoogleGemini: "Google Gemini",
@@ -454,8 +437,6 @@ const SETTINGS_EN = {
   deleteProfileConfirm: (name: string): string =>
     `Delete “${name}” and its credential? The credential will never be shown or exported.`,
   profileCount: (count: number): string => `${count} ${count === 1 ? "configuration" : "configurations"}`,
-  defaultAlibabaProfileName: "Alibaba Cloud",
-  defaultOpenAIProfileName: "OpenAI Realtime",
   providerAlibaba: "Alibaba Cloud",
   providerOpenAI: "OpenAI Realtime",
   providerGoogleGemini: "Google Gemini",
@@ -578,8 +559,6 @@ const SETTINGS_JA = {
   deleteProfileConfirm: (name: string): string =>
     `「${name}」と専用の認証情報を削除しますか？認証情報は表示・書き出しされません。`,
   profileCount: (count: number): string => `${count} 件の設定`,
-  defaultAlibabaProfileName: "Alibaba Cloud",
-  defaultOpenAIProfileName: "OpenAI Realtime",
   providerAlibaba: "Alibaba Cloud",
   providerOpenAI: "OpenAI Realtime",
   providerGoogleGemini: "Google Gemini",

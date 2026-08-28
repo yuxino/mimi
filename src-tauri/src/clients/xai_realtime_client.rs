@@ -671,15 +671,18 @@ fn take_complete_audio_messages(
 ) -> Result<Vec<String>, XAIRealtimeClientError> {
     let frame_size = XAIRealtimeEndpoint::AUDIO_FRAME_BYTE_COUNT;
     let complete_bytes = pending.len() / frame_size * frame_size;
-    let complete: Vec<u8> = pending.drain(..complete_bytes).collect();
-    complete
+    let result = pending[..complete_bytes]
         .chunks_exact(frame_size)
         .map(|frame| {
             XAIRealtimeRequestEncoder::audio_append(frame)
                 .map(|value| value.to_string())
                 .map_err(|_| XAIRealtimeClientError::TransportFailure)
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>();
+    // Preserve the existing failure semantics: a complete batch is consumed
+    // even if encoding one of its frames fails.
+    pending.drain(..complete_bytes);
+    result
 }
 
 fn take_padded_audio_message(
@@ -1103,6 +1106,24 @@ mod tests {
                 true,
             )
             .is_empty());
+    }
+
+    #[test]
+    fn frame_buffer_keeps_only_a_partial_tail() {
+        let frame_size = XAIRealtimeEndpoint::AUDIO_FRAME_BYTE_COUNT;
+        let mut pending = vec![0x23; frame_size * 2 + 17];
+        let messages = take_complete_audio_messages(&mut pending).unwrap();
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(pending, vec![0x23; 17]);
+        for message in messages {
+            let value: Value = serde_json::from_str(&message).unwrap();
+            let frame = base64::engine::general_purpose::STANDARD
+                .decode(value["audio"].as_str().unwrap())
+                .unwrap();
+            assert_eq!(frame.len(), frame_size);
+            assert!(frame.iter().all(|byte| *byte == 0x23));
+        }
     }
 
     #[tokio::test]

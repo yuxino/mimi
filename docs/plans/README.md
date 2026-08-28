@@ -22,6 +22,9 @@ Git history, not on the active documentation path.
 - `2026-08-24-runtime-reliability-and-release-design.md` — bounded streaming
   topology, generation ownership, recovery, control-island ownership, and the
   native/WebView release baseline.
+- `2026-08-28-efficiency-size-maintenance-design.md` — per-window frontend
+  loading, allocation-free buffer slicing, parallel branch bundles, and the
+  supported desktop asset boundary.
 
 ## Runtime behavior
 

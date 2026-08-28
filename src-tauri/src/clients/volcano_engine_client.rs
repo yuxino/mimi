@@ -620,14 +620,17 @@ fn take_complete_audio_messages(
 ) -> Result<Vec<Vec<u8>>, VolcanoEngineClientError> {
     let frame_size = VolcanoEngineEndpoint::AUDIO_FRAME_BYTE_COUNT;
     let complete_bytes = pending.len() / frame_size * frame_size;
-    let complete: Vec<u8> = pending.drain(..complete_bytes).collect();
-    complete
+    let result = pending[..complete_bytes]
         .chunks_exact(frame_size)
         .map(|frame| {
             VolcanoEngineRequestEncoder::audio(session_id, frame)
                 .map_err(|_| VolcanoEngineClientError::TransportFailure)
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>();
+    // Preserve the existing failure semantics: a complete batch is consumed
+    // even if encoding one of its frames fails.
+    pending.drain(..complete_bytes);
+    result
 }
 
 fn take_padded_audio_message(
@@ -1667,6 +1670,18 @@ mod tests {
                 frame_size
             );
         }
+    }
+
+    #[test]
+    fn failed_audio_encoding_still_consumes_the_complete_batch() {
+        let frame_size = VolcanoEngineEndpoint::AUDIO_FRAME_BYTE_COUNT;
+        let mut pending = vec![0x22; frame_size * 2 + 17];
+
+        assert_eq!(
+            take_complete_audio_messages("", &mut pending),
+            Err(VolcanoEngineClientError::TransportFailure)
+        );
+        assert_eq!(pending, vec![0x22; 17]);
     }
 
     #[test]
