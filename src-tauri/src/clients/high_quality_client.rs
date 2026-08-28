@@ -5,7 +5,9 @@
 //! serial final-translation queue.
 
 use crate::clients::audio3_client::Audio3ASRClient;
-use crate::clients::provider_events::{provider_event_channel, ProviderEventSender};
+use crate::clients::provider_events::{
+    provider_event_channel, ProviderEventReceiver, ProviderEventSender,
+};
 use crate::clients::qwen_mt_client::QwenMTClient;
 use crate::core::committer::ASRDraftCommitter;
 use crate::core::models::{SourceLanguage, TargetLanguage};
@@ -17,7 +19,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -25,6 +27,7 @@ const MAX_FINAL_QUEUE_DEPTH: usize = 3;
 const MAX_FINAL_REQUEST_AGE: Duration = Duration::from_secs(45);
 const MAX_PREVIEW_REQUEST_AGE: Duration = Duration::from_secs(12);
 const MAX_TRANSLATION_ATTEMPTS: usize = 3;
+const ASR_BRIDGE_FINISH_TIMEOUT: Duration = Duration::from_secs(1);
 const OVERLOAD_ERROR_CODE: &str = "translation_backlog_overflow";
 const OVERLOAD_ERROR_MESSAGE: &str = "Translation fell behind live audio. mimi is reconnecting.";
 
@@ -85,6 +88,12 @@ struct TaskSlot {
     handle: JoinHandle<()>,
 }
 
+#[derive(Default)]
+struct ASRBridgeState {
+    task: Option<JoinHandle<()>>,
+    finish_ack: Option<oneshot::Receiver<()>>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DraftTimerKind {
     Stable,
@@ -111,7 +120,6 @@ struct Inner {
     draft_maximum_wait_task: Option<TaskSlot>,
     preview_task: Option<TaskSlot>,
     final_worker: Option<TaskSlot>,
-    asr_bridge: Option<JoinHandle<()>>,
     next_task_id: u64,
     pipeline_failed: bool,
     final_completion_in_progress: bool,
@@ -138,6 +146,7 @@ pub struct HighQualityTranslationClient {
     translates_audio: bool,
     events: ProviderEventSender,
     inner: Arc<Mutex<Inner>>,
+    asr_bridge: Arc<Mutex<ASRBridgeState>>,
     preview_epoch: Arc<AtomicU64>,
     stable_draft_delay: Duration,
     maximum_wait_delay: Duration,
@@ -196,13 +205,13 @@ impl HighQualityTranslationClient {
                 draft_maximum_wait_task: None,
                 preview_task: None,
                 final_worker: None,
-                asr_bridge: None,
                 next_task_id: 0,
                 pipeline_failed: false,
                 final_completion_in_progress: false,
                 deferred_overload: false,
                 last_draft_log_at: None,
             })),
+            asr_bridge: Arc::new(Mutex::new(ASRBridgeState::default())),
             preview_epoch: Arc::new(AtomicU64::new(0)),
             stable_draft_delay,
             maximum_wait_delay,
@@ -217,7 +226,7 @@ impl HighQualityTranslationClient {
         self.disconnect_asr_bridge().await;
 
         let task_id = Uuid::new_v4().simple().to_string();
-        let (asr_tx, mut asr_rx) = provider_event_channel();
+        let (asr_tx, asr_rx) = provider_event_channel();
         self.asr_client.set_event_sender(asr_tx).await;
         self.asr_client.connect(&task_id).await.map_err(|error| {
             QwenMTClientError::RequestFailed {
@@ -226,13 +235,7 @@ impl HighQualityTranslationClient {
             }
         })?;
 
-        let self_arc = self.clone();
-        let bridge = tokio::spawn(async move {
-            while let Some(event) = asr_rx.recv().await {
-                self_arc.handle_asr_event(event).await;
-            }
-        });
-        self.inner.lock().await.asr_bridge = Some(bridge);
+        self.install_asr_bridge(asr_rx).await;
         Ok(())
     }
 
@@ -257,6 +260,12 @@ impl HighQualityTranslationClient {
 
     pub async fn finish(&self) {
         self.asr_client.finish(Duration::from_secs(1)).await;
+        if !self
+            .wait_for_asr_bridge_finish(ASR_BRIDGE_FINISH_TIMEOUT)
+            .await
+        {
+            pipeline_log!("audio3 asr bridge finish timed out");
+        }
         self.flush_pending_draft().await;
         self.wait_for_final_translations(Duration::from_secs(3))
             .await;
@@ -1023,9 +1032,44 @@ impl HighQualityTranslationClient {
         }
     }
 
+    async fn install_asr_bridge(&self, mut receiver: ProviderEventReceiver) {
+        let (finish_tx, finish_rx) = oneshot::channel();
+        let self_arc = self.clone();
+        let task = tokio::spawn(async move {
+            let mut finish_tx = Some(finish_tx);
+            while let Some(event) = receiver.recv().await {
+                let is_session_finished = event == LiveTranslateServerEvent::SessionFinished;
+                self_arc.handle_asr_event(event).await;
+                if is_session_finished {
+                    if let Some(finish_tx) = finish_tx.take() {
+                        let _ = finish_tx.send(());
+                    }
+                }
+            }
+        });
+        let mut bridge = self.asr_bridge.lock().await;
+        if let Some(previous_task) = bridge.task.replace(task) {
+            previous_task.abort();
+        }
+        bridge.finish_ack = Some(finish_rx);
+    }
+
+    async fn wait_for_asr_bridge_finish(&self, timeout: Duration) -> bool {
+        let finish_ack = self.take_asr_bridge_finish_ack().await;
+        let Some(finish_ack) = finish_ack else {
+            return false;
+        };
+        matches!(tokio::time::timeout(timeout, finish_ack).await, Ok(Ok(())))
+    }
+
+    async fn take_asr_bridge_finish_ack(&self) -> Option<oneshot::Receiver<()>> {
+        self.asr_bridge.lock().await.finish_ack.take()
+    }
+
     async fn disconnect_asr_bridge(&self) {
-        let mut inner = self.inner.lock().await;
-        if let Some(task) = inner.asr_bridge.take() {
+        let mut bridge = self.asr_bridge.lock().await;
+        bridge.finish_ack = None;
+        if let Some(task) = bridge.task.take() {
             task.abort();
         }
     }
@@ -1326,5 +1370,76 @@ mod tests {
         );
         assert!(events.try_recv().is_err());
         client.cancel_final_translations().await;
+    }
+
+    #[tokio::test]
+    async fn finish_ack_waits_for_the_bridge_to_consume_the_queued_final() {
+        let (client, mut events) = test_client(TargetLanguage::Original, 20);
+        let (asr_events, asr_receiver) = provider_event_channel();
+        client.install_asr_bridge(asr_receiver).await;
+        let mut finish_ack = client.take_asr_bridge_finish_ack().await.unwrap();
+
+        // Hold the draft/final state so the bridge cannot finish consuming the
+        // authoritative final. The per-connection acknowledgement uses separate
+        // bridge state, so observing it never shares this lock.
+        let inner = client.inner.lock().await;
+        asr_events
+            .send(LiveTranslateServerEvent::SourceFinal {
+                text: "最後の字幕。".into(),
+                language: Some("ja".into()),
+            })
+            .unwrap();
+        asr_events
+            .send(LiveTranslateServerEvent::SessionFinished)
+            .unwrap();
+        tokio::task::yield_now().await;
+        assert!(matches!(
+            finish_ack.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+
+        drop(inner);
+        assert!(tokio::time::timeout(Duration::from_secs(1), finish_ack)
+            .await
+            .unwrap()
+            .is_ok());
+        assert_eq!(
+            events.recv().await,
+            Some(LiveTranslateServerEvent::SubtitleFinalPair {
+                source: "最後の字幕。".into(),
+                language: Some("ja".into()),
+                translation: "最後の字幕。".into(),
+            })
+        );
+        assert_eq!(
+            events.recv().await,
+            Some(LiveTranslateServerEvent::SessionFinished)
+        );
+        client.disconnect_asr_bridge().await;
+    }
+
+    #[tokio::test]
+    async fn finish_ack_is_scoped_to_one_bridge_connection() {
+        let (client, _events) = test_client(TargetLanguage::Original, 20);
+
+        let (first_events, first_receiver) = provider_event_channel();
+        client.install_asr_bridge(first_receiver).await;
+        first_events
+            .send(LiveTranslateServerEvent::SessionFinished)
+            .unwrap();
+        assert!(
+            client
+                .wait_for_asr_bridge_finish(Duration::from_secs(1))
+                .await
+        );
+
+        let (_second_events, second_receiver) = provider_event_channel();
+        client.install_asr_bridge(second_receiver).await;
+        assert!(
+            !client
+                .wait_for_asr_bridge_finish(Duration::from_millis(25))
+                .await
+        );
+        client.disconnect_asr_bridge().await;
     }
 }

@@ -7,9 +7,13 @@ import {
   overlayPopoverToggle,
   type OverlayControlMode,
 } from "../../lib/ipc";
-import { useStore } from "../../lib/store";
 import {
-  computeActivityPhase,
+  selectHasRecognizingSourceDraft,
+  selectSessionStatusKind,
+  useStore,
+} from "../../lib/store";
+import {
+  computeActivityPhaseFromSignals,
   isWaitingForFinalTranslation,
   languageStatus,
 } from "../overlay/overlayModel";
@@ -20,7 +24,17 @@ import "./overlay-control.css";
 
 /** Child window that morphs between a compact status island and its panel. */
 export function OverlayControlWindow() {
-  const session = useStore((state) => state.session);
+  const sessionStatusKind = useStore(selectSessionStatusKind);
+  const sessionIsPaused = useStore((state) => state.session.isPaused);
+  const detectedLanguage = useStore(
+    (state) => state.session.detectedLanguage,
+  );
+  const isTranslationPending = useStore(
+    (state) => state.session.isTranslationPending,
+  );
+  const hasRecognizingSourceDraft = useStore(
+    selectHasRecognizingSourceDraft,
+  );
   const settings = useStore((state) => state.settings);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
   const switchTranslationMode = useStore(
@@ -86,17 +100,26 @@ export function OverlayControlWindow() {
 
   if (mode === "hidden") return null;
 
-  const phase = computeActivityPhase(session, settings);
-  const status = languageStatus(settings, session.detectedLanguage);
+  const phase = computeActivityPhaseFromSignals(
+    {
+      statusKind: sessionStatusKind,
+      isPaused: sessionIsPaused,
+      detectedLanguage,
+      isTranslationPending,
+      hasRecognizingSourceDraft,
+    },
+    settings,
+  );
+  const status = languageStatus(settings, detectedLanguage);
   if (status === null) return null;
   const isWaiting = isWaitingForFinalTranslation(
     settings,
-    session.detectedLanguage,
-    session.isTranslationPending,
+    detectedLanguage,
+    isTranslationPending,
   );
   const model = overlayControlPanelModel(settings);
   const isChangingSession =
-    session.status.kind === "connecting" || session.status.kind === "stopping";
+    sessionStatusKind === "connecting" || sessionStatusKind === "stopping";
 
   if (mode === "panel") {
     return (
@@ -105,7 +128,7 @@ export function OverlayControlWindow() {
         status={status}
         settings={settings}
         model={model}
-        isPaused={session.isPaused}
+        isPaused={sessionIsPaused}
         isWaitingForFinalTranslation={isWaiting}
         isChangingSession={isChangingSession}
         onDismiss={dismiss}
@@ -126,7 +149,7 @@ export function OverlayControlWindow() {
       status={status}
       settings={settings}
       effectiveMode={model.effectiveTranslationMode}
-      isPaused={session.isPaused}
+      isPaused={sessionIsPaused}
       isWaitingForFinalTranslation={isWaiting}
       expanded={false}
       onToggle={toggle}

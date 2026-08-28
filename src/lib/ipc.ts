@@ -102,16 +102,6 @@ export function profileDelete(profileId: string): Promise<SettingsSnapshot> {
   return invoke<SettingsSnapshot>("profile_delete", { profileId });
 }
 
-export function profileSaveAPIKey(
-  profileId: string,
-  apiKey: string,
-): Promise<SettingsSnapshot> {
-  return invoke<SettingsSnapshot>("profile_save_api_key", {
-    profileId,
-    apiKey,
-  });
-}
-
 export function profileSaveCredentials(
   profileId: string,
   credentials: ProviderCredentialsInput,

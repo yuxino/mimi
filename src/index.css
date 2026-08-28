@@ -132,17 +132,3 @@ input:focus-visible,
 .settings-panel {
   animation: settings-panel-enter 160ms ease-out;
 }
-
-/* Background hover for list-style buttons (tray rows, picker rows). */
-button.ux-hover-bg {
-  transition: background-color 120ms ease, filter 120ms ease;
-  border-radius: 6px;
-}
-
-button.ux-hover-bg:hover {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-button.ux-hover-bg:active {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}

@@ -17,7 +17,7 @@ function presentation(
   } = {},
 ) {
   return deriveTrayPresentation({
-    status,
+    statusKind: status.kind,
     isPaused: options.paused ?? false,
     credentialState: options.credential ?? "present",
     hasSubtitleContent: options.hasContent ?? false,
@@ -39,7 +39,7 @@ describe("deriveTrayPresentation", () => {
     "routes an idle %s credential state to settings",
     (credential) => {
       const model = deriveTrayPresentation({
-        status: { kind: "idle" },
+        statusKind: "idle",
         isPaused: false,
         credentialState: credential,
         hasSubtitleContent: false,

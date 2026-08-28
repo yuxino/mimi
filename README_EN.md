@@ -44,14 +44,16 @@ Each service configuration's credentials are stored separately in the operating 
 | Baidu Realtime Speech Translation | Chinese, English, Japanese, Korean | Simplified Chinese, English, Japanese | Turbo |
 | xAI Grok Voice | Auto | Simplified Chinese, English, Japanese | Turbo, turn based |
 
+The Gemini, Azure OpenAI, Volcano Engine, Tencent, Baidu, and xAI integrations have protocol-fixture, mock-WebSocket, and UI-logic coverage. Paid-account end-to-end quality and latency have not yet been accepted across every service.
+
 ### Platform notes
 
 - **macOS 13 or later on Apple silicon**: GitHub Releases provide a developer-installable, ad-hoc-signed DMG without Apple notarization. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Updates may require approving Screen & System Audio Recording or Keychain access again. Local permission-sensitive QA uses the repository's separate stable development identity. mimi captures system audio only, never the screen, and excludes its own sound.
-- **Windows preview**: the source implements WASAPI loopback capture and CI produces x64 MSI and EXE packages. Real-device installation, trust prompts, credential storage, system-audio capture, overlay behavior, and the complete live-subtitle flow have not yet been accepted on Windows. CI success is not a substitute for that verification.
+- **Windows preview**: the source implements WASAPI loopback capture and CI produces x64 MSI and NSIS installers; the current installers are not Authenticode-signed. Real-device installation, trust prompts, credential storage, system-audio capture, overlay behavior, and the complete live-subtitle flow have not yet been accepted on Windows. CI success is not a substitute for that verification.
 
 ## Build from source
 
-Requires Rust 1.85+ and Node.js 20+ (macOS also needs the Xcode Command Line Tools).
+Requires Rust 1.88+ and Node.js 20.19.x, 22.13+, or 24+ (macOS also needs the Xcode Command Line Tools).
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
@@ -60,7 +62,7 @@ npm ci
 ./scripts/dev-app.sh     # develop on macOS with a stable app identity
 npm run tauri:dev        # develop on Windows with isolated dev settings
 ./scripts/check.sh       # full check (fmt/clippy/tests/frontend build)
-./scripts/package-app.sh # package (macOS: .dmg; Windows: .msi/.nsis)
+./scripts/package-app.sh # package (macOS: DMG; Windows: MSI / NSIS EXE)
 ```
 
 Build the Windows package on a Windows machine (Rust's C dependencies cannot cross-compile from macOS to the MSVC target); CI runs the full Rust suite on both macOS and Windows.

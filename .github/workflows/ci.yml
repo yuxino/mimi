@@ -38,10 +38,29 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
+  msrv:
+    runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.88.0
+
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          workspaces: src-tauri
+          shared-key: msrv
+
+      - name: Check minimum supported Rust version
+        run: cargo check --locked --manifest-path src-tauri/Cargo.toml
 
   frontend:
     runs-on: ubuntu-latest
@@ -78,7 +97,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.os == 'macos-latest' && '13.0' || '' }}
-    needs: [rust, frontend]
+    needs: [rust, msrv, frontend]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -97,7 +116,7 @@ jobs:
 
       - name: Compile macOS without a runnable bundle
         if: ${{ matrix.os == 'macos-latest' }}
-        run: npm run tauri -- build --no-bundle
+        run: npm run tauri -- build --no-bundle -- --locked
 
       - uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
         if: ${{ matrix.os == 'windows-latest' }}
@@ -127,12 +146,13 @@ jobs:
           node -e '
             const fs = require("node:fs");
             const pkg = require("./package.json").version;
+            const packageLock = require("./package-lock.json").packages[""].version;
             const tauri = require("./src-tauri/tauri.conf.json").version;
             const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8")
               .match(/^version = "([^"]+)"/m)?.[1];
             const expected = `v${pkg}`;
-            if (process.env.RELEASE_TAG !== expected || tauri !== pkg || cargo !== pkg) {
-              throw new Error(`release versions disagree: tag=${process.env.RELEASE_TAG}, package=${pkg}, tauri=${tauri}, cargo=${cargo}`);
+            if (process.env.RELEASE_TAG !== expected || packageLock !== pkg || tauri !== pkg || cargo !== pkg) {
+              throw new Error(`release versions disagree: tag=${process.env.RELEASE_TAG}, package=${pkg}, packageLock=${packageLock}, tauri=${tauri}, cargo=${cargo}`);
             }
           '
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
@@ -150,7 +170,7 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
       APPLE_SIGNING_IDENTITY: "-"
-    needs: [rust, frontend, release-preflight]
+    needs: [rust, msrv, frontend, release-preflight]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -174,7 +194,7 @@ jobs:
           rm -rf "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg"
 
       - name: Build developer-installable macOS package
-        run: npm run tauri build
+        run: npm run tauri -- build -- --locked
 
       - name: Verify and stage the macOS release asset
         shell: bash
@@ -209,7 +229,7 @@ jobs:
   release-windows:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: windows-latest
-    needs: [rust, frontend, release-preflight]
+    needs: [rust, msrv, frontend, release-preflight]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -232,7 +252,7 @@ jobs:
           Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE/src-tauri/target/release/bundle/msi" -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE/src-tauri/target/release/bundle/nsis" -ErrorAction SilentlyContinue
 
-      - run: npm run tauri build
+      - run: npm run tauri -- build -- --locked
 
       - name: Verify and stage Windows release assets
         shell: pwsh

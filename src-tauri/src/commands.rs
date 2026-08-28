@@ -559,19 +559,6 @@ pub async fn profile_delete(
 }
 
 #[tauri::command]
-pub async fn profile_save_api_key(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    profile_id: String,
-    api_key: String,
-) -> Result<SettingsSnapshotPayload, String> {
-    let _lifecycle = state.session.settings_mutation_guard(true).await?;
-    ensure_profile_mutation_allowed(state.session.has_active_session())?;
-    state.settings.save_api_key(&profile_id, &api_key)?;
-    emit_settings_snapshot(&app, &state.settings)
-}
-
-#[tauri::command]
 pub async fn profile_save_credentials(
     app: AppHandle,
     state: State<'_, AppState>,

@@ -44,14 +44,16 @@
 | 百度实时语音翻译 | 中文、英语、日语、韩语 | 简体中文、英语、日语 | 极速 |
 | xAI Grok Voice | 自动 | 简体中文、英语、日语 | 极速、回合式 |
 
+Gemini、Azure OpenAI、豆包、腾讯云、百度和 xAI 已通过协议夹具、模拟 WebSocket 与 UI 逻辑测试；各服务付费账号的端到端质量和延迟尚未逐一验收。
+
 ### 平台说明
 
 - **Apple 芯片上的 macOS 13 或更高版本**：GitHub Releases 提供可供开发者安装、使用临时签名且未经 Apple 公证的 DMG。如果首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。更新后可能需要重新允许「屏幕与系统音频录制」或钥匙串访问。本地权限相关测试使用仓库独立的稳定开发身份。mimi 只采集系统音频，不录制屏幕，也会排除自身声音。
-- **Windows 预览**：源码已实现 WASAPI 环回采集，CI 也能生成 x64 MSI 和 EXE。Windows 真机安装、信任提示、凭据存储、系统音频采集、浮窗行为和完整实时字幕流程尚未验收；CI 成功不能代替这些验证。
+- **Windows 预览**：源码已实现 WASAPI 环回采集，CI 也能生成 x64 MSI 和 NSIS 安装程序；当前安装程序未做 Authenticode 签名。Windows 真机安装、信任提示、凭据存储、系统音频采集、浮窗行为和完整实时字幕流程尚未验收；CI 成功不能代替这些验证。
 
 ## 从源码构建
 
-需要 Rust 1.85+ 和 Node.js 20+（macOS 上还需 Xcode Command Line Tools）。
+需要 Rust 1.88+，以及 Node.js 20.19.x、22.13+ 或 24+（macOS 上还需 Xcode Command Line Tools）。
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
@@ -60,7 +62,7 @@ npm ci
 ./scripts/dev-app.sh     # macOS：以稳定应用身份开发运行
 npm run tauri:dev        # Windows：使用独立开发配置运行
 ./scripts/check.sh       # 完整检查（fmt/clippy/测试/前端构建）
-./scripts/package-app.sh # 打包（macOS: .dmg；Windows: .msi/.nsis）
+./scripts/package-app.sh # 打包（macOS: DMG；Windows: MSI / NSIS EXE）
 ```
 
 Windows 打包请在 Windows 机器上执行（Rust 依赖的 C 代码无法从 macOS 交叉编译到 MSVC 目标）；CI 会在 macOS 与 Windows 两个平台跑完整的 Rust 测试。

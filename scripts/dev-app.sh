@@ -296,6 +296,7 @@ export MACOSX_DEPLOYMENT_TARGET="13.0"
 
 npm run build
 TAURI_CONFIG="$(<"$DEV_TAURI_CONFIG")" cargo build --release \
+  --locked \
   --features tauri/custom-protocol,devtools \
   --manifest-path src-tauri/Cargo.toml
 

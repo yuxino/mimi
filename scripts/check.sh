@@ -23,17 +23,17 @@ echo "==> cargo fmt --check"
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 echo "==> cargo clippy -D warnings"
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
 echo "==> cargo test"
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --locked --manifest-path src-tauri/Cargo.toml
 
 # Windows compile-level verification when explicitly requested (the MSVC
 # target's C dependencies cannot cross-compile from macOS; CI runs the full
 # Rust suite on windows-latest instead).
 if [[ "${MIMI_CHECK_WINDOWS:-0}" == "1" ]]; then
   echo "==> cargo check (windows-msvc)"
-  cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
+  cargo check --locked --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
 else
   echo "==> skipping windows-msvc check (set MIMI_CHECK_WINDOWS=1 to enable)"
 fi

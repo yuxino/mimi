@@ -130,6 +130,29 @@ interface StoreState {
   quit: () => Promise<void>;
 }
 
+type SessionStoreSlice = Pick<StoreState, "session">;
+
+/**
+ * Stable primitive selectors for native windows that do not render subtitle
+ * text. Provider drafts replace the session snapshot many times per second;
+ * returning the status object would repaint hidden settings/tray windows on
+ * every replacement even when their visible state did not change.
+ */
+export function selectSessionStatusKind(state: SessionStoreSlice) {
+  return state.session.status.kind;
+}
+
+export function selectSessionErrorMessage(state: SessionStoreSlice) {
+  return state.session.status.kind === "error"
+    ? state.session.status.message
+    : null;
+}
+
+export function selectHasRecognizingSourceDraft(state: SessionStoreSlice) {
+  const source = state.session.subtitles.source;
+  return source.text !== "" && !source.isFinal;
+}
+
 const unlisteners: UnlistenFn[] = [];
 const settingsSaveCoordinator = new SettingsSaveCoordinator();
 const settingsResponseGate = new SnapshotResponseGate();

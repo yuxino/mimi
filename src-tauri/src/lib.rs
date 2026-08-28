@@ -174,7 +174,6 @@ pub fn run() {
             commands::profile_update,
             commands::profile_select,
             commands::profile_delete,
-            commands::profile_save_api_key,
             commands::profile_save_credentials,
             commands::profile_delete_api_key,
             commands::session_start,

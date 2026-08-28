@@ -9,12 +9,15 @@ import {
   sourceLanguagesForSettings,
   targetLanguagesForSettings,
 } from "../../lib/providerCapabilities";
-import { useStore } from "../../lib/store";
+import {
+  selectSessionErrorMessage,
+  selectSessionStatusKind,
+  useStore,
+} from "../../lib/store";
 import {
   TARGET_LANGUAGE_DISPLAY_NAMES,
   TRANSLATION_MODE_DISPLAY_NAMES,
   targetLanguageTranslatesAudio,
-  type SessionStateEvent,
   type SettingsSnapshot,
   type SourceLanguage,
   type SubtitleAlignment,
@@ -46,9 +49,10 @@ type PendingAction =
 
 /** Compact cross-platform command center shown from the tray icon. */
 export function TrayPanel() {
-  // Keep streaming subtitle updates from repainting this window after content
-  // first becomes available; the selector returns a stable boolean.
-  const sessionStatus = useStore((state) => state.session.status);
+  // Keep streaming subtitle updates from repainting this hidden native window:
+  // each selector returns only the primitive state rendered by the tray.
+  const sessionStatusKind = useStore(selectSessionStatusKind);
+  const sessionErrorMessage = useStore(selectSessionErrorMessage);
   const isPaused = useStore((state) => state.session.isPaused);
   const subtitleHasContent = useStore((state) =>
     hasSubtitleContent(state.session.subtitles),
@@ -75,7 +79,7 @@ export function TrayPanel() {
   const chineseIsOriginalOnly =
     targetLanguagesForSettings(settings).includes("original");
   const presentation = deriveTrayPresentation({
-    status: sessionStatus,
+    statusKind: sessionStatusKind,
     isPaused,
     credentialState: activeProfile?.credentialState,
     hasSubtitleContent: subtitleHasContent,
@@ -188,7 +192,9 @@ export function TrayPanel() {
           <strong>{I18N.tray.appName}</strong>
           <span className="tray-status" aria-live="polite">
             <span className="tray-status__dot" aria-hidden="true" />
-            <span>{statusText(presentation.statusKind, sessionStatus)}</span>
+            <span>
+              {statusText(presentation.statusKind, sessionErrorMessage)}
+            </span>
           </span>
         </span>
 
@@ -504,7 +510,7 @@ function ToolButton({
 
 function statusText(
   kind: TrayStatusKind,
-  status: SessionStateEvent["status"],
+  sessionErrorMessage: string | null,
 ): string {
   switch (kind) {
     case "ready":
@@ -520,9 +526,7 @@ function statusText(
     case "stopping":
       return I18N.tray.stopping;
     case "error":
-      return status.kind === "error"
-        ? status.message
-        : I18N.settings.profileActionFailed;
+      return sessionErrorMessage ?? I18N.settings.profileActionFailed;
   }
 }
 

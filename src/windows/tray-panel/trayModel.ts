@@ -47,7 +47,7 @@ interface TrayPresentation {
 }
 
 interface TrayPresentationInput {
-  status: SessionStateEvent["status"];
+  statusKind: SessionStateEvent["status"]["kind"];
   isPaused: boolean;
   credentialState: CredentialState | undefined;
   hasSubtitleContent: boolean;
@@ -59,7 +59,7 @@ interface TrayPresentationInput {
  * exposing actions that the session manager cannot safely perform.
  */
 export function deriveTrayPresentation({
-  status,
+  statusKind,
   isPaused,
   credentialState,
   hasSubtitleContent,
@@ -69,7 +69,7 @@ export function deriveTrayPresentation({
   };
 
   // Transitional states take priority over a briefly stale pause flag.
-  if (status.kind === "connecting") {
+  if (statusKind === "connecting") {
     return {
       ...shared,
       visualState: "connecting",
@@ -81,7 +81,7 @@ export function deriveTrayPresentation({
     };
   }
 
-  if (status.kind === "stopping") {
+  if (statusKind === "stopping") {
     return {
       ...shared,
       visualState: "stopping",
@@ -101,11 +101,11 @@ export function deriveTrayPresentation({
       primaryAction: { action: "resume", disabled: false },
       secondaryAction: { action: "stop", disabled: false },
       canChangeSourceLanguage: false,
-      canShowOverlay: status.kind === "listening",
+      canShowOverlay: statusKind === "listening",
     };
   }
 
-  if (status.kind === "listening") {
+  if (statusKind === "listening") {
     return {
       ...shared,
       visualState: "listening",
@@ -122,7 +122,7 @@ export function deriveTrayPresentation({
     ? { action: "start", disabled: false }
     : { action: "configure", disabled: false };
 
-  if (status.kind === "error") {
+  if (statusKind === "error") {
     return {
       ...shared,
       visualState: "error",

@@ -573,6 +573,7 @@ impl SettingsStore {
             .map_err(|_| CREDENTIAL_STORE_UNAVAILABLE.to_string())
     }
 
+    #[cfg(test)]
     pub fn save_api_key(&self, profile_id: &str, api_key: &str) -> Result<(), String> {
         self.save_credentials(profile_id, &ProviderCredentials::api_key(api_key))
     }

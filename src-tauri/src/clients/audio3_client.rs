@@ -189,13 +189,12 @@ impl Audio3ASRClient {
                             return;
                         }
                     };
+                    let is_task_finished = matches!(&event, Audio3ASRServerEvent::TaskFinished);
                     match &event {
                         Audio3ASRServerEvent::TaskStarted => {
                             inner.task_started.store(true, Ordering::SeqCst);
                         }
-                        Audio3ASRServerEvent::TaskFinished => {
-                            inner.task_finished.store(true, Ordering::SeqCst);
-                        }
+                        Audio3ASRServerEvent::TaskFinished => {}
                         Audio3ASRServerEvent::TaskFailed { .. } => {
                             *inner.terminal_error.lock().await = Some(GENERIC_TASK_ERROR.into());
                         }
@@ -212,7 +211,15 @@ impl Audio3ASRClient {
                     };
                     let is_task_failed =
                         matches!(subtitle_event, LiveTranslateServerEvent::Error { .. });
-                    if events.send(subtitle_event).is_err() {
+                    let send_result = events.send(subtitle_event);
+                    // `finish` disconnects the socket as soon as this flag is
+                    // visible. Publish SessionFinished first so that cleanup
+                    // cannot abort the receive task between provider ack and
+                    // the bridge event needed to drain an authoritative tail.
+                    if is_task_finished {
+                        inner.task_finished.store(true, Ordering::SeqCst);
+                    }
+                    if send_result.is_err() {
                         break;
                     }
                     if is_task_failed {

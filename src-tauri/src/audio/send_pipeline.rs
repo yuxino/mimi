@@ -106,7 +106,7 @@ impl AudioSendPipeline {
                     Ok(()) => {
                         sent_buffer_count += 1;
                         sent_byte_count += bytes as u64;
-                        if sent_buffer_count == 1 || sent_buffer_count % 100 == 0 {
+                        if sent_buffer_count == 1 || sent_buffer_count.is_multiple_of(100) {
                             pipeline_log!(
                                 "audio sent buffers={} bytes={} peakDbFS={}",
                                 sent_buffer_count,

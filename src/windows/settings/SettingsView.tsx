@@ -7,7 +7,7 @@ import {
   isTauri,
   listenSettingsNavigation,
 } from "../../lib/ipc";
-import { useStore } from "../../lib/store";
+import { selectSessionStatusKind, useStore } from "../../lib/store";
 import {
   effectiveTranslationModeForSettings,
   sourceLanguagesForSettings,
@@ -18,7 +18,6 @@ import {
   SOURCE_LANGUAGE_DISPLAY_NAMES,
   TARGET_LANGUAGE_DISPLAY_NAMES,
   TRANSLATION_MODE_DISPLAY_NAMES,
-  type SessionStateEvent,
   type SettingsSnapshot,
   type SourceLanguage,
   type SubtitleAlignment,
@@ -47,7 +46,7 @@ const CATEGORY_SECTION_IDS: Record<SettingsCategory, string> = {
 export function SettingsView() {
   // Subscribe only to state rendered in this window. Subtitle text updates do
   // not re-render settings while a stream is active.
-  const sessionStatus = useStore((state) => state.session.status);
+  const sessionStatusKind = useStore(selectSessionStatusKind);
   const sessionIsActive = useStore((state) => state.session.isActive);
   const settings = useStore((state) => state.settings);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
@@ -91,7 +90,7 @@ export function SettingsView() {
   const effectiveTranslationMode =
     effectiveTranslationModeForSettings(settings);
   const isChangingSession =
-    sessionStatus.kind === "connecting" || sessionStatus.kind === "stopping";
+    sessionStatusKind === "connecting" || sessionStatusKind === "stopping";
 
   const categories: readonly {
     id: SettingsCategory;
@@ -220,7 +219,7 @@ export function SettingsView() {
                     </div>
                     <p className="settings-help">
                       {sourceLanguageHelp(
-                        sessionStatus,
+                        sessionStatusKind,
                         settings,
                         chineseIsOriginalOnly,
                       )}
@@ -509,21 +508,21 @@ function translationModeHelp(mode: TranslationMode): string {
 }
 
 function sourceLanguageHelp(
-  status: SessionStateEvent["status"],
+  statusKind: ReturnType<typeof selectSessionStatusKind>,
   settings: SettingsSnapshot,
   chineseIsOriginalOnly: boolean,
 ): string {
   if (settings.sourceLanguage === "zh") {
     if (!chineseIsOriginalOnly) {
-      return status.kind === "listening"
+      return statusKind === "listening"
         ? I18N.settings.recognizingChineseTranslatedListening
         : I18N.settings.recognizingChineseTranslatedIdle;
     }
-    return status.kind === "listening"
+    return statusKind === "listening"
       ? I18N.settings.recognizingChineseListening
       : I18N.settings.recognizingChineseIdle;
   }
-  if (status.kind === "listening") {
+  if (statusKind === "listening") {
     return I18N.settings.sourceHelpReconnecting;
   }
   return I18N.settings.sourceHelpIdle;

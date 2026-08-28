@@ -51,9 +51,34 @@ export function computeActivityPhase(
   session: SessionStateEvent,
   settings: Pick<SettingsSnapshot, "sourceLanguage" | "targetLanguage">,
 ): OverlayActivityPhaseKind {
-  if (session.isPaused) return "paused";
+  const source = session.subtitles.source;
+  return computeActivityPhaseFromSignals(
+    {
+      statusKind: session.status.kind,
+      isPaused: session.isPaused,
+      detectedLanguage: session.detectedLanguage,
+      isTranslationPending: session.isTranslationPending,
+      hasRecognizingSourceDraft: source.text !== "" && !source.isFinal,
+    },
+    settings,
+  );
+}
 
-  switch (session.status.kind) {
+export interface ActivityPhaseSignals {
+  statusKind: SessionStateEvent["status"]["kind"];
+  isPaused: boolean;
+  detectedLanguage: string | null;
+  isTranslationPending: boolean;
+  hasRecognizingSourceDraft: boolean;
+}
+
+export function computeActivityPhaseFromSignals(
+  signals: ActivityPhaseSignals,
+  settings: Pick<SettingsSnapshot, "sourceLanguage" | "targetLanguage">,
+): OverlayActivityPhaseKind {
+  if (signals.isPaused) return "paused";
+
+  switch (signals.statusKind) {
     case "connecting":
     case "stopping":
       return "connecting";
@@ -61,14 +86,13 @@ export function computeActivityPhase(
       if (
         isWaitingForFinalTranslation(
           settings,
-          session.detectedLanguage,
-          session.isTranslationPending,
+          signals.detectedLanguage,
+          signals.isTranslationPending,
         )
       ) {
         return "translating";
       }
-      const source = session.subtitles.source;
-      if (source.text !== "" && !source.isFinal) {
+      if (signals.hasRecognizingSourceDraft) {
         return "recognizing";
       }
       return "listening";

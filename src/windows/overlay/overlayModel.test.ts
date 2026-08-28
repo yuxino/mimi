@@ -5,6 +5,7 @@ import {
   type SubtitleSnapshot,
 } from "../../lib/types";
 import {
+  computeActivityPhaseFromSignals,
   sourceLanguageButtonTitle,
   visibleLiveSubtitle,
 } from "./overlayModel";
@@ -165,5 +166,45 @@ describe("source language labels", () => {
     expect(sourceLanguageButtonTitle("zh", false)).toBe(
       SOURCE_LANGUAGE_DISPLAY_NAMES.zh,
     );
+  });
+});
+
+describe("activity phase signals", () => {
+  const base = {
+    statusKind: "listening" as const,
+    isPaused: false,
+    detectedLanguage: "ja",
+    isTranslationPending: false,
+    hasRecognizingSourceDraft: false,
+  };
+
+  it("distinguishes recognizing and translating without subtitle text", () => {
+    expect(
+      computeActivityPhaseFromSignals(
+        { ...base, hasRecognizingSourceDraft: true },
+        settings,
+      ),
+    ).toBe("recognizing");
+    expect(
+      computeActivityPhaseFromSignals(
+        { ...base, isTranslationPending: true },
+        settings,
+      ),
+    ).toBe("translating");
+  });
+
+  it("keeps pause and lifecycle transitions ahead of stream activity", () => {
+    expect(
+      computeActivityPhaseFromSignals(
+        { ...base, isPaused: true, isTranslationPending: true },
+        settings,
+      ),
+    ).toBe("paused");
+    expect(
+      computeActivityPhaseFromSignals(
+        { ...base, statusKind: "stopping", hasRecognizingSourceDraft: true },
+        settings,
+      ),
+    ).toBe("connecting");
   });
 });

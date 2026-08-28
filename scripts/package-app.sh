@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Release packaging for the mimi Tauri application. Produces the native
-# bundles for the current platform (macOS: .app + .dmg; Windows: .msi/.nsis)
+# bundles for the current platform (macOS: .app + .dmg; Windows: MSI + NSIS EXE)
 # under src-tauri/target/release/bundle/. Never commit dist/ or signing
 # identities.
 #
@@ -38,7 +38,7 @@ EOF
   echo "using macOS signing identity: $APPLE_SIGNING_IDENTITY"
 fi
 
-npm run tauri build
+npm run tauri -- build -- --locked
 
 BUNDLE_DIR="$PROJECT_DIR/src-tauri/target/release/bundle"
 echo "Bundle produced under: $BUNDLE_DIR"

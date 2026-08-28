@@ -44,14 +44,16 @@ mimiは、日本語の「耳（みみ）」に由来する名前です。デバ�
 | Baidu リアルタイム音声翻訳 | 中国語、英語、日本語、韓国語 | 簡体中国語、英語、日本語 | 超高速 |
 | xAI Grok Voice | 自動 | 簡体中国語、英語、日本語 | 超高速、ターン制 |
 
+Gemini、Azure OpenAI、Volcano Engine、Tencent、Baidu、xAI は、プロトコルのフィクスチャ、モック WebSocket、UI ロジックのテストまで検証済みです。有料アカウントを使うエンドツーエンドの品質と遅延は、全サービスではまだ検証していません。
+
 ### プラットフォームについて
 
 - **Apple シリコン搭載の macOS 13 以降**：GitHub Releases では、開発者がインストールできるアドホック署名済み・未公証の DMG を提供します。初回起動がブロックされた場合は「システム設定 → プライバシーとセキュリティ」で「このまま開く」を選びます。更新後に「画面とシステムオーディオの収録」またはキーチェーンへのアクセスを再度許可する必要がある場合があります。権限に関するローカル QA では、リポジトリ専用の安定した開発 ID を使用します。mimi はシステム音声だけを取得し、画面や自身の音声は収録しません。
-- **Windows プレビュー**：ソースには WASAPI ループバック実装があり、CI は x64 MSI と EXE を生成できます。ただし、Windows 実機でのインストール、信頼警告、資格情報ストレージ、システム音声取得、字幕ウィンドウ、エンドツーエンド字幕フローは未検証です。CI の成功は実機検証の代わりにはなりません。
+- **Windows プレビュー**：ソースには WASAPI ループバック実装があり、CI は x64 MSI と NSIS インストーラーを生成できます。現在のインストーラーには Authenticode 署名がありません。ただし、Windows 実機でのインストール、信頼警告、資格情報ストレージ、システム音声取得、字幕ウィンドウ、エンドツーエンド字幕フローは未検証です。CI の成功は実機検証の代わりにはなりません。
 
 ## ソースからビルド
 
-Rust 1.85+ と Node.js 20+ が必要です（macOS は Xcode Command Line Tools も必要）。
+Rust 1.88+ と Node.js 20.19.x、22.13+、または 24+ が必要です（macOS は Xcode Command Line Tools も必要）。
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
@@ -60,7 +62,7 @@ npm ci
 ./scripts/dev-app.sh     # macOS：安定したアプリ ID で開発実行
 npm run tauri:dev        # Windows：分離された開発設定で実行
 ./scripts/check.sh       # 全チェック（fmt/clippy/テスト/フロントエンドビルド）
-./scripts/package-app.sh # パッケージ化（macOS: .dmg / Windows: .msi/.nsis）
+./scripts/package-app.sh # パッケージ化（macOS: DMG / Windows: MSI / NSIS EXE）
 ```
 
 Windows 向けパッケージは Windows マシンでビルドしてください（Rust の C 依存は macOS から MSVC ターゲットへクロスコンパイルできません）。CI は macOS と Windows の両方で Rust テスト一式を実行します。
