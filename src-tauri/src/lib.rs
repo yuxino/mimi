@@ -420,19 +420,18 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
         })
         .on_tray_icon_event(|tray, event| {
-            // Record the tray icon's screen position for the positioner
-            // plugin; without this, TrayBottomCenter (used by the tray panel)
-            // fails with "Tray position not set" and the panel stays at its
-            // default window position.
+            // Preserve the positioner fallback state as well as passing the
+            // click rectangle to the edge-aware primary placement path.
             tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
             if let TrayIconEvent::Click {
+                rect,
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 ..
             } = event
             {
                 let app = tray.app_handle();
-                windows::TrayPanelManager::toggle(app);
+                windows::TrayPanelManager::toggle(app, &rect);
                 // Refresh the panel's snapshots so its pickers and check
                 // states always match the current session, even if its
                 // webview missed events while hidden.

@@ -42,11 +42,12 @@ impl WindowsSystemAudioCapture {
             .default_output_device()
             .ok_or(SystemAudioCaptureError::NoPlaybackDevice)?;
 
-        // Opening an input stream on the output device enables WASAPI
-        // loopback: we receive the system mix (this app plays no audio, so
-        // there is no echo).
+        // CPAL enables WASAPI loopback when an input stream is built on an
+        // output device. Its configuration must still come from that output
+        // endpoint: `default_input_config()` rejects render devices before a
+        // loopback stream can be created.
         let input_config = output_device
-            .default_input_config()
+            .default_output_config()
             .map_err(|_| SystemAudioCaptureError::NativeStartFailed)?;
         let sample_format = input_config.sample_format();
         let channel_count = input_config.channels() as usize;

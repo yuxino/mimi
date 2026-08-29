@@ -433,6 +433,10 @@ impl From<&TranslationSessionState> for SessionStateEvent {
     }
 }
 
+fn status_should_show_overlay(status: &SessionStatus) -> bool {
+    status.is_active() || matches!(status, SessionStatus::Error(_))
+}
+
 #[derive(Clone)]
 pub struct SessionManager {
     app: AppHandle,
@@ -534,6 +538,14 @@ impl SessionManager {
             self.has_active_session(),
             self.lifecycle_operations.load(Ordering::SeqCst),
         )
+    }
+
+    /// Errors remain visible in the overlay until the user retries or stops.
+    /// This is intentionally separate from `is_active`: tray and shortcut
+    /// actions must still treat an error as a stopped session that can retry.
+    pub fn should_show_overlay(&self) -> bool {
+        self.is_active()
+            || status_should_show_overlay(&self.controller.lock().unwrap().state.status)
     }
 
     /// True only for an established/in-flight session, excluding a settings
@@ -2096,7 +2108,8 @@ impl SessionManager {
 
     fn publish_state_now(self: &Arc<Self>) {
         let event = self.current_state_event();
-        let is_active = event.is_active;
+        let should_show_overlay =
+            event.is_active || matches!(&event.status, StatusPayload::Error { .. });
         let is_collapsed = event.is_overlay_collapsed;
         let preferences = self.settings.preferences();
         let click_through =
@@ -2104,7 +2117,7 @@ impl SessionManager {
         let _ = self.app.emit("session-state", event);
         OverlayWindowManager::sync_presentation(
             &self.app,
-            is_active,
+            should_show_overlay,
             is_collapsed,
             click_through,
             preferences.subtitle_blends_with_background,
@@ -2142,6 +2155,15 @@ impl SessionManager {
 #[cfg(test)]
 mod lifecycle_tests {
     use super::*;
+
+    #[test]
+    fn terminal_error_remains_visible_but_is_not_an_active_session() {
+        let status = SessionStatus::Error("capture failed".into());
+
+        assert!(!status.is_active());
+        assert!(status_should_show_overlay(&status));
+        assert!(!status_should_show_overlay(&SessionStatus::Idle));
+    }
 
     #[test]
     fn recovery_backoff_is_bounded_exponential_and_deterministic() {

@@ -435,7 +435,7 @@ fn apply_settings_draft_guarded(
         let preferences = state.settings.preferences();
         OverlayWindowManager::sync_presentation(
             app,
-            state.session.is_active(),
+            state.session.should_show_overlay(),
             state.session.is_overlay_collapsed(),
             preferences.overlay_locked || preferences.subtitle_blends_with_background,
             preferences.subtitle_blends_with_background,
@@ -640,7 +640,7 @@ pub fn overlay_set_collapsed(
     OverlayWindowManager::set_collapsed(&app, &state.overlay, &state.settings, collapsed);
     OverlayWindowManager::sync_presentation(
         &app,
-        state.session.is_active(),
+        state.session.should_show_overlay(),
         collapsed,
         preferences.overlay_locked || preferences.subtitle_blends_with_background,
         preferences.subtitle_blends_with_background,
@@ -668,7 +668,7 @@ pub fn overlay_set_locked(
     let preferences = state.settings.preferences();
     OverlayWindowManager::sync_presentation(
         &app,
-        state.session.is_active(),
+        state.session.should_show_overlay(),
         state.session.is_overlay_collapsed(),
         locked || preferences.subtitle_blends_with_background,
         preferences.subtitle_blends_with_background,
@@ -682,7 +682,7 @@ pub fn overlay_set_locked(
 
 #[tauri::command]
 pub fn overlay_show(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    if state.session.is_active() {
+    if state.session.should_show_overlay() {
         let preferences = state.settings.preferences();
         OverlayWindowManager::sync_presentation(
             &app,
