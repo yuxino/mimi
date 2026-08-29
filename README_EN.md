@@ -49,7 +49,7 @@ Gemini, Azure OpenAI, Volcano Engine, Tencent, Baidu, and xAI have protocol, moc
 ### Platform notes
 
 - **macOS 13 or later on Apple silicon**: GitHub Releases provide an ad-hoc-signed DMG without Apple notarization. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Updates may require approving Screen & System Audio Recording or Keychain access again. mimi captures system audio only, never the screen, and excludes its own sound.
-- **Windows preview**: GitHub Releases provide x64 MSI and NSIS installers without Authenticode signing. Real-device installation, trust prompts, credential storage, system-audio capture, overlay behavior, and the complete subtitle flow have not yet been accepted.
+- **Windows preview**: GitHub Releases provide x64 MSI and NSIS installers without Authenticode signing, so Windows Defender SmartScreen may warn. Real-device installation, trust prompts, credential storage, system-audio capture, overlay behavior, and the complete subtitle flow have not yet been accepted.
 
 ## Build from source
 

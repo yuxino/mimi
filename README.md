@@ -49,7 +49,7 @@ Gemini、Azure OpenAI、豆包、腾讯云、百度和 xAI 已通过协议、模
 ### 平台说明
 
 - **Apple 芯片上的 macOS 13 或更高版本**：GitHub Releases 提供使用临时签名且未经 Apple 公证的 DMG。如果首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。更新后可能需要重新允许「屏幕与系统音频录制」或钥匙串访问。mimi 只采集系统音频，不录制屏幕，并会排除自身声音。
-- **Windows 预览**：GitHub Releases 提供 x64 MSI 和 NSIS 安装程序，但尚未做 Authenticode 签名。真机安装、信任提示、凭据存储、系统音频采集、浮窗和完整字幕流程尚未验收。
+- **Windows 预览**：GitHub Releases 提供 x64 MSI 和 NSIS 安装程序，但尚未做 Authenticode 签名，Windows Defender SmartScreen 可能显示警告。真机安装、信任提示、凭据存储、系统音频采集、浮窗和完整字幕流程尚未验收。
 
 ## 从源码构建
 

@@ -380,4 +380,4 @@ jobs:
             exit 1
           fi
 
-          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "Developer-installable packages for macOS (Apple Silicon) and Windows. The macOS package is ad-hoc signed and not notarized; on first launch, choose Open Anyway in System Settings → Privacy & Security if macOS blocks it. Updates may require approving Screen & System Audio Recording and Keychain access again." --draft=false --latest
+          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "Developer-installable packages for macOS (Apple Silicon) and Windows x64. The macOS package is ad-hoc signed and not notarized; on first launch, choose Open Anyway in System Settings → Privacy & Security if macOS blocks it. Updates may require approving Screen & System Audio Recording and Keychain access again. The Windows MSI and NSIS installers are an unsigned preview without Authenticode signing, so Windows Defender SmartScreen may warn; real-device acceptance is still incomplete." --draft=false --latest
