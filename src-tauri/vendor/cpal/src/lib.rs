@@ -1,0 +1,1096 @@
+//! Low-level library for audio input and output, written in Rust.
+//!
+//! For higher-level audio playback and capture, consider
+//! [Rodio](https://github.com/RustAudio/rodio) or similar libraries.
+//!
+//! # How to use cpal
+//!
+//! Here are some concepts cpal exposes:
+//!
+//! - A [`Host`] provides access to the available audio devices on the system.
+//!   Some platforms have more than one host available, but every platform supported by CPAL has at
+//!   least one [default_host] that is guaranteed to be available.
+//! - A [`Device`] is an audio device that may have any number of input and
+//!   output streams.
+//! - A [`Stream`] is an open flow of audio data. Input streams allow you to
+//!   receive audio data, output streams allow you to play audio data. You must choose which
+//!   [Device] will run your stream before you can create one. Often, a default device can be
+//!   retrieved via the [Host].
+//!
+//! The first step is to initialise the [`Host`]:
+//!
+//! ```
+//! use cpal::traits::HostTrait;
+//! let host = cpal::default_host();
+//! ```
+//!
+//! Then choose an available [`Device`]. The easiest way is to use the default input or output
+//! `Device` via the [`default_input_device()`] or [`default_output_device()`] methods on `host`.
+//!
+//! Alternatively, you can enumerate all the available devices with the [`devices()`] method.
+//! Beware that the `default_*_device()` functions return an `Option<Device>` in case no device
+//! is available for that stream type on the system.
+//!
+//! ```no_run
+//! # use cpal::traits::HostTrait;
+//! # let host = cpal::default_host();
+//! let device = host.default_output_device().expect("no output device available");
+//! ```
+//!
+//! Before we can create a stream, we must decide what the configuration of the audio stream is
+//! going to be.
+//! You can query all the supported configurations with the
+//! [`supported_input_configs()`] and [`supported_output_configs()`] methods.
+//! These produce a list of [`SupportedStreamConfigRange`] structs which can later be turned into
+//! actual [`SupportedStreamConfig`] structs.
+//!
+//! If you don't want to query the list of configs,
+//! you can also build your own [`StreamConfig`] manually, but doing so could lead to an error when
+//! building the stream if the config is not supported by the device.
+//!
+//! > **Note**: the `supported_input/output_configs()` methods
+//! > could return an error for example if the device has been disconnected.
+//!
+//! ```no_run
+//! use cpal::traits::{DeviceTrait, HostTrait};
+//! # let host = cpal::default_host();
+//! # let device = host.default_output_device().unwrap();
+//! let mut supported_configs_range = device.supported_output_configs()
+//!     .expect("error while querying configs");
+//! let supported_config = supported_configs_range.next()
+//!     .expect("no supported config?!")
+//!     .with_max_sample_rate();
+//! ```
+//!
+//! Now that we have everything for the stream, we are ready to create it from our selected device:
+//!
+//! ```no_run
+//! use cpal::Data;
+//! use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+//! # let host = cpal::default_host();
+//! # let device = host.default_output_device().unwrap();
+//! # let config = device.default_output_config().unwrap().into();
+//! let stream = device.build_output_stream(
+//!     config,
+//!     move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+//!         // react to stream events and read or write stream data here.
+//!     },
+//!     move |err| {
+//!         // react to errors here.
+//!     },
+//!     None // Timeout for stream initialization: None = wait indefinitely,
+//!          // Some(Duration) = time to wait for the backend to initialize the stream.
+//! );
+//! ```
+//!
+//! Streams are returned in a paused state. Once the stream has been started with
+//! [`Stream::play`](traits::StreamTrait::play), the selected audio device will periodically call
+//! the data callback that was passed to the function. For input streams, the callback receives
+//! `&`[`Data`] containing captured audio samples. For output streams, the callback receives
+//! `&mut`[`Data`] to be filled with audio samples for playback.
+//!
+//! > **Note**: Creating and running a stream will *not* block the thread. On modern platforms, the
+//! > given callback is called by a dedicated, high-priority thread responsible for delivering
+//! > audio data to the system's audio device in a timely manner. On older platforms that only
+//! > provide a blocking API (e.g. ALSA), CPAL will create a thread in order to consistently
+//! > provide non-blocking behaviour (currently this is a thread per stream, but this may change to
+//! > use a single thread for all streams). *If this is an issue for your platform or design,
+//! > please share your issue and use-case with the CPAL team on the GitHub issue tracker for
+//! > consideration.*
+//!
+//! In this example, we simply fill the given output buffer with silence.
+//!
+//! ```no_run
+//! use cpal::{Data, Sample, SampleFormat, FromSample};
+//! use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+//! # let host = cpal::default_host();
+//! # let device = host.default_output_device().unwrap();
+//! # let supported_config = device.default_output_config().unwrap();
+//! let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
+//! let sample_format = supported_config.sample_format();
+//! let config = supported_config.into();
+//! let stream = match sample_format {
+//!     SampleFormat::F32 => device.build_output_stream(config, write_silence::<f32>, err_fn, None),
+//!     SampleFormat::I16 => device.build_output_stream(config, write_silence::<i16>, err_fn, None),
+//!     SampleFormat::U16 => device.build_output_stream(config, write_silence::<u16>, err_fn, None),
+//!     sample_format => panic!("Unsupported sample format '{sample_format}'")
+//! }.unwrap();
+//!
+//! fn write_silence<T: Sample>(data: &mut [T], _: &cpal::OutputCallbackInfo) {
+//!     for sample in data.iter_mut() {
+//!         *sample = Sample::EQUILIBRIUM;
+//!     }
+//! }
+//! ```
+//!
+//! Streams are always returned in a paused state, so we must call
+//! [`Stream::play`](traits::StreamTrait::play) to start running the data callback.
+//!
+//! ```no_run
+//! # use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+//! # let host = cpal::default_host();
+//! # let device = host.default_output_device().unwrap();
+//! # let supported_config = device.default_output_config().unwrap();
+//! # let sample_format = supported_config.sample_format();
+//! # let config = supported_config.into();
+//! # let data_fn = move |_data: &mut cpal::Data, _: &cpal::OutputCallbackInfo| {};
+//! # let err_fn = move |_err| {};
+//! # let stream = device.build_output_stream_raw(config, sample_format, data_fn, err_fn, None).unwrap();
+//! stream.play().unwrap();
+//! ```
+//!
+//! Some devices support pausing the audio stream. This can be useful for saving energy in moments
+//! of silence.
+//!
+//! ```no_run
+//! # use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+//! # let host = cpal::default_host();
+//! # let device = host.default_output_device().unwrap();
+//! # let supported_config = device.default_output_config().unwrap();
+//! # let sample_format = supported_config.sample_format();
+//! # let config = supported_config.into();
+//! # let data_fn = move |_data: &mut cpal::Data, _: &cpal::OutputCallbackInfo| {};
+//! # let err_fn = move |_err| {};
+//! # let stream = device.build_output_stream_raw(config, sample_format, data_fn, err_fn, None).unwrap();
+//! stream.pause().unwrap();
+//! ```
+//!
+//! [`default_input_device()`]: traits::HostTrait::default_input_device
+//! [`default_output_device()`]: traits::HostTrait::default_output_device
+//! [`devices()`]: traits::HostTrait::devices
+//! [`supported_input_configs()`]: traits::DeviceTrait::supported_input_configs
+//! [`supported_output_configs()`]: traits::DeviceTrait::supported_output_configs
+
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
+// Extern crate declarations with `#[macro_use]` must unfortunately be at crate root.
+#[cfg(all(
+    target_arch = "wasm32",
+    target_os = "unknown",
+    feature = "wasm-bindgen"
+))]
+extern crate js_sys;
+#[cfg(all(
+    target_arch = "wasm32",
+    target_os = "unknown",
+    feature = "wasm-bindgen"
+))]
+extern crate wasm_bindgen;
+#[cfg(all(
+    target_arch = "wasm32",
+    target_os = "unknown",
+    feature = "wasm-bindgen"
+))]
+extern crate web_sys;
+
+pub use device_description::{
+    DeviceDescription, DeviceDescriptionBuilder, DeviceDirection, DeviceType, InterfaceType,
+};
+pub use error::*;
+pub use platform::{
+    available_hosts, default_host, host_from_id, Device, Devices, Host, HostId, Stream,
+    SupportedInputConfigs, SupportedOutputConfigs, ALL_HOSTS,
+};
+pub use sample_format::{FromSample, Sample, SampleFormat, SizedSample, I24, U24};
+#[cfg(all(
+    target_arch = "wasm32",
+    target_os = "unknown",
+    feature = "wasm-bindgen"
+))]
+use wasm_bindgen::prelude::*;
+
+pub mod device_description;
+mod error;
+mod host;
+pub mod platform;
+mod sample_format;
+mod timestamp;
+pub mod traits;
+
+/// Iterator of devices wrapped in a filter to only include certain device types
+pub type DevicesFiltered<I> = std::iter::Filter<I, fn(&<I as Iterator>::Item) -> bool>;
+
+/// A host's device iterator yielding only *input* devices.
+pub type InputDevices<I> = DevicesFiltered<I>;
+
+/// A host's device iterator yielding only *output* devices.
+pub type OutputDevices<I> = DevicesFiltered<I>;
+
+/// Number of channels.
+pub type ChannelCount = u16;
+
+/// The number of samples processed per second for a single channel of audio.
+pub type SampleRate = u32;
+
+/// 44.1 kHz: the CD standard, widely used in music production and consumer audio.
+pub const SAMPLE_RATE_CD: SampleRate = 44_100;
+
+/// 48 kHz: the EBU/SMPTE broadcast standard, default on most modern hardware.
+pub const SAMPLE_RATE_48K: SampleRate = 48_000;
+
+/// A frame represents one sample for each channel. For example, with stereo audio,
+/// one frame contains two samples (left and right channels).
+pub type FrameCount = u32;
+
+/// A stable identifier for an audio device across all supported platforms.
+///
+/// Device IDs should remain stable across application restarts and can be serialized using `Display`/`FromStr`.
+///
+/// A device ID consists of a [`HostId`] identifying the audio backend and a device-specific identifier string.
+///
+/// # Example
+///
+/// ```no_run
+/// use cpal::traits::{HostTrait, DeviceTrait};
+/// use cpal::DeviceId;
+/// use std::str::FromStr;
+///
+/// let host = cpal::default_host();
+/// let device = host.default_output_device().unwrap();
+/// let device_id = device.id().unwrap();
+///
+/// // Serialize to string (e.g., for storage in config file)
+/// let id_string = device_id.to_string();
+/// println!("Device ID: {}", id_string); // e.g., "wasapi:device_identifier"
+///
+/// // Deserialize from string
+/// match DeviceId::from_str(&id_string) {
+///     Ok(parsed_id) => {
+///         // Retrieve the device by its ID
+///         if let Some(device) = host.device_by_id(&parsed_id) {
+///             println!("Found device: {:?}", device.id());
+///         }
+///     }
+///     Err(e) => eprintln!("Failed to parse device ID: {}", e),
+/// }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DeviceId(crate::platform::HostId, Box<str>);
+
+impl DeviceId {
+    /// Creates a `DeviceId` from a host identifier and a device-specific identifier string.
+    ///
+    /// This constructor is used by backend implementations. Application code should obtain
+    /// `DeviceId` values through [`DeviceTrait::id`] and persist them via [`Display`]/[`FromStr`].
+    ///
+    /// [`DeviceTrait::id`]: crate::traits::DeviceTrait::id
+    /// [`Display`]: std::fmt::Display
+    /// [`FromStr`]: std::str::FromStr
+    pub fn new(host: crate::platform::HostId, id: impl AsRef<str>) -> Self {
+        Self(host, Box::from(id.as_ref()))
+    }
+
+    /// Returns the host this device belongs to.
+    pub fn host(&self) -> crate::platform::HostId {
+        self.0
+    }
+
+    /// Returns the backend-specific device identifier string.
+    pub fn id(&self) -> &str {
+        &self.1
+    }
+}
+
+impl std::fmt::Display for DeviceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.host(), self.id())
+    }
+}
+
+impl std::str::FromStr for DeviceId {
+    type Err = Error;
+
+    /// Parse a device identifier from its string representation (e.g. `"alsa:hw:0,0"`).
+    ///
+    /// The format is `"<host>:<device>"` where `<host>` is the lowercase host name (see
+    /// [`HostId`]) and `<device>` is the device-specific identifier string.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::InvalidInput`] if the string is not in `"host:device"` format.
+    /// - [`ErrorKind::UnsupportedOperation`] if the host portion names a host not available on this
+    ///   platform.
+    ///
+    /// [`ErrorKind::InvalidInput`]: ErrorKind::InvalidInput
+    /// [`ErrorKind::UnsupportedOperation`]: ErrorKind::UnsupportedOperation
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (host_str, device_str) = s.split_once(':').ok_or_else(|| {
+            Error::with_message(
+                ErrorKind::InvalidInput,
+                format!("failed to parse device ID \"{s}\": expected \"host:device_id\" format"),
+            )
+        })?;
+
+        let host_id = crate::platform::HostId::from_str(host_str)?;
+
+        Ok(Self::new(host_id, device_str))
+    }
+}
+
+/// The buffer size requests the callback size for audio streams.
+///
+/// This controls the approximate size of the audio buffer passed to your callback.
+/// The actual callback size depends on the host/platform implementation and hardware
+/// constraints, and may differ from or vary around the requested size.
+///
+/// ## Callback Size Expectations
+///
+/// When you specify [`BufferSize::Fixed(x)`], you are **requesting** that callbacks
+/// receive approximately `x` frames of audio data. However, **no guarantees can be
+/// made** about the actual callback size:
+///
+/// - The host may round to hardware-supported values
+/// - Different devices have different constraints
+/// - The callback size may vary between calls (especially on mobile platforms)
+/// - The actual size might be larger or smaller than requested
+///
+/// ## Latency Considerations
+///
+/// [`BufferSize::Default`] uses the host's default buffer size, which may be
+/// surprisingly large, leading to higher latency. If low latency is desired,
+/// [`BufferSize::Fixed`] should be used with a small value in accordance with
+/// the [`SupportedBufferSize`] range from [`SupportedStreamConfig`].
+///
+/// Smaller buffer sizes reduce latency but may increase CPU usage and risk audio
+/// dropouts if the callback cannot process audio quickly enough.
+///
+/// # Example
+///
+/// ```no_run
+/// use cpal::traits::{DeviceTrait, HostTrait};
+/// use cpal::{BufferSize, SupportedBufferSize};
+///
+/// let host = cpal::default_host();
+/// let device = host.default_output_device().unwrap();
+/// let config = device.default_output_config().unwrap();
+///
+/// // Check supported buffer size range
+/// match config.buffer_size() {
+///     SupportedBufferSize::Range { min, max } => {
+///         println!("Buffer size range: {} - {}", min, max);
+///         // Request a small buffer for low latency
+///         let mut stream_config = config.config();
+///         stream_config.buffer_size = BufferSize::Fixed(256);
+///     }
+///     SupportedBufferSize::Unknown => {
+///         // Platform doesn't expose buffer size control
+///         println!("Buffer size cannot be queried on this platform");
+///     }
+/// }
+/// ```
+///
+/// [`BufferSize::Default`]: BufferSize::Default
+/// [`BufferSize::Fixed`]: BufferSize::Fixed
+/// [`BufferSize::Fixed(x)`]: BufferSize::Fixed
+/// [`SupportedBufferSize`]: SupportedStreamConfig::buffer_size
+/// [`SupportedStreamConfig`]: SupportedStreamConfig
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BufferSize {
+    #[default]
+    Default,
+    Fixed(FrameCount),
+}
+
+#[cfg(all(
+    target_arch = "wasm32",
+    target_os = "unknown",
+    feature = "wasm-bindgen"
+))]
+impl wasm_bindgen::describe::WasmDescribe for BufferSize {
+    fn describe() {
+        <Option<FrameCount> as wasm_bindgen::describe::WasmDescribe>::describe();
+    }
+}
+
+#[cfg(all(
+    target_arch = "wasm32",
+    target_os = "unknown",
+    feature = "wasm-bindgen"
+))]
+impl wasm_bindgen::convert::IntoWasmAbi for BufferSize {
+    type Abi = <Option<FrameCount> as wasm_bindgen::convert::IntoWasmAbi>::Abi;
+
+    fn into_abi(self) -> Self::Abi {
+        match self {
+            Self::Default => None,
+            Self::Fixed(fc) => Some(fc),
+        }
+        .into_abi()
+    }
+}
+
+#[cfg(all(
+    target_arch = "wasm32",
+    target_os = "unknown",
+    feature = "wasm-bindgen"
+))]
+impl wasm_bindgen::convert::FromWasmAbi for BufferSize {
+    type Abi = <Option<FrameCount> as wasm_bindgen::convert::FromWasmAbi>::Abi;
+
+    unsafe fn from_abi(js: Self::Abi) -> Self {
+        match Option::<FrameCount>::from_abi(js) {
+            None => Self::Default,
+            Some(fc) => Self::Fixed(fc),
+        }
+    }
+}
+
+/// The set of parameters used to describe how to open a stream.
+///
+/// The sample format is omitted in favour of using a sample type.
+///
+/// See also [`BufferSize`] for details on buffer size behavior and latency considerations.
+#[cfg_attr(
+    all(
+        target_arch = "wasm32",
+        target_os = "unknown",
+        feature = "wasm-bindgen"
+    ),
+    wasm_bindgen
+)]
+#[derive(Clone, Debug, Eq, PartialEq, Copy)]
+pub struct StreamConfig {
+    pub channels: ChannelCount,
+    pub sample_rate: SampleRate,
+    pub buffer_size: BufferSize,
+}
+
+/// Describes the minimum and maximum supported buffer size for the device
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SupportedBufferSize {
+    Range {
+        min: FrameCount,
+        max: FrameCount,
+    },
+    /// In the case that the platform provides no way of getting the default
+    /// buffer size before starting a stream.
+    #[default]
+    Unknown,
+}
+
+/// Describes a range of supported stream configurations, retrieved via the
+/// [`Device::supported_input/output_configs`](traits::DeviceTrait#required-methods) method.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SupportedStreamConfigRange {
+    pub(crate) channels: ChannelCount,
+    /// Minimum value for the sample rate of the supported formats.
+    pub(crate) min_sample_rate: SampleRate,
+    /// Maximum value for the sample rate of the supported formats.
+    pub(crate) max_sample_rate: SampleRate,
+    /// Buffer size ranges supported by the device
+    pub(crate) buffer_size: SupportedBufferSize,
+    /// Type of data expected by the device.
+    pub(crate) sample_format: SampleFormat,
+}
+
+/// Common iterator types used by backend implementations.
+///
+/// All backends use these same concrete iterator types for supported stream configurations.
+#[allow(dead_code)]
+pub(crate) mod iter {
+    use super::SupportedStreamConfigRange;
+
+    /// Iterator type for supported input stream configurations.
+    ///
+    /// This is the iterator type returned by all backend implementations of
+    /// [`DeviceTrait::supported_input_configs`](crate::traits::DeviceTrait::supported_input_configs).
+    pub type SupportedInputConfigs = std::vec::IntoIter<SupportedStreamConfigRange>;
+
+    /// Iterator type for supported output stream configurations.
+    ///
+    /// This is the iterator type returned by all backend implementations of
+    /// [`DeviceTrait::supported_output_configs`](crate::traits::DeviceTrait::supported_output_configs).
+    pub type SupportedOutputConfigs = std::vec::IntoIter<SupportedStreamConfigRange>;
+}
+
+/// Describes a single supported stream configuration, retrieved via either a
+/// [`SupportedStreamConfigRange`] instance or one of the
+/// [`Device::default_input/output_config`](traits::DeviceTrait#required-methods) methods.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SupportedStreamConfig {
+    channels: ChannelCount,
+    sample_rate: SampleRate,
+    buffer_size: SupportedBufferSize,
+    sample_format: SampleFormat,
+}
+
+/// A buffer of dynamically typed audio data, passed to raw stream callbacks.
+///
+/// Raw input stream callbacks receive `&Data`, while raw output stream callbacks expect `&mut Data`.
+#[derive(Debug)]
+pub struct Data {
+    data: *mut (),
+    len: usize,
+    sample_format: SampleFormat,
+}
+
+pub use timestamp::{
+    InputCallbackInfo, InputStreamTimestamp, OutputCallbackInfo, OutputStreamTimestamp,
+    StreamInstant,
+};
+
+impl SupportedStreamConfig {
+    pub fn new(
+        channels: ChannelCount,
+        sample_rate: SampleRate,
+        buffer_size: SupportedBufferSize,
+        sample_format: SampleFormat,
+    ) -> Self {
+        Self {
+            channels,
+            sample_rate,
+            buffer_size,
+            sample_format,
+        }
+    }
+
+    pub fn channels(&self) -> ChannelCount {
+        self.channels
+    }
+
+    pub fn sample_rate(&self) -> SampleRate {
+        self.sample_rate
+    }
+
+    pub fn buffer_size(&self) -> &SupportedBufferSize {
+        &self.buffer_size
+    }
+
+    pub fn sample_format(&self) -> SampleFormat {
+        self.sample_format
+    }
+
+    pub fn config(&self) -> StreamConfig {
+        StreamConfig {
+            channels: self.channels,
+            sample_rate: self.sample_rate,
+            buffer_size: BufferSize::Default,
+        }
+    }
+}
+
+// Note: Data does not implement `is_empty()` because it always contains a valid audio buffer
+// by design. The buffer may contain silence, but it is never structurally empty.
+#[allow(clippy::len_without_is_empty)]
+impl Data {
+    /// Constructor for host implementations to use.
+    ///
+    /// # Safety
+    /// The following requirements must be met in order for the safety of `Data`'s API.
+    /// - The `data` pointer must point to the first sample in the slice containing all samples.
+    /// - The `len` must describe the length of the buffer as a number of samples in the expected
+    ///   format specified via the `sample_format` argument.
+    /// - The `sample_format` must correctly represent the underlying sample data delivered/expected
+    ///   by the stream.
+    pub unsafe fn from_parts(data: *mut (), len: usize, sample_format: SampleFormat) -> Self {
+        Self {
+            data,
+            len,
+            sample_format,
+        }
+    }
+
+    /// The sample format of the internal audio data.
+    pub fn sample_format(&self) -> SampleFormat {
+        self.sample_format
+    }
+
+    /// The full length of the buffer in samples.
+    ///
+    /// The returned length is the same length as the slice of type `T` that would be returned via
+    /// [`as_slice`](Self::as_slice) given a sample type that matches the inner sample format.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// The raw slice of memory representing the underlying audio data as a slice of bytes.
+    ///
+    /// It is up to the user to interpret the slice of memory based on [`Data::sample_format`].
+    pub fn bytes(&self) -> &[u8] {
+        let len = self.len * self.sample_format.sample_size();
+        // The safety of this block relies on correct construction of the `Data` instance.
+        // See the unsafe `from_parts` constructor for these requirements.
+        unsafe { std::slice::from_raw_parts(self.data as *const u8, len) }
+    }
+
+    /// The raw slice of memory representing the underlying audio data as a slice of bytes.
+    ///
+    /// It is up to the user to interpret the slice of memory based on [`Data::sample_format`].
+    pub fn bytes_mut(&mut self) -> &mut [u8] {
+        let len = self.len * self.sample_format.sample_size();
+        // The safety of this block relies on correct construction of the `Data` instance. See
+        // the unsafe `from_parts` constructor for these requirements.
+        unsafe { std::slice::from_raw_parts_mut(self.data as *mut u8, len) }
+    }
+
+    /// Access the data as a slice of sample type `T`.
+    ///
+    /// Returns `None` if the sample type does not match the expected sample format.
+    pub fn as_slice<T>(&self) -> Option<&[T]>
+    where
+        T: SizedSample,
+    {
+        if T::FORMAT == self.sample_format {
+            // The safety of this block relies on correct construction of the `Data` instance. See
+            // the unsafe `from_parts` constructor for these requirements.
+            unsafe { Some(std::slice::from_raw_parts(self.data as *const T, self.len)) }
+        } else {
+            None
+        }
+    }
+
+    /// Access the data as a slice of sample type `T`.
+    ///
+    /// Returns `None` if the sample type does not match the expected sample format.
+    pub fn as_slice_mut<T>(&mut self) -> Option<&mut [T]>
+    where
+        T: SizedSample,
+    {
+        if T::FORMAT == self.sample_format {
+            // The safety of this block relies on correct construction of the `Data` instance. See
+            // the unsafe `from_parts` constructor for these requirements.
+            unsafe {
+                Some(std::slice::from_raw_parts_mut(
+                    self.data as *mut T,
+                    self.len,
+                ))
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl SupportedStreamConfigRange {
+    pub fn new(
+        channels: ChannelCount,
+        min_sample_rate: SampleRate,
+        max_sample_rate: SampleRate,
+        buffer_size: SupportedBufferSize,
+        sample_format: SampleFormat,
+    ) -> Self {
+        Self {
+            channels,
+            min_sample_rate,
+            max_sample_rate,
+            buffer_size,
+            sample_format,
+        }
+    }
+
+    pub fn channels(&self) -> ChannelCount {
+        self.channels
+    }
+
+    pub fn min_sample_rate(&self) -> SampleRate {
+        self.min_sample_rate
+    }
+
+    pub fn max_sample_rate(&self) -> SampleRate {
+        self.max_sample_rate
+    }
+
+    pub fn buffer_size(&self) -> &SupportedBufferSize {
+        &self.buffer_size
+    }
+
+    pub fn sample_format(&self) -> SampleFormat {
+        self.sample_format
+    }
+
+    /// Retrieve a [`SupportedStreamConfig`] with the given sample rate.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given `sample_rate` is outside the range specified within
+    /// this [`SupportedStreamConfigRange`] instance. For a non-panicking
+    /// variant, use [`try_with_sample_rate`](#method.try_with_sample_rate).
+    pub fn with_sample_rate(self, sample_rate: SampleRate) -> SupportedStreamConfig {
+        self.try_with_sample_rate(sample_rate)
+            .expect("sample rate out of range")
+    }
+
+    /// Retrieve a [`SupportedStreamConfig`] with the given sample rate.
+    ///
+    /// Returns `None` if the given sample rate is outside the range specified
+    /// within this [`SupportedStreamConfigRange`] instance.
+    pub fn try_with_sample_rate(self, sample_rate: SampleRate) -> Option<SupportedStreamConfig> {
+        if self.min_sample_rate <= sample_rate && sample_rate <= self.max_sample_rate {
+            Some(SupportedStreamConfig {
+                channels: self.channels,
+                sample_rate,
+                sample_format: self.sample_format,
+                buffer_size: self.buffer_size,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Turns this [`SupportedStreamConfigRange`] into a [`SupportedStreamConfig`] corresponding to the maximum sample rate.
+    #[inline]
+    pub fn with_max_sample_rate(self) -> SupportedStreamConfig {
+        SupportedStreamConfig {
+            channels: self.channels,
+            sample_rate: self.max_sample_rate,
+            sample_format: self.sample_format,
+            buffer_size: self.buffer_size,
+        }
+    }
+
+    /// Returns `true` if `rate` falls within `[min_sample_rate, max_sample_rate]`.
+    pub fn contains_rate(&self, rate: SampleRate) -> bool {
+        self.min_sample_rate <= rate && rate <= self.max_sample_rate
+    }
+
+    /// Retrieve a [`SupportedStreamConfig`] with a standard sample rate.
+    ///
+    /// The preferred rate is selected in order:
+    /// 1. 48 kHz as the dominant native rate on modern hardware.
+    /// 2. 44.1 kHz as the standard CD/consumer rate.
+    ///
+    /// Returns `None` if neither standard rate falls within the range specified within this
+    /// [`SupportedStreamConfigRange`] instance.
+    pub fn try_with_standard_sample_rate(self) -> Option<SupportedStreamConfig> {
+        for rate in [SAMPLE_RATE_48K, SAMPLE_RATE_CD] {
+            if self.contains_rate(rate) {
+                return Some(self.with_sample_rate(rate));
+            }
+        }
+        None
+    }
+
+    /// Retrieve a [`SupportedStreamConfig`] with a standard sample rate.
+    ///
+    /// The preferred rate is selected in order:
+    /// 1. 48 kHz as the dominant native rate on modern hardware.
+    /// 2. 44.1 kHz as the standard CD/consumer rate.
+    ///
+    /// # Panics
+    ///
+    /// Panics if neither standard rate falls within the range specified within this
+    /// [`SupportedStreamConfigRange`] instance. For a non-panicking variant, use
+    /// [`try_with_standard_sample_rate`](Self::try_with_standard_sample_rate).
+    pub fn with_standard_sample_rate(self) -> SupportedStreamConfig {
+        self.try_with_standard_sample_rate()
+            .expect("no standard sample rate (48000 or 44100 Hz) in supported range")
+    }
+
+    /// A comparison function which compares two [`SupportedStreamConfigRange`]s in terms of their
+    /// priority of use as a default stream format.
+    ///
+    /// Some backends do not provide a default stream format for their audio devices. In these
+    /// cases, CPAL attempts to decide on a reasonable default format for the user. To do this we
+    /// use the "greatest" of all supported stream formats when compared with this method.
+    ///
+    /// [`SupportedStreamConfig`]s are prioritised by the following heuristics, applied in order:
+    ///
+    /// **Channels**:
+    ///
+    /// 1. Stereo
+    /// 2. Mono
+    /// 3. Highest available channel count
+    ///
+    /// **Sample format** (most preferred first):
+    ///
+    /// F32 is ranked highest as the universal realtime audio format, followed by F64. Standard
+    /// integer widths descend by bit depth (I32 > I24 > I16); 64-bit integers are deprioritised
+    /// below I16 as accumulator types rather than native stream formats. Signed beats unsigned
+    /// at the same width. DSD ranks last as non-PCM.
+    ///
+    /// **Sample rate**:
+    ///
+    /// 1. 48 kHz (EBU/SMPTE broadcast standard)
+    /// 2. 44.1 kHz (CD standard)
+    /// 3. Highest supported sample rate
+    pub fn cmp_default_heuristics(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::Equal;
+
+        let cmp_stereo = (self.channels == 2).cmp(&(other.channels == 2));
+        if cmp_stereo != Equal {
+            return cmp_stereo;
+        }
+
+        let cmp_mono = (self.channels == 1).cmp(&(other.channels == 1));
+        if cmp_mono != Equal {
+            return cmp_mono;
+        }
+
+        let cmp_channels = self.channels.cmp(&other.channels);
+        if cmp_channels != Equal {
+            return cmp_channels;
+        }
+
+        fn format_rank(fmt: SampleFormat) -> u8 {
+            match fmt {
+                SampleFormat::DsdU8 => 0,
+                SampleFormat::DsdU16 => 1,
+                SampleFormat::DsdU32 => 2,
+                SampleFormat::U8 => 3,
+                SampleFormat::I8 => 4,
+                // 64-bit integers: deprioritised below standard audio widths.
+                SampleFormat::U64 => 5,
+                SampleFormat::I64 => 6,
+                SampleFormat::U16 => 7,
+                SampleFormat::I16 => 8,
+                SampleFormat::U24 => 9,
+                SampleFormat::I24 => 10,
+                SampleFormat::U32 => 11,
+                SampleFormat::I32 => 12,
+                SampleFormat::F64 => 13,
+                SampleFormat::F32 => 14,
+            }
+        }
+
+        let cmp_format = format_rank(self.sample_format).cmp(&format_rank(other.sample_format));
+        if cmp_format != Equal {
+            return cmp_format;
+        }
+
+        let cmp_broadcast = self
+            .contains_rate(SAMPLE_RATE_48K)
+            .cmp(&other.contains_rate(SAMPLE_RATE_48K));
+        if cmp_broadcast != Equal {
+            return cmp_broadcast;
+        }
+
+        let cmp_cd = self
+            .contains_rate(SAMPLE_RATE_CD)
+            .cmp(&other.contains_rate(SAMPLE_RATE_CD));
+        if cmp_cd != Equal {
+            return cmp_cd;
+        }
+
+        self.max_sample_rate.cmp(&other.max_sample_rate)
+    }
+}
+
+impl From<SupportedStreamConfig> for StreamConfig {
+    fn from(conf: SupportedStreamConfig) -> Self {
+        conf.config()
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn validate_stream_config(config: &StreamConfig) -> Result<(), Error> {
+    if config.channels == 0 {
+        return Err(Error::with_message(
+            ErrorKind::InvalidInput,
+            "channel count must be at least 1",
+        ));
+    }
+    if config.sample_rate == 0 {
+        return Err(Error::with_message(
+            ErrorKind::InvalidInput,
+            "sample rate must be at least 1 Hz",
+        ));
+    }
+    if config.buffer_size == BufferSize::Fixed(0) {
+        return Err(Error::with_message(
+            ErrorKind::InvalidInput,
+            "buffer size must be greater than 0",
+        ));
+    }
+    Ok(())
+}
+
+// If a backend does not provide an API for retrieving supported formats, we query it with a bunch
+// of commonly used rates. This is always the case for WASAPI and is sometimes the case for ALSA.
+#[allow(dead_code)]
+pub(crate) const COMMON_SAMPLE_RATES: &[SampleRate] = &[
+    // Standard PCM rates and DSD sample rates through DSD512
+    5512, 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 96000, 176400,
+    192000, 352800, 384000, 705600, 768000, 1411200, 1536000, 2822400, 3072000, 5644800, 6144000,
+    11289600, 12288000, 22579200, 24576000,
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_range(
+        channels: ChannelCount,
+        format: SampleFormat,
+        min: SampleRate,
+        max: SampleRate,
+    ) -> SupportedStreamConfigRange {
+        SupportedStreamConfigRange {
+            buffer_size: SupportedBufferSize::Range { min: 256, max: 512 },
+            channels,
+            min_sample_rate: min,
+            max_sample_rate: max,
+            sample_format: format,
+        }
+    }
+
+    #[test]
+    fn with_standard_sample_rate() {
+        let r = |min, max| make_range(2, SampleFormat::F32, min, max);
+
+        assert_eq!(
+            r(1, 96_000).with_standard_sample_rate().sample_rate(),
+            SAMPLE_RATE_48K
+        );
+        assert_eq!(
+            r(1, 44_100).with_standard_sample_rate().sample_rate(),
+            SAMPLE_RATE_CD
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "no standard sample rate")]
+    fn with_standard_sample_rate_panics_when_no_standard_rate() {
+        make_range(2, SampleFormat::F32, 8_000, 32_000).with_standard_sample_rate();
+    }
+
+    #[test]
+    fn try_with_standard_sample_rate() {
+        let r = |min, max| make_range(2, SampleFormat::F32, min, max);
+
+        // 48 kHz available; first choice
+        assert_eq!(
+            r(1, 96_000)
+                .try_with_standard_sample_rate()
+                .map(|c| c.sample_rate()),
+            Some(SAMPLE_RATE_48K)
+        );
+
+        // 48 kHz not available but 44.1 kHz is; second choice
+        assert_eq!(
+            r(1, 44_100)
+                .try_with_standard_sample_rate()
+                .map(|c| c.sample_rate()),
+            Some(SAMPLE_RATE_CD)
+        );
+
+        // Neither preferred rate available
+        assert_eq!(r(8_000, 32_000).try_with_standard_sample_rate(), None);
+    }
+
+    #[test]
+    fn cmp_default_heuristics_format_order() {
+        use SampleFormat::*;
+
+        // Input is deliberately not sorted to prove the sort works.
+        let unsorted = [
+            F32, I16, DsdU32, U64, I32, DsdU8, F64, U8, I24, U16, I64, U24, U32, I8, DsdU16,
+        ];
+
+        let mut ranges: Vec<_> = unsorted
+            .iter()
+            .map(|&fmt| make_range(2, fmt, 1, 96_000))
+            .collect();
+        ranges.sort_by(|a, b| a.cmp_default_heuristics(b));
+
+        let sorted_formats: Vec<SampleFormat> = ranges.iter().map(|r| r.sample_format()).collect();
+
+        // Expected order from lowest to highest priority:
+        assert_eq!(
+            sorted_formats,
+            vec![DsdU8, DsdU16, DsdU32, U8, I8, U64, I64, U16, I16, U24, I24, U32, I32, F64, F32,]
+        );
+    }
+
+    #[test]
+    fn cmp_default_heuristics() {
+        let mut configs = [
+            make_range(1, SampleFormat::F64, 1, 96_000), // mono; loses to all stereo
+            make_range(2, SampleFormat::DsdU8, 1, 96_000), // DSD; lowest format priority
+            make_range(2, SampleFormat::U8, 1, 96_000),
+            make_range(2, SampleFormat::I8, 1, 96_000),
+            make_range(2, SampleFormat::U16, 1, 96_000),
+            make_range(2, SampleFormat::I16, 1, 96_000),
+            make_range(2, SampleFormat::F32, 1, 22_050), // neither standard rate
+            make_range(2, SampleFormat::F32, 1, 44_100), // 44.1 kHz only
+            make_range(2, SampleFormat::F32, 48_000, 96_000), // 48 kHz only
+            make_range(2, SampleFormat::F32, 1, 96_000), // both standard rates
+            make_range(2, SampleFormat::F64, 1, 96_000),
+        ];
+
+        configs.sort_by(|a, b| a.cmp_default_heuristics(b));
+
+        // Results in ascending priority order (lowest first):
+
+        // [0] Mono loses to every stereo entry regardless of format or rate.
+        assert_eq!(configs[0].channels(), 1);
+        assert_eq!(configs[0].sample_format(), SampleFormat::F64);
+
+        // [1]–[5] Stereo entries ranked by format (DSD < 8-bit < 16-bit).
+        assert_eq!(configs[1].sample_format(), SampleFormat::DsdU8);
+        assert_eq!(configs[2].sample_format(), SampleFormat::U8);
+        assert_eq!(configs[3].sample_format(), SampleFormat::I8);
+        assert_eq!(configs[4].sample_format(), SampleFormat::U16);
+        assert_eq!(configs[5].sample_format(), SampleFormat::I16);
+
+        // [6] F64 is outranked by F32.
+        assert_eq!(configs[6].sample_format(), SampleFormat::F64);
+        assert_eq!(configs[6].channels(), 2);
+
+        // [7]–[10] Stereo F32 entries ranked by rate coverage.
+        assert_eq!(configs[7].sample_format(), SampleFormat::F32);
+        assert_eq!(configs[7].max_sample_rate(), 22_050); // neither standard rate
+
+        assert_eq!(configs[8].sample_format(), SampleFormat::F32);
+        assert_eq!(configs[8].max_sample_rate(), 44_100); // 44.1 kHz only
+
+        assert_eq!(configs[9].sample_format(), SampleFormat::F32);
+        assert_eq!(configs[9].min_sample_rate(), 48_000); // 48 kHz only (no 44.1 kHz)
+        assert_eq!(configs[9].max_sample_rate(), 96_000);
+
+        assert_eq!(configs[10].sample_format(), SampleFormat::F32);
+        assert_eq!(configs[10].min_sample_rate(), 1);
+        assert_eq!(configs[10].max_sample_rate(), 96_000); // both standard rates
+    }
+
+    #[test]
+    fn validate_stream_config_rejects_zero_channels() {
+        let err = validate_stream_config(&StreamConfig {
+            channels: 0,
+            sample_rate: 44100,
+            buffer_size: BufferSize::Default,
+        })
+        .unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidInput);
+        assert!(err.message().unwrap().contains("channel"));
+    }
+
+    #[test]
+    fn validate_stream_config_rejects_zero_sample_rate() {
+        let err = validate_stream_config(&StreamConfig {
+            channels: 2,
+            sample_rate: 0,
+            buffer_size: BufferSize::Default,
+        })
+        .unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidInput);
+        assert!(err.message().unwrap().contains("sample rate"));
+    }
+
+    #[test]
+    fn validate_stream_config_rejects_fixed_buffer_zero() {
+        let err = validate_stream_config(&StreamConfig {
+            channels: 2,
+            sample_rate: 44100,
+            buffer_size: BufferSize::Fixed(0),
+        })
+        .unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidInput);
+        assert!(err.message().unwrap().contains("buffer size"));
+    }
+
+    #[test]
+    fn validate_stream_config_accepts_valid_configs() {
+        assert!(validate_stream_config(&StreamConfig {
+            channels: 2,
+            sample_rate: 44100,
+            buffer_size: BufferSize::Default,
+        })
+        .is_ok());
+        assert!(validate_stream_config(&StreamConfig {
+            channels: 1,
+            sample_rate: 1,
+            buffer_size: BufferSize::Fixed(1),
+        })
+        .is_ok());
+    }
+}

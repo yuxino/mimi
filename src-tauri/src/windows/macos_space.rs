@@ -152,6 +152,7 @@ pub(super) fn main_screen_work_area() -> Option<LogicalWorkArea> {
         y: primary_top - visible.origin.y - visible.size.height,
         width: visible.size.width,
         height: visible.size.height,
+        coordinate_scale: 1.0,
     })
 }
 

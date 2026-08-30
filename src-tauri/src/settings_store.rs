@@ -117,29 +117,130 @@ pub trait SecretStore: Send + Sync {
 
 struct KeyringSecretStore;
 
+#[cfg(any(target_os = "windows", test))]
+// `windows-native-keyring-store` maps `local` to
+// `CRED_PERSIST_LOCAL_MACHINE` in Windows Credential Manager.
+const WINDOWS_CREDENTIAL_PERSISTENCE: &str = "local";
+
+fn credential_entry(service: &str, account: &str) -> Result<keyring_core::Entry, SecretStoreError> {
+    #[cfg(target_os = "windows")]
+    {
+        // `keyring` owns one-time selection of the native platform store. Its
+        // compatibility wrapper does not expose store modifiers, so initialise
+        // it there and construct the actual entry through keyring-core.
+        if keyring::Entry::store_status().is_err() {
+            return Err(SecretStoreError::Unavailable);
+        }
+        let modifiers = HashMap::from([("persistence", WINDOWS_CREDENTIAL_PERSISTENCE)]);
+        return keyring_core::Entry::new_with_modifiers(service, account, &modifiers)
+            .map_err(|_| SecretStoreError::Unavailable);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        keyring::Entry::new(service, account)
+            .map(|entry| entry.inner)
+            .map_err(|_| SecretStoreError::Unavailable)
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn ensure_local_credential_persistence(
+    password: &str,
+    mut read_attributes: impl FnMut() -> Result<HashMap<String, String>, SecretStoreError>,
+    rewrite: impl FnOnce(&str) -> Result<(), SecretStoreError>,
+    mut retry_pause: impl FnMut(),
+) -> Result<(), SecretStoreError> {
+    const VERIFICATION_ATTEMPTS: usize = 3;
+    let is_local = |attributes: &HashMap<String, String>| {
+        attributes
+            .get("persistence")
+            .is_some_and(|value| value.eq_ignore_ascii_case("local"))
+    };
+    let mut initial_attributes = None;
+    for attempt in 0..VERIFICATION_ATTEMPTS {
+        if let Ok(attributes) = read_attributes() {
+            initial_attributes = Some(attributes);
+            break;
+        }
+        if attempt + 1 < VERIFICATION_ATTEMPTS {
+            retry_pause();
+        }
+    }
+    let Some(initial_attributes) = initial_attributes else {
+        return Err(SecretStoreError::Unavailable);
+    };
+    if is_local(&initial_attributes) {
+        return Ok(());
+    }
+
+    // Entries written by earlier Mimi builds used Windows' Enterprise
+    // persistence. Rewriting the same target with a local-spec entry keeps the
+    // secret value while stopping future credential roaming.
+    rewrite(password)?;
+    // Windows Credential Manager can briefly expose stale attributes after a
+    // persistence rewrite. Verify a bounded number of times instead of
+    // caching that transient state as unavailable until restart.
+    for attempt in 0..VERIFICATION_ATTEMPTS {
+        if read_attributes().is_ok_and(|attributes| is_local(&attributes)) {
+            return Ok(());
+        }
+        if attempt + 1 < VERIFICATION_ATTEMPTS {
+            retry_pause();
+        }
+    }
+    Err(SecretStoreError::Unavailable)
+}
+
+#[cfg(target_os = "windows")]
+fn enforce_local_credential_persistence(
+    entry: &keyring_core::Entry,
+    password: &str,
+) -> Result<(), SecretStoreError> {
+    ensure_local_credential_persistence(
+        password,
+        || {
+            entry
+                .get_attributes()
+                .map_err(|_| SecretStoreError::Unavailable)
+        },
+        |value| {
+            entry
+                .set_password(value)
+                .map_err(|_| SecretStoreError::Unavailable)
+        },
+        || std::thread::sleep(std::time::Duration::from_millis(25)),
+    )
+}
+
 impl SecretStore for KeyringSecretStore {
     fn load(&self, service: &str, account: &str) -> Result<Option<String>, SecretStoreError> {
-        let entry =
-            keyring::Entry::new(service, account).map_err(|_| SecretStoreError::Unavailable)?;
+        let entry = credential_entry(service, account)?;
         match entry.get_password() {
-            Ok(password) => Ok(Some(password)),
-            Err(keyring::Error::NoEntry) => Ok(None),
+            Ok(password) => {
+                #[cfg(target_os = "windows")]
+                enforce_local_credential_persistence(&entry, &password)?;
+                Ok(Some(password))
+            }
+            Err(keyring_core::Error::NoEntry) => Ok(None),
             Err(_) => Err(SecretStoreError::Unavailable),
         }
     }
 
     fn save(&self, service: &str, account: &str, value: &str) -> Result<(), SecretStoreError> {
-        keyring::Entry::new(service, account)
-            .map_err(|_| SecretStoreError::Unavailable)?
+        let entry = credential_entry(service, account)?;
+        entry
             .set_password(value)
-            .map_err(|_| SecretStoreError::Unavailable)
+            .map_err(|_| SecretStoreError::Unavailable)?;
+        #[cfg(target_os = "windows")]
+        enforce_local_credential_persistence(&entry, value)?;
+        Ok(())
     }
 
     fn delete(&self, service: &str, account: &str) -> Result<(), SecretStoreError> {
-        let entry =
-            keyring::Entry::new(service, account).map_err(|_| SecretStoreError::Unavailable)?;
+        let entry = credential_entry(service, account)?;
         match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
             Err(_) => Err(SecretStoreError::Unavailable),
         }
     }
@@ -1053,7 +1154,186 @@ fn sync_directory(_path: &Path) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
     use std::sync::Arc;
+
+    fn persistence_attributes(value: &str) -> HashMap<String, String> {
+        HashMap::from([("persistence".to_string(), value.to_string())])
+    }
+
+    #[test]
+    fn windows_credential_modifier_requests_local_persistence() {
+        assert_eq!(WINDOWS_CREDENTIAL_PERSISTENCE, "local");
+    }
+
+    #[test]
+    fn local_windows_credential_is_not_rewritten() {
+        let reads = Cell::new(0);
+        let rewrites = Cell::new(0);
+
+        ensure_local_credential_persistence(
+            "secret",
+            || {
+                reads.set(reads.get() + 1);
+                Ok(persistence_attributes("Local"))
+            },
+            |_| {
+                rewrites.set(rewrites.get() + 1);
+                Ok(())
+            },
+            || {},
+        )
+        .unwrap();
+
+        assert_eq!(reads.get(), 1);
+        assert_eq!(rewrites.get(), 0);
+    }
+
+    #[test]
+    fn enterprise_windows_credential_is_rewritten_and_verified_once() {
+        let reads = Cell::new(0);
+        let rewrites = Cell::new(0);
+
+        ensure_local_credential_persistence(
+            "secret",
+            || {
+                let read = reads.get();
+                reads.set(read + 1);
+                Ok(persistence_attributes(if read == 0 {
+                    "Enterprise"
+                } else {
+                    "Local"
+                }))
+            },
+            |value| {
+                assert_eq!(value, "secret");
+                rewrites.set(rewrites.get() + 1);
+                Ok(())
+            },
+            || {},
+        )
+        .unwrap();
+
+        assert_eq!(reads.get(), 2);
+        assert_eq!(rewrites.get(), 1);
+    }
+
+    #[test]
+    fn windows_credential_migration_fails_closed_when_local_state_is_not_verified() {
+        let reads = Cell::new(0);
+        let rewrites = Cell::new(0);
+
+        let result = ensure_local_credential_persistence(
+            "secret",
+            || {
+                reads.set(reads.get() + 1);
+                Ok(persistence_attributes("Enterprise"))
+            },
+            |_| {
+                rewrites.set(rewrites.get() + 1);
+                Ok(())
+            },
+            || {},
+        );
+
+        assert_eq!(result, Err(SecretStoreError::Unavailable));
+        assert_eq!(reads.get(), 4);
+        assert_eq!(rewrites.get(), 1);
+    }
+
+    #[test]
+    fn windows_credential_verification_retries_a_transient_attribute_failure() {
+        let reads = Cell::new(0);
+        let pauses = Cell::new(0);
+
+        ensure_local_credential_persistence(
+            "secret",
+            || {
+                let read = reads.get();
+                reads.set(read + 1);
+                match read {
+                    0 => Ok(persistence_attributes("Enterprise")),
+                    1 => Err(SecretStoreError::Unavailable),
+                    _ => Ok(persistence_attributes("Local")),
+                }
+            },
+            |_| Ok(()),
+            || pauses.set(pauses.get() + 1),
+        )
+        .unwrap();
+
+        assert_eq!(reads.get(), 3);
+        assert_eq!(pauses.get(), 1);
+    }
+
+    #[test]
+    fn local_windows_credential_retries_an_initial_attribute_failure_without_rewrite() {
+        let reads = Cell::new(0);
+        let rewrites = Cell::new(0);
+
+        ensure_local_credential_persistence(
+            "secret",
+            || {
+                let read = reads.get();
+                reads.set(read + 1);
+                if read == 0 {
+                    Err(SecretStoreError::Unavailable)
+                } else {
+                    Ok(persistence_attributes("Local"))
+                }
+            },
+            |_| {
+                rewrites.set(rewrites.get() + 1);
+                Ok(())
+            },
+            || {},
+        )
+        .unwrap();
+
+        assert_eq!(reads.get(), 2);
+        assert_eq!(rewrites.get(), 0);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_credential_manager_migrates_enterprise_to_local_without_changing_secret() {
+        struct Cleanup {
+            service: String,
+            account: String,
+        }
+
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                if let Ok(entry) = keyring_core::Entry::new(&self.service, &self.account) {
+                    let _ = entry.delete_credential();
+                }
+            }
+        }
+
+        assert!(keyring::Entry::store_status().is_ok());
+        let unique = uuid::Uuid::new_v4().simple().to_string();
+        let service = format!("app.yuxino.mimi.test.{unique}");
+        let account = format!("credential-local-migration-{unique}");
+        let _cleanup = Cleanup {
+            service: service.clone(),
+            account: account.clone(),
+        };
+        let enterprise = keyring_core::Entry::new(&service, &account).unwrap();
+        enterprise.set_password("migration-secret").unwrap();
+        assert_eq!(
+            enterprise.get_attributes().unwrap()["persistence"],
+            "Enterprise"
+        );
+
+        assert_eq!(
+            KeyringSecretStore.load(&service, &account).unwrap(),
+            Some("migration-secret".to_string())
+        );
+
+        let observed = keyring_core::Entry::new(&service, &account).unwrap();
+        assert_eq!(observed.get_password().unwrap(), "migration-secret");
+        assert_eq!(observed.get_attributes().unwrap()["persistence"], "Local");
+    }
 
     #[derive(Default)]
     struct FakeState {

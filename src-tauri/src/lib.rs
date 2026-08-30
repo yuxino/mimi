@@ -98,6 +98,8 @@ pub fn run() {
             );
             windows::TrayPanelManager::ensure(&app_handle);
             windows::OverlayControlWindowManager::ensure(&app_handle);
+            #[cfg(target_os = "windows")]
+            app.manage(windows::install_windows_workspace_follower(&app_handle));
 
             setup_tray(&app_handle)?;
             setup_global_shortcuts(&app_handle, Arc::clone(&session))?;
@@ -121,7 +123,11 @@ pub fn run() {
                 // The overlay geometry manager folds the final frame in after
                 // a debounce; transient states (control panel, collapse
                 // animation steps) are never persisted.
-                WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == "overlay" => {
+                WindowEvent::Moved(_)
+                | WindowEvent::Resized(_)
+                | WindowEvent::ScaleFactorChanged { .. }
+                    if window.label() == "overlay" =>
+                {
                     if let Some(state) = app.try_state::<AppState>() {
                         windows::OverlayWindowManager::on_geometry_event(
                             app,
@@ -329,6 +335,16 @@ fn system_language_code() -> Option<String> {
 
 /// Tray icon with a compact native menu and a left-click popup control panel.
 /// Copy follows the saved UI override, falling back to the system language.
+fn tray_icon_bytes(is_windows: bool) -> &'static [u8] {
+    if is_windows {
+        // Windows does not implement macOS template-image recolouring. Use
+        // the branded full-colour icon so it remains visible on dark taskbars.
+        include_bytes!("../icons/32x32.png")
+    } else {
+        include_bytes!("../icons/tray-template.png")
+    }
+}
+
 fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let (override_language, session_is_active) = app
         .try_state::<AppState>()
@@ -372,14 +388,14 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     // the native menu-bar resolution — crisp at any size and adapting to the
     // light/dark menu bar — unlike the character squircle, whose fine detail
     // turned into a blurry blob at ~18pt.
-    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))
+    let icon = tauri::image::Image::from_bytes(tray_icon_bytes(cfg!(target_os = "windows")))
         .ok()
         .or_else(|| app.default_window_icon().cloned())
         .expect("the tray icon is bundled");
 
     let _tray = TrayIconBuilder::with_id("mimi-tray")
         .icon(icon)
-        .icon_as_template(true)
+        .icon_as_template(cfg!(target_os = "macos"))
         .tooltip(windows::dev_title("mimi"))
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -670,5 +686,18 @@ mod tests {
             config["identifier"].as_str(),
             Some(DEVELOPMENT_APPLICATION_IDENTIFIER)
         );
+    }
+
+    #[test]
+    fn windows_tray_asset_contains_visible_colour_pixels() {
+        let windows_icon = tauri::image::Image::from_bytes(tray_icon_bytes(true)).unwrap();
+        let template_icon = tauri::image::Image::from_bytes(tray_icon_bytes(false)).unwrap();
+
+        assert_eq!((windows_icon.width(), windows_icon.height()), (32, 32));
+        assert_ne!(windows_icon.rgba(), template_icon.rgba());
+        assert!(windows_icon
+            .rgba()
+            .chunks_exact(4)
+            .any(|pixel| { pixel[3] != 0 && (pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0) }));
     }
 }

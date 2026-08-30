@@ -1,0 +1,5 @@
+[target.armv7-unknown-linux-gnueabihf]
+dockerfile = "Dockerfile"
+
+[target.armv7-unknown-linux-gnueabihf.env]
+passthrough = ["RUSTFLAGS"]

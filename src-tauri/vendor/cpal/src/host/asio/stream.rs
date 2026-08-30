@@ -1,0 +1,1449 @@
+extern crate asio_sys as sys;
+extern crate num_traits;
+
+use std::{
+    sync::{
+        atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering},
+        mpsc, Arc, Mutex,
+    },
+    time::Duration,
+};
+
+use self::num_traits::{FromPrimitive, PrimInt};
+use super::Device;
+use crate::{
+    host::{
+        com,
+        error_emit::{emit_error, try_emit_error},
+        frames_to_duration,
+    },
+    BufferSize, Data, Error, ErrorKind, FrameCount, InputCallbackInfo, InputStreamTimestamp,
+    OutputCallbackInfo, OutputStreamTimestamp, SampleFormat, SampleRate, StreamConfig,
+    StreamInstant, I24,
+};
+
+/// Shared state for extending the 32-bit `timeGetTime()` millisecond counter into a
+/// monotonic 64-bit nanosecond value, shared between `now()` and audio callbacks.
+#[derive(Default)]
+struct TimeBase {
+    last_ns: AtomicU64,
+    epoch_ns: AtomicU64,
+}
+
+/// Nanosecond span of one full `timeGetTime()` wrap period (~49.7 days).
+const TIMEGETIME_WRAP_NS: u64 = (u32::MAX as u64 + 1) * 1_000_000;
+
+impl TimeBase {
+    /// Convert a nanosecond timestamp to a monotonic `StreamInstant`.
+    fn to_stream_instant(&self, ns: u64) -> StreamInstant {
+        // `Relaxed` is sufficient: callbacks run on a single ASIO thread. The only
+        // cross-thread caller is `now()`, which may race at wrap time (~1µs every 49.7 days).
+        let prev = self.last_ns.swap(ns, Ordering::Relaxed);
+        let epoch = if ns < prev {
+            self.epoch_ns
+                .fetch_add(TIMEGETIME_WRAP_NS, Ordering::Relaxed)
+                + TIMEGETIME_WRAP_NS
+        } else {
+            self.epoch_ns.load(Ordering::Relaxed)
+        };
+        StreamInstant::from_nanos(epoch + ns)
+    }
+}
+
+/// Matches the `startTimer(500)` call JUCE uses for debouncing ASIO driver event notifications.
+const ASIO_EVENT_DEBOUNCE: Duration = Duration::from_millis(500);
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StreamState {
+    Starting = 0,
+    Paused = 1,
+    Playing = 2,
+}
+
+impl StreamState {
+    fn load(atom: &AtomicU8, order: Ordering) -> Self {
+        match atom.load(order) {
+            1 => Self::Paused,
+            2 => Self::Playing,
+            _ => Self::Starting,
+        }
+    }
+
+    fn store(self, atom: &AtomicU8, order: Ordering) {
+        atom.store(self as u8, order);
+    }
+}
+
+pub struct Stream {
+    state: Arc<AtomicU8>,
+    driver: Arc<sys::Driver>,
+    asio_streams: Arc<Mutex<sys::AsioStreams>>,
+    callback_id: sys::BufferCallbackId,
+    driver_event_callback_id: sys::DriverEventCallbackId,
+    time_base: Arc<TimeBase>,
+}
+
+// Compile-time assertion that Stream is Send and Sync
+crate::assert_stream_send!(Stream);
+crate::assert_stream_sync!(Stream);
+
+impl Stream {
+    pub fn now(&self) -> StreamInstant {
+        // `ASIOTimeInfo::systemTime` is specified by the ASIO SDK as nanoseconds
+        // derived from `timeGetTime()`, so calling it here gives a value on the
+        // same clock as the `system_time` field delivered to every callback.
+        let ms = unsafe { windows::Win32::Media::timeGetTime() };
+        self.time_base.to_stream_instant(ms as u64 * 1_000_000)
+    }
+
+    pub fn play(&self) -> Result<(), Error> {
+        StreamState::Playing.store(&self.state, Ordering::Release);
+        Ok(())
+    }
+
+    pub fn pause(&self) -> Result<(), Error> {
+        StreamState::Paused.store(&self.state, Ordering::Release);
+        Ok(())
+    }
+
+    pub fn buffer_size(&self) -> Result<FrameCount, Error> {
+        let streams = self.asio_streams.lock().map_err(|_| {
+            Error::with_message(ErrorKind::StreamInvalidated, "Stream lock poisoned")
+        })?;
+        Ok(streams
+            .output
+            .as_ref()
+            .or(streams.input.as_ref())
+            .expect("ASIO stream has neither input nor output")
+            .buffer_size as FrameCount)
+    }
+}
+
+impl Device {
+    pub fn build_input_stream_raw<D, E>(
+        &self,
+        config: StreamConfig,
+        sample_format: SampleFormat,
+        mut data_callback: D,
+        error_callback: E,
+        _timeout: Option<Duration>,
+    ) -> Result<Stream, Error>
+    where
+        D: FnMut(&Data, &InputCallbackInfo) + Send + 'static,
+        E: FnMut(Error) + Send + 'static,
+    {
+        crate::validate_stream_config(&config)?;
+        com::com_initialized();
+        let description = self.description()?;
+        let driver = super::GLOBAL_ASIO
+            .get()
+            .ok_or_else(|| {
+                Error::with_message(
+                    ErrorKind::DeviceNotAvailable,
+                    "ASIO driver is not initialized",
+                )
+            })?
+            .load_driver(description.name())
+            .map_err(load_driver_err)?;
+
+        let stream_type = driver.input_data_type().map_err(build_stream_err)?;
+
+        // Ensure that the desired sample type is supported.
+        let expected_sample_format =
+            super::device::convert_data_type(&stream_type).ok_or_else(|| {
+                Error::with_message(
+                    ErrorKind::UnsupportedConfig,
+                    "Input sample format is not supported",
+                )
+            })?;
+        if sample_format != expected_sample_format {
+            return Err(Error::with_message(
+                ErrorKind::UnsupportedConfig,
+                format!(
+                    "Sample format {sample_format} is not supported; expected {expected_sample_format}"
+                ),
+            ));
+        }
+
+        let num_channels = config.channels;
+        let buffer_size = self.get_or_create_input_stream(&driver, config, sample_format)?;
+        let cpal_num_samples = buffer_size * num_channels as usize;
+
+        // Create the buffer depending on the size of the data type.
+        let len_bytes = cpal_num_samples * sample_format.sample_size();
+        let mut interleaved = vec![0u8; len_bytes];
+
+        // Query hardware input latency (order matters: needs buffers created above).
+        // Wrapped in Arc<AtomicUsize> so the message callback can update it on
+        // kAsioLatenciesChanged without touching the buffer callback.
+        let hardware_input_latency = Arc::new(AtomicU32::new(
+            driver
+                .latencies()
+                .map(|latencies| latencies.input.max(0) as u32)
+                .unwrap_or(0),
+        ));
+
+        let state = Arc::new(AtomicU8::new(StreamState::Starting as u8));
+        let driver_event_callback_id = self
+            .add_event_callback(
+                &driver,
+                error_callback,
+                Arc::clone(&hardware_input_latency),
+                true,
+                Arc::clone(&state),
+            )
+            .inspect_err(|_| {
+                // Roll back the input stream stored by get_or_create_input_stream.
+                if let Ok(mut streams) = self.asio_streams.lock() {
+                    streams.input = None;
+                }
+            })?;
+
+        let state_cb = Arc::clone(&state);
+        let asio_streams = self.asio_streams.clone();
+        let mut current_buffer_size = buffer_size as i32;
+        let mut last_buffer_index: i32 = -1;
+
+        let time_base = Arc::new(TimeBase::default());
+        let time_base_cb = Arc::clone(&time_base);
+
+        // Set the input callback.
+        // This is most performance critical part of the ASIO bindings.
+        let callback_id = driver.add_callback(move |callback_info| unsafe {
+            // If not playing, return early.
+            if StreamState::load(&state_cb, Ordering::Acquire) != StreamState::Playing {
+                return;
+            }
+
+            // Guard against non-conformant drivers (e.g. Focusrite USB ASIO, ReaRoute) that
+            // fire the buffer callback multiple times per buffer cycle with the same buffer
+            // index.
+            if callback_info.buffer_index == last_buffer_index {
+                return;
+            }
+            last_buffer_index = callback_info.buffer_index;
+
+            // There is 0% chance of lock contention the host only locks when recreating streams.
+            let stream_lock = asio_streams.lock().unwrap();
+            let asio_stream = match stream_lock.input {
+                Some(ref asio_stream) => asio_stream,
+                None => return,
+            };
+
+            // Resize the buffer only when the driver issues a buffer size change request.
+            // In normal operation this branch is never taken.
+            if asio_stream.buffer_size != current_buffer_size {
+                current_buffer_size = asio_stream.buffer_size;
+                interleaved.resize(
+                    current_buffer_size as usize
+                        * num_channels as usize
+                        * sample_format.sample_size(),
+                    0,
+                );
+            }
+
+            let hardware_input_latency = hardware_input_latency.load(Ordering::Relaxed) as usize;
+
+            let callback_instant = time_base_cb.to_stream_instant(callback_info.system_time);
+
+            /// 1. Write from the ASIO buffer to the interleaved CPAL buffer.
+            /// 2. Deliver the CPAL buffer to the user callback.
+            #[allow(clippy::too_many_arguments)]
+            unsafe fn process_input_callback<A, D, F>(
+                data_callback: &mut D,
+                interleaved: &mut [u8],
+                asio_stream: &sys::AsioStream,
+                asio_info: &sys::CallbackInfo,
+                sample_rate: SampleRate,
+                format: SampleFormat,
+                from_endianness: F,
+                hardware_latency_frames: usize,
+                callback_instant: StreamInstant,
+            ) where
+                A: Copy,
+                D: FnMut(&Data, &InputCallbackInfo) + Send + 'static,
+                F: Fn(A) -> A,
+            {
+                // 1. Write the ASIO channels to the CPAL buffer.
+                let interleaved: &mut [A] = cast_slice_mut(interleaved);
+                let n_frames = asio_stream.buffer_size as usize;
+                let n_channels = interleaved.len() / n_frames;
+                let buffer_index = asio_info.buffer_index as usize;
+                for ch_ix in 0..n_channels {
+                    let asio_channel =
+                        asio_channel_slice::<A>(asio_stream, buffer_index, ch_ix, None);
+                    for (frame, s_asio) in interleaved.chunks_mut(n_channels).zip(asio_channel) {
+                        frame[ch_ix] = from_endianness(*s_asio);
+                    }
+                }
+
+                // 2. Deliver the interleaved buffer to the callback.
+                apply_input_callback_to_data::<A, _>(
+                    data_callback,
+                    interleaved,
+                    callback_instant,
+                    sample_rate,
+                    format,
+                    hardware_latency_frames,
+                );
+            }
+
+            match (&stream_type, sample_format) {
+                (&sys::AsioSampleType::ASIOSTInt16LSB, SampleFormat::I16) => {
+                    process_input_callback::<i16, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I16,
+                        from_le,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+                (&sys::AsioSampleType::ASIOSTInt16MSB, SampleFormat::I16) => {
+                    process_input_callback::<i16, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I16,
+                        from_be,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+
+                (&sys::AsioSampleType::ASIOSTFloat32LSB, SampleFormat::F32) => {
+                    process_input_callback::<u32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F32,
+                        from_le,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+                (&sys::AsioSampleType::ASIOSTFloat32MSB, SampleFormat::F32) => {
+                    process_input_callback::<u32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F32,
+                        from_be,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+
+                (&sys::AsioSampleType::ASIOSTInt32LSB, SampleFormat::I32) => {
+                    process_input_callback::<i32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I32,
+                        from_le,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+                (&sys::AsioSampleType::ASIOSTInt32MSB, SampleFormat::I32) => {
+                    process_input_callback::<i32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I32,
+                        from_be,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+
+                (&sys::AsioSampleType::ASIOSTFloat64LSB, SampleFormat::F64) => {
+                    process_input_callback::<u64, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F64,
+                        from_le,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+                (&sys::AsioSampleType::ASIOSTFloat64MSB, SampleFormat::F64) => {
+                    process_input_callback::<u64, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F64,
+                        from_be,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+
+                (&sys::AsioSampleType::ASIOSTInt24LSB, SampleFormat::I24) => {
+                    process_input_callback_i24(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        true,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+                (&sys::AsioSampleType::ASIOSTInt24MSB, SampleFormat::I24) => {
+                    process_input_callback_i24(
+                        &mut data_callback,
+                        &mut interleaved,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        false,
+                        hardware_input_latency,
+                        callback_instant,
+                    );
+                }
+
+                unsupported_format_pair => unreachable!(
+                    "`build_input_stream_raw` should have returned with unsupported \
+                     format {:?}",
+                    unsupported_format_pair
+                ),
+            }
+        });
+
+        let driver = Arc::new(driver);
+        let asio_streams = self.asio_streams.clone();
+
+        if let Err(e) = driver.start() {
+            driver.remove_event_callback(driver_event_callback_id);
+            driver.remove_callback(callback_id);
+            if let Ok(mut streams) = asio_streams.lock() {
+                streams.input = None;
+            }
+            return Err(build_stream_err(e));
+        }
+
+        StreamState::Paused.store(&state, Ordering::Release);
+        Ok(Stream {
+            state,
+            driver,
+            asio_streams,
+            callback_id,
+            driver_event_callback_id,
+            time_base: Arc::clone(&time_base),
+        })
+    }
+
+    pub fn build_output_stream_raw<D, E>(
+        &self,
+        config: StreamConfig,
+        sample_format: SampleFormat,
+        mut data_callback: D,
+        error_callback: E,
+        _timeout: Option<Duration>,
+    ) -> Result<Stream, Error>
+    where
+        D: FnMut(&mut Data, &OutputCallbackInfo) + Send + 'static,
+        E: FnMut(Error) + Send + 'static,
+    {
+        crate::validate_stream_config(&config)?;
+        com::com_initialized();
+        let description = self.description()?;
+        let driver = super::GLOBAL_ASIO
+            .get()
+            .ok_or_else(|| {
+                Error::with_message(
+                    ErrorKind::DeviceNotAvailable,
+                    "ASIO driver is not initialized",
+                )
+            })?
+            .load_driver(description.name())
+            .map_err(load_driver_err)?;
+
+        let stream_type = driver.output_data_type().map_err(build_stream_err)?;
+
+        // Ensure that the desired sample type is supported.
+        let expected_sample_format =
+            super::device::convert_data_type(&stream_type).ok_or_else(|| {
+                Error::with_message(
+                    ErrorKind::UnsupportedConfig,
+                    "Output sample format is not supported",
+                )
+            })?;
+        if sample_format != expected_sample_format {
+            return Err(Error::with_message(
+                ErrorKind::UnsupportedConfig,
+                format!(
+                    "Sample format {sample_format} is not supported; expected {expected_sample_format}"
+                ),
+            ));
+        }
+
+        let num_channels = config.channels;
+        let buffer_size = self.get_or_create_output_stream(&driver, config, sample_format)?;
+        let cpal_num_samples = buffer_size * num_channels as usize;
+
+        // Create the buffer depending on data type.
+        let len_bytes = cpal_num_samples * sample_format.sample_size();
+        let mut interleaved = vec![0u8; len_bytes];
+        let current_callback_flag = self.current_callback_flag.clone();
+
+        // Query hardware output latency (order matters: needs buffers created above).
+        // Wrapped in Arc<AtomicUsize> so the message callback can update it on
+        // kAsioLatenciesChanged without touching the buffer callback.
+        let hardware_output_latency = Arc::new(AtomicU32::new(
+            driver
+                .latencies()
+                .map(|latencies| latencies.output.max(0) as u32)
+                .unwrap_or(0),
+        ));
+
+        let state = Arc::new(AtomicU8::new(StreamState::Starting as u8));
+        let driver_event_callback_id = self
+            .add_event_callback(
+                &driver,
+                error_callback,
+                Arc::clone(&hardware_output_latency),
+                false,
+                Arc::clone(&state),
+            )
+            .inspect_err(|_| {
+                // Roll back the output stream stored by get_or_create_output_stream.
+                if let Ok(mut streams) = self.asio_streams.lock() {
+                    streams.output = None;
+                }
+            })?;
+
+        let state_cb = Arc::clone(&state);
+        let asio_streams = self.asio_streams.clone();
+        let mut current_buffer_size = buffer_size as i32;
+        let mut last_buffer_index: i32 = -1;
+
+        let time_base = Arc::new(TimeBase::default());
+        let time_base_cb = Arc::clone(&time_base);
+
+        let callback_id = driver.add_callback(move |callback_info| unsafe {
+            // If not playing, return early.
+            if StreamState::load(&state_cb, Ordering::Acquire) != StreamState::Playing {
+                return;
+            }
+
+            // Guard against non-conformant drivers (e.g. Focusrite USB ASIO, ReaRoute) that
+            // fire the buffer callback multiple times per buffer cycle with the same buffer
+            // index.
+            if callback_info.buffer_index == last_buffer_index {
+                return;
+            }
+            last_buffer_index = callback_info.buffer_index;
+
+            // There is 0% chance of lock contention the host only locks when recreating streams.
+            let mut stream_lock = asio_streams.lock().unwrap();
+            let asio_stream = match stream_lock.output {
+                Some(ref mut asio_stream) => asio_stream,
+                None => return,
+            };
+
+            // Resize the buffer only when the driver issues a buffer size change request.
+            // In normal operation this branch is never taken.
+            if asio_stream.buffer_size != current_buffer_size {
+                current_buffer_size = asio_stream.buffer_size;
+                interleaved.resize(
+                    current_buffer_size as usize
+                        * num_channels as usize
+                        * sample_format.sample_size(),
+                    0,
+                );
+            }
+
+            let hardware_output_latency = hardware_output_latency.load(Ordering::Relaxed) as usize;
+
+            let callback_instant = time_base_cb.to_stream_instant(callback_info.system_time);
+
+            // Silence the ASIO buffer that is about to be used.
+            //
+            // Check if any other callbacks have already silenced the buffer associated with
+            // the current callback. The flag is updated once per buffer switch.
+            let silence =
+                current_callback_flag.load(Ordering::Acquire) != callback_info.callback_flag;
+
+            if silence {
+                current_callback_flag.store(callback_info.callback_flag, Ordering::Release);
+            }
+
+            /// 1. Render the given callback to the given buffer of interleaved samples.
+            /// 2. If required, silence the ASIO buffer.
+            /// 3. Finally, write the interleaved data to the non-interleaved ASIO buffer,
+            ///    performing endianness conversions as necessary.
+            #[allow(clippy::too_many_arguments)]
+            unsafe fn process_output_callback<A, D, F>(
+                data_callback: &mut D,
+                interleaved: &mut [u8],
+                silence_asio_buffer: bool,
+                asio_stream: &mut sys::AsioStream,
+                asio_info: &sys::CallbackInfo,
+                sample_rate: SampleRate,
+                format: SampleFormat,
+                mix_samples: F,
+                hardware_latency_frames: usize,
+                callback_instant: StreamInstant,
+            ) where
+                A: Copy,
+                D: FnMut(&mut Data, &OutputCallbackInfo) + Send + 'static,
+                F: Fn(A, A) -> A,
+            {
+                let interleaved: &mut [A] = cast_slice_mut(interleaved);
+                apply_output_callback_to_data::<A, _>(
+                    data_callback,
+                    interleaved,
+                    callback_instant,
+                    sample_rate,
+                    format,
+                    hardware_latency_frames,
+                );
+                let n_channels = interleaved.len() / asio_stream.buffer_size as usize;
+                let buffer_index = asio_info.buffer_index as usize;
+
+                // Write interleaved samples to ASIO channels, one channel at a time.
+                for ch_ix in 0..n_channels {
+                    let asio_channel =
+                        asio_channel_slice_mut::<A>(asio_stream, buffer_index, ch_ix, None);
+                    if silence_asio_buffer {
+                        asio_channel.align_to_mut::<u8>().1.fill(0);
+                    }
+                    for (frame, s_asio) in interleaved.chunks(n_channels).zip(asio_channel) {
+                        *s_asio = mix_samples(*s_asio, frame[ch_ix]);
+                    }
+                }
+            }
+
+            interleaved.fill(0);
+            match (sample_format, &stream_type) {
+                (SampleFormat::I16, &sys::AsioSampleType::ASIOSTInt16LSB) => {
+                    process_output_callback::<i16, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I16,
+                        |old_sample, new_sample| {
+                            from_le(old_sample).saturating_add(new_sample).to_le()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+                (SampleFormat::I16, &sys::AsioSampleType::ASIOSTInt16MSB) => {
+                    process_output_callback::<i16, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I16,
+                        |old_sample, new_sample| {
+                            from_be(old_sample).saturating_add(new_sample).to_be()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+                (SampleFormat::F32, &sys::AsioSampleType::ASIOSTFloat32LSB) => {
+                    process_output_callback::<u32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F32,
+                        |old_sample, new_sample| {
+                            (f32::from_bits(from_le(old_sample)) + f32::from_bits(new_sample))
+                                .to_bits()
+                                .to_le()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+
+                (SampleFormat::F32, &sys::AsioSampleType::ASIOSTFloat32MSB) => {
+                    process_output_callback::<u32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F32,
+                        |old_sample, new_sample| {
+                            (f32::from_bits(from_be(old_sample)) + f32::from_bits(new_sample))
+                                .to_bits()
+                                .to_be()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+
+                (SampleFormat::I32, &sys::AsioSampleType::ASIOSTInt32LSB) => {
+                    process_output_callback::<i32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I32,
+                        |old_sample, new_sample| {
+                            from_le(old_sample).saturating_add(new_sample).to_le()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+                (SampleFormat::I32, &sys::AsioSampleType::ASIOSTInt32MSB) => {
+                    process_output_callback::<i32, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::I32,
+                        |old_sample, new_sample| {
+                            from_be(old_sample).saturating_add(new_sample).to_be()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+
+                (SampleFormat::F64, &sys::AsioSampleType::ASIOSTFloat64LSB) => {
+                    process_output_callback::<u64, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F64,
+                        |old_sample, new_sample| {
+                            (f64::from_bits(from_le(old_sample)) + f64::from_bits(new_sample))
+                                .to_bits()
+                                .to_le()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+
+                (SampleFormat::F64, &sys::AsioSampleType::ASIOSTFloat64MSB) => {
+                    process_output_callback::<u64, _, _>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        SampleFormat::F64,
+                        |old_sample, new_sample| {
+                            (f64::from_bits(from_be(old_sample)) + f64::from_bits(new_sample))
+                                .to_bits()
+                                .to_be()
+                        },
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+
+                (SampleFormat::I24, &sys::AsioSampleType::ASIOSTInt24LSB) => {
+                    process_output_callback_i24::<_>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        true,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+
+                (SampleFormat::I24, &sys::AsioSampleType::ASIOSTInt24MSB) => {
+                    process_output_callback_i24::<_>(
+                        &mut data_callback,
+                        &mut interleaved,
+                        silence,
+                        false,
+                        asio_stream,
+                        callback_info,
+                        config.sample_rate,
+                        hardware_output_latency,
+                        callback_instant,
+                    );
+                }
+
+                unsupported_format_pair => unreachable!(
+                    "`build_output_stream_raw` should have returned with unsupported \
+                     format {unsupported_format_pair:?}"
+                ),
+            }
+        });
+
+        let driver = Arc::new(driver);
+        let asio_streams = self.asio_streams.clone();
+
+        if let Err(e) = driver.start() {
+            driver.remove_event_callback(driver_event_callback_id);
+            driver.remove_callback(callback_id);
+            if let Ok(mut streams) = asio_streams.lock() {
+                streams.output = None;
+            }
+            return Err(build_stream_err(e));
+        }
+
+        StreamState::Paused.store(&state, Ordering::Release);
+        Ok(Stream {
+            state,
+            driver,
+            asio_streams,
+            callback_id,
+            driver_event_callback_id,
+            time_base: Arc::clone(&time_base),
+        })
+    }
+
+    /// Create a new CPAL Input Stream.
+    ///
+    /// If there is no existing ASIO Input Stream it will be created.
+    ///
+    /// On success, the buffer size of the stream is returned.
+    fn get_or_create_input_stream(
+        &self,
+        driver: &sys::Driver,
+        config: StreamConfig,
+        sample_format: SampleFormat,
+    ) -> Result<usize, Error> {
+        let num_asio_channels = self.default_input_config()?.channels;
+        check_config(driver, config, sample_format, num_asio_channels)?;
+        let num_channels = config.channels as usize;
+        let mut streams = self.asio_streams.lock().map_err(|_| {
+            Error::with_message(ErrorKind::StreamInvalidated, "Stream lock poisoned")
+        })?;
+
+        let buffer_size = match config.buffer_size {
+            BufferSize::Fixed(v) => Some(v as i32),
+            BufferSize::Default => None,
+        };
+
+        // Either create a stream if thers none or had back the
+        // size of the current one.
+        match streams.input {
+            Some(ref input) => Ok(input.buffer_size as usize),
+            None => {
+                let output = streams.output.take();
+                driver
+                    .prepare_input_stream(output, num_channels, buffer_size)
+                    .map(|new_streams| {
+                        let bs = match new_streams.input {
+                            Some(ref inp) => inp.buffer_size as usize,
+                            None => unreachable!(),
+                        };
+                        *streams = new_streams;
+                        bs
+                    })
+                    .map_err(build_stream_err)
+            }
+        }
+    }
+
+    /// Create a new CPAL Output Stream.
+    ///
+    /// If there is no existing ASIO Output Stream it will be created.
+    fn get_or_create_output_stream(
+        &self,
+        driver: &sys::Driver,
+        config: StreamConfig,
+        sample_format: SampleFormat,
+    ) -> Result<usize, Error> {
+        let num_asio_channels = self.default_output_config()?.channels;
+        check_config(driver, config, sample_format, num_asio_channels)?;
+        let num_channels = config.channels as usize;
+        let mut streams = self.asio_streams.lock().map_err(|_| {
+            Error::with_message(ErrorKind::StreamInvalidated, "Stream lock poisoned")
+        })?;
+
+        let buffer_size = match config.buffer_size {
+            BufferSize::Fixed(v) => Some(v as i32),
+            BufferSize::Default => None,
+        };
+
+        // Either create a stream if thers none or had back the
+        // size of the current one.
+        match streams.output {
+            Some(ref output) => Ok(output.buffer_size as usize),
+            None => {
+                let input = streams.input.take();
+                driver
+                    .prepare_output_stream(input, num_channels, buffer_size)
+                    .map(|new_streams| {
+                        let bs = match new_streams.output {
+                            Some(ref out) => out.buffer_size as usize,
+                            None => unreachable!(),
+                        };
+                        *streams = new_streams;
+                        bs
+                    })
+                    .map_err(build_stream_err)
+            }
+        }
+    }
+
+    fn add_event_callback<E>(
+        &self,
+        driver: &sys::Driver,
+        error_callback: E,
+        hardware_latency: Arc<AtomicU32>,
+        is_input: bool,
+        state: Arc<AtomicU8>,
+    ) -> Result<sys::DriverEventCallbackId, Error>
+    where
+        E: FnMut(Error) + Send + 'static,
+    {
+        let error_callback_shared = Arc::new(Mutex::new(error_callback));
+        let configured_sample_rate = match driver.sample_rate() {
+            Ok(r) if r > 0.0 => Some(r),
+            _ => {
+                // Some drivers do not report a sample rate before a stream has started.
+                None
+            }
+        };
+        let driver_for_latency = driver.clone();
+        let asio_streams_for_event = self.asio_streams.clone();
+
+        // Debounce timer: wait for ASIO_EVENT_DEBOUNCE of silence after the most recent event
+        // before delivering to the user. Exits when `timer_tx` is dropped, which happens when the
+        // event callback closure is removed during stream teardown.
+        let (timer_tx, timer_rx) = mpsc::channel::<Error>();
+        let error_cb_for_timer = Arc::clone(&error_callback_shared);
+        std::thread::Builder::new()
+            .name("cpal-asio-event-timer".into())
+            .spawn(move || {
+                let mut pending: Option<Error> = None;
+                loop {
+                    // Use recv() when idle (no timeout needed) so we don't spin.
+                    let result = if pending.is_some() {
+                        timer_rx.recv_timeout(ASIO_EVENT_DEBOUNCE)
+                    } else {
+                        timer_rx
+                            .recv()
+                            .map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+                    };
+                    match result {
+                        Ok(err) => {
+                            // New event; restart the grace window.
+                            pending = Some(err);
+                        }
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            // Grace period elapsed with no new events: now deliver.
+                            if let Some(err) = pending.take() {
+                                emit_error(&error_cb_for_timer, err);
+                            }
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                    }
+                }
+            })
+            .map_err(|e| {
+                Error::with_message(
+                    ErrorKind::ResourceExhausted,
+                    format!("Failed to spawn event timer thread: {e}"),
+                )
+            })?;
+
+        Ok(driver.add_event_callback(move |event| {
+            match event {
+                sys::AsioDriverEvent::Message {
+                    selector: msg,
+                    value,
+                } => match msg {
+                    sys::AsioMessageSelectors::kAsioSelectorSupported => {
+                        // Signal which selectors this stream opts into.
+                        matches!(
+                            sys::AsioMessageSelectors::from_i64(value as i64),
+                            Some(sys::AsioMessageSelectors::kAsioBufferSizeChange)
+                                | Some(sys::AsioMessageSelectors::kAsioOverload)
+                        )
+                    }
+                    sys::AsioMessageSelectors::kAsioResetRequest => {
+                        // Guard on Starting: some USB ASIO drivers (ASIO4ALL, Focusrite, etc.)
+                        // fire spurious reset/resync requests during driver.start().
+                        if StreamState::load(&state, Ordering::Acquire) != StreamState::Starting {
+                            let _ = timer_tx.send(Error::with_message(
+                                ErrorKind::StreamInvalidated,
+                                "Stream reset was requested by the ASIO driver",
+                            ));
+                        }
+                        true
+                    }
+                    sys::AsioMessageSelectors::kAsioResyncRequest => {
+                        // Per the ASIO spec (and matching JUCE's behavior), kAsioResyncRequest
+                        // means the driver needs a full stop/reinit/start. It is *not* a simple
+                        // xrun notification.
+                        if StreamState::load(&state, Ordering::Acquire) != StreamState::Starting {
+                            let _ = timer_tx.send(Error::with_message(
+                                ErrorKind::StreamInvalidated,
+                                "Stream resynchronization was requested by the ASIO driver",
+                            ));
+                        }
+                        true
+                    }
+                    sys::AsioMessageSelectors::kAsioOverload => {
+                        if StreamState::load(&state, Ordering::Acquire) == StreamState::Playing {
+                            let _ =
+                                try_emit_error(&error_callback_shared, Error::new(ErrorKind::Xrun));
+                        }
+                        true
+                    }
+                    sys::AsioMessageSelectors::kAsioLatenciesChanged => {
+                        if let Ok(latencies) = driver_for_latency.latencies() {
+                            let latency = if is_input {
+                                latencies.input
+                            } else {
+                                latencies.output
+                            };
+                            hardware_latency.store(latency.max(0) as u32, Ordering::Relaxed);
+                        }
+                        false
+                    }
+                    sys::AsioMessageSelectors::kAsioBufferSizeChange => {
+                        if value > 0 {
+                            let mut streams = asio_streams_for_event
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            let stream = if is_input {
+                                streams.input.as_mut()
+                            } else {
+                                streams.output.as_mut()
+                            };
+                            if let Some(s) = stream {
+                                s.buffer_size = value;
+                            }
+                        }
+                        true
+                    }
+                    _ => false,
+                },
+                sys::AsioDriverEvent::SampleRateChanged(new_rate) => {
+                    let should_notify = match configured_sample_rate {
+                        Some(rate) => (new_rate - rate).abs() >= 1.0,
+                        None => {
+                            // Unknown baseline: any reported change is treated as invalidating.
+                            true
+                        }
+                    };
+                    if should_notify
+                        && StreamState::load(&state, Ordering::Acquire) != StreamState::Starting
+                    {
+                        let _ = timer_tx.send(Error::with_message(
+                            ErrorKind::StreamInvalidated,
+                            format!("Sample rate changed to {new_rate} Hz by the ASIO driver"),
+                        ));
+                    }
+                    false
+                }
+            }
+        }))
+    }
+}
+
+impl Drop for Stream {
+    fn drop(&mut self) {
+        self.driver.remove_callback(self.callback_id);
+        self.driver
+            .remove_event_callback(self.driver_event_callback_id);
+    }
+}
+
+/// Check whether or not the desired config is supported by the stream.
+///
+/// Checks sample rate, data type, number of channels, and buffer size.
+fn check_config(
+    driver: &sys::Driver,
+    config: StreamConfig,
+    sample_format: SampleFormat,
+    num_asio_channels: u16,
+) -> Result<(), Error> {
+    let StreamConfig {
+        channels,
+        sample_rate,
+        buffer_size,
+    } = config;
+
+    // Validate buffer size if `Fixed` is specified. This is necessary because ASIO's
+    // `create_buffers` only validates the upper bound (returns `InvalidBufferSize` if > max) but
+    // does NOT validate the lower bound. Passing a buffer size below min would be accepted but
+    // behavior is unspecified.
+    if let BufferSize::Fixed(requested_size) = buffer_size {
+        let range = driver.buffersize_range().map_err(build_stream_err)?;
+        let requested_size_i32 = requested_size as i32;
+        if !(range.min..=range.max).contains(&requested_size_i32) {
+            return Err(Error::with_message(
+                ErrorKind::UnsupportedConfig,
+                format!(
+                    "Buffer size {requested_size} is not in the supported range {min}..={max}",
+                    min = range.min,
+                    max = range.max
+                ),
+            ));
+        }
+        if let sys::BufferPreference::Stepped { step, .. } = range.preferred {
+            let offset = requested_size_i32 - range.min;
+            if offset % step as i32 != 0 {
+                return Err(Error::with_message(
+                    ErrorKind::UnsupportedConfig,
+                    format!(
+                        "Buffer size {requested_size} is not valid; sizes must start at {min} and increment by {step}",
+                        min = range.min
+                    ),
+                ));
+            }
+        }
+    }
+
+    // Try and set the sample rate to what the user selected.
+    let sample_rate = sample_rate.into();
+    if sample_rate != driver.sample_rate().map_err(build_stream_err)? {
+        if driver
+            .can_sample_rate(sample_rate)
+            .map_err(build_stream_err)?
+        {
+            driver
+                .set_sample_rate(sample_rate)
+                .map_err(build_stream_err)?;
+        } else {
+            return Err(Error::with_message(
+                ErrorKind::UnsupportedConfig,
+                format!("Sample rate {sample_rate} Hz is not supported"),
+            ));
+        }
+    }
+    // unsigned formats are not supported by asio
+    match sample_format {
+        SampleFormat::I16 | SampleFormat::I24 | SampleFormat::I32 | SampleFormat::F32 => (),
+        _ => {
+            return Err(Error::with_message(
+                ErrorKind::UnsupportedConfig,
+                format!("Sample format {sample_format} is not supported"),
+            ))
+        }
+    }
+    if channels > num_asio_channels {
+        return Err(Error::with_message(
+            ErrorKind::UnsupportedConfig,
+            format!("Channel count {channels} exceeds the maximum of {num_asio_channels}"),
+        ));
+    }
+    Ok(())
+}
+
+/// Cast a byte slice into a mutable slice of desired type.
+///
+/// Safety: it's up to the caller to ensure that the input slice has valid bit representations.
+#[inline]
+unsafe fn cast_slice_mut<T>(v: &mut [u8]) -> &mut [T] {
+    debug_assert!(v.len() % std::mem::size_of::<T>() == 0);
+    std::slice::from_raw_parts_mut(v.as_mut_ptr() as *mut T, v.len() / std::mem::size_of::<T>())
+}
+
+/// Helper function to convert from little endianness.
+#[inline]
+fn from_le<T: PrimInt>(t: T) -> T {
+    T::from_le(t)
+}
+
+/// Helper function to convert from big endianness.
+#[inline]
+fn from_be<T: PrimInt>(t: T) -> T {
+    T::from_be(t)
+}
+
+/// Shorthand for retrieving the asio buffer slice associated with a channel.
+///
+/// The channel length is automatically inferred from the buffer size or some
+/// value can be passed to enforce a certain length (for odd sized sample formats)
+#[inline]
+unsafe fn asio_channel_slice<T>(
+    asio_stream: &sys::AsioStream,
+    buffer_index: usize,
+    channel_index: usize,
+    requested_channel_length: Option<usize>,
+) -> &[T] {
+    let channel_length = requested_channel_length.unwrap_or(asio_stream.buffer_size as usize);
+    let buff_ptr: *const T =
+        asio_stream.buffer_infos[channel_index].buffers[buffer_index] as *const _;
+    std::slice::from_raw_parts(buff_ptr, channel_length)
+}
+
+/// Shorthand for retrieving the asio buffer slice associated with a channel.
+///
+/// The channel length is automatically inferred from the buffer size or some
+/// value can be passed to enforce a certain length (for odd sized sample formats)
+#[inline]
+unsafe fn asio_channel_slice_mut<T>(
+    asio_stream: &mut sys::AsioStream,
+    buffer_index: usize,
+    channel_index: usize,
+    requested_channel_length: Option<usize>,
+) -> &mut [T] {
+    let channel_length = requested_channel_length.unwrap_or(asio_stream.buffer_size as usize);
+    let buff_ptr: *mut T = asio_stream.buffer_infos[channel_index].buffers[buffer_index] as *mut _;
+    std::slice::from_raw_parts_mut(buff_ptr, channel_length)
+}
+
+fn load_driver_err(e: sys::LoadDriverError) -> Error {
+    match e {
+        sys::LoadDriverError::LoadDriverFailed | sys::LoadDriverError::DriverAlreadyExists => {
+            Error::with_message(ErrorKind::DeviceNotAvailable, e.to_string())
+        }
+        sys::LoadDriverError::InitializationFailed(asio_err) => build_stream_err(asio_err),
+    }
+}
+
+fn build_stream_err(e: sys::AsioError) -> Error {
+    match e {
+        sys::AsioError::NoDrivers | sys::AsioError::HardwareMalfunction => {
+            Error::with_message(ErrorKind::DeviceNotAvailable, e.to_string())
+        }
+        sys::AsioError::InvalidInput | sys::AsioError::BadMode => {
+            Error::with_message(ErrorKind::InvalidInput, e.to_string())
+        }
+        sys::AsioError::InvalidBufferSize | sys::AsioError::NoRate => {
+            Error::with_message(ErrorKind::UnsupportedConfig, e.to_string())
+        }
+        sys::AsioError::HardwareStuck => Error::with_message(ErrorKind::DeviceBusy, e.to_string()),
+        err => Error::with_message(ErrorKind::BackendError, err.to_string()),
+    }
+}
+
+/// Convert i24 bytes to i32
+#[inline]
+fn i24_bytes_to_i32(i24_bytes: &[u8; 3], little_endian: bool) -> i32 {
+    let sample = if little_endian {
+        i32::from_le_bytes([i24_bytes[0], i24_bytes[1], i24_bytes[2], 0u8])
+    } else {
+        i32::from_le_bytes([i24_bytes[2], i24_bytes[1], i24_bytes[0], 0u8])
+    };
+    if sample & 0x800000 != 0 {
+        sample | -0x1000000
+    } else {
+        sample
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn process_output_callback_i24<D>(
+    data_callback: &mut D,
+    interleaved: &mut [u8],
+    silence_asio_buffer: bool,
+    little_endian: bool,
+    asio_stream: &mut sys::AsioStream,
+    asio_info: &sys::CallbackInfo,
+    sample_rate: SampleRate,
+    hardware_latency_frames: usize,
+    callback_instant: StreamInstant,
+) where
+    D: FnMut(&mut Data, &OutputCallbackInfo) + Send + 'static,
+{
+    let format = SampleFormat::I24;
+    let interleaved: &mut [I24] = cast_slice_mut(interleaved);
+    apply_output_callback_to_data::<I24, _>(
+        data_callback,
+        interleaved,
+        callback_instant,
+        sample_rate,
+        format,
+        hardware_latency_frames,
+    );
+
+    // Size of samples in the ASIO buffer (has to be 3 in this case)
+    let asio_sample_size_bytes = 3;
+    let n_channels = interleaved.len() / asio_stream.buffer_size as usize;
+    let buffer_index = asio_info.buffer_index as usize;
+
+    // Write interleaved samples to ASIO channels, one channel at a time.
+    for ch_ix in 0..n_channels {
+        // Take channel as u8 array ([u8; 3] packets to represent i24)
+        let asio_channel = asio_channel_slice_mut(
+            asio_stream,
+            buffer_index,
+            ch_ix,
+            Some(asio_stream.buffer_size as usize * asio_sample_size_bytes),
+        );
+
+        if silence_asio_buffer {
+            asio_channel.align_to_mut::<u8>().1.fill(0);
+        }
+
+        // Fill in every channel from the interleaved vector
+        for (channel_sample, sample_in_buffer) in asio_channel
+            .chunks_mut(asio_sample_size_bytes)
+            .zip(interleaved.iter().skip(ch_ix).step_by(n_channels))
+        {
+            // Add samples from buffer if no silence was applied, otherwise just overwrite
+            let result = if silence_asio_buffer {
+                sample_in_buffer.inner()
+            } else {
+                let sample = i24_bytes_to_i32(
+                    &[channel_sample[0], channel_sample[1], channel_sample[2]],
+                    little_endian,
+                );
+                (sample_in_buffer.inner() + sample).clamp(-8388608, 8388607)
+            };
+            let bytes = result.to_le_bytes();
+            if little_endian {
+                channel_sample[0] = bytes[0];
+                channel_sample[1] = bytes[1];
+                channel_sample[2] = bytes[2];
+            } else {
+                channel_sample[2] = bytes[0];
+                channel_sample[1] = bytes[1];
+                channel_sample[0] = bytes[2];
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn process_input_callback_i24<D>(
+    data_callback: &mut D,
+    interleaved: &mut [u8],
+    asio_stream: &sys::AsioStream,
+    asio_info: &sys::CallbackInfo,
+    sample_rate: SampleRate,
+    little_endian: bool,
+    hardware_latency_frames: usize,
+    callback_instant: StreamInstant,
+) where
+    D: FnMut(&Data, &InputCallbackInfo) + Send + 'static,
+{
+    let format = SampleFormat::I24;
+
+    // 1. Write the ASIO channels to the CPAL buffer.
+    let interleaved: &mut [I24] = cast_slice_mut(interleaved);
+    let n_frames = asio_stream.buffer_size as usize;
+    let n_channels = interleaved.len() / n_frames;
+    let buffer_index = asio_info.buffer_index as usize;
+    let asio_sample_size_bytes = 3;
+
+    for ch_ix in 0..n_channels {
+        let asio_channel = asio_channel_slice::<u8>(
+            asio_stream,
+            buffer_index,
+            ch_ix,
+            Some(n_frames * asio_sample_size_bytes),
+        );
+        for (channel_sample, sample_in_buffer) in asio_channel
+            .chunks(asio_sample_size_bytes)
+            .zip(interleaved.iter_mut().skip(ch_ix).step_by(n_channels))
+        {
+            let sample = i24_bytes_to_i32(
+                &[channel_sample[0], channel_sample[1], channel_sample[2]],
+                little_endian,
+            );
+            *sample_in_buffer = I24::new(sample).unwrap();
+        }
+    }
+
+    // 2. Deliver the interleaved buffer to the callback.
+    apply_input_callback_to_data::<I24, _>(
+        data_callback,
+        interleaved,
+        callback_instant,
+        sample_rate,
+        format,
+        hardware_latency_frames,
+    );
+}
+
+/// Apply the output callback to the interleaved buffer.
+#[inline]
+unsafe fn apply_output_callback_to_data<A, D>(
+    data_callback: &mut D,
+    interleaved: &mut [A],
+    callback_instant: StreamInstant,
+    sample_rate: SampleRate,
+    sample_format: SampleFormat,
+    hardware_latency_frames: usize,
+) where
+    A: Copy,
+    D: FnMut(&mut Data, &OutputCallbackInfo) + Send + 'static,
+{
+    let mut data = Data::from_parts(
+        interleaved.as_mut_ptr() as *mut (),
+        interleaved.len(),
+        sample_format,
+    );
+    let delay = frames_to_duration(hardware_latency_frames as FrameCount, sample_rate);
+    let playback = callback_instant + delay;
+    let timestamp = OutputStreamTimestamp {
+        callback: callback_instant,
+        playback,
+    };
+    let info = OutputCallbackInfo { timestamp };
+    data_callback(&mut data, &info);
+}
+
+/// Apply the input callback to the interleaved buffer.
+#[inline]
+unsafe fn apply_input_callback_to_data<A, D>(
+    data_callback: &mut D,
+    interleaved: &mut [A],
+    callback_instant: StreamInstant,
+    sample_rate: SampleRate,
+    format: SampleFormat,
+    hardware_latency_frames: usize,
+) where
+    A: Copy,
+    D: FnMut(&Data, &InputCallbackInfo) + Send + 'static,
+{
+    let data = Data::from_parts(
+        interleaved.as_mut_ptr() as *mut (),
+        interleaved.len(),
+        format,
+    );
+    let delay = frames_to_duration(hardware_latency_frames as FrameCount, sample_rate);
+    let capture = callback_instant
+        .checked_sub(delay)
+        .unwrap_or(StreamInstant::ZERO);
+    let timestamp = InputStreamTimestamp {
+        callback: callback_instant,
+        capture,
+    };
+    let info = InputCallbackInfo { timestamp };
+    data_callback(&data, &info);
+}

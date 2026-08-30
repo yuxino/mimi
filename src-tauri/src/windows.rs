@@ -79,6 +79,17 @@ use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
+#[cfg(target_os = "windows")]
+mod windows_workspace;
+
+#[cfg(target_os = "windows")]
+pub use windows_workspace::WindowsWorkspaceFollower;
+
+#[cfg(target_os = "windows")]
+pub fn install_windows_workspace_follower(app: &AppHandle) -> WindowsWorkspaceFollower {
+    windows_workspace::install(app)
+}
+
 #[cfg(target_os = "macos")]
 tauri_nspanel::tauri_panel! {
     panel!(SubtitleOverlayPanel {
@@ -129,10 +140,18 @@ fn convert_overlay_to_panel(
     Ok(())
 }
 
-/// Logical-coordinate frame layout version. Frames saved before this version
-/// stored physical pixels and must be discarded (they restore off-screen on
-/// Retina displays).
+/// Persisted overlay-coordinate layout version. macOS/Linux use desktop-wide
+/// logical coordinates. Windows v2 uses unambiguous physical desktop origins
+/// with logical window dimensions, because independently dividing each
+/// monitor's global origin by its DPI creates overlapping coordinate spaces.
+#[cfg(target_os = "windows")]
+pub const OVERLAY_FRAME_LAYOUT_VERSION: u64 = 2;
+#[cfg(not(target_os = "windows"))]
 pub const OVERLAY_FRAME_LAYOUT_VERSION: u64 = 1;
+
+fn frame_layout_is_current(version: u64) -> bool {
+    version == OVERLAY_FRAME_LAYOUT_VERSION
+}
 
 pub struct SubtitleOverlayMetrics;
 
@@ -175,7 +194,7 @@ pub struct OverlayState {
     /// Active resize drag, if any (only valid while `mode == Expanded`).
     pub resize_drag: Option<ResizeRegion>,
     /// Pointer position and frame snapshot taken at `resize_start`.
-    pub resize_start: Option<(f64, f64, OverlayFrame)>,
+    resize_start: Option<ResizeGesture>,
     /// Timestamp of the most recent Moved/Resized event; debounced commits
     /// compare against it to drop superseded tasks.
     last_geometry_event: Option<std::time::Instant>,
@@ -192,7 +211,14 @@ struct OverlayApplySnapshot {
     user_frame: OverlayFrame,
     presentation_frame: Option<OverlayFrame>,
     resize_drag: Option<ResizeRegion>,
-    resize_start: Option<(f64, f64, OverlayFrame)>,
+    resize_start: Option<ResizeGesture>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ResizeGesture {
+    pointer: (f64, f64),
+    frame: OverlayFrame,
+    work_area: LogicalWorkArea,
 }
 
 impl From<&OverlayState> for OverlayApplySnapshot {
@@ -335,7 +361,7 @@ impl OverlayState {
     /// starts in the expanded mode.
     pub fn load(app: &AppHandle, settings: &SettingsStore) -> Self {
         let prefs = settings.preferences();
-        let trusted = (prefs.frame_layout_version >= OVERLAY_FRAME_LAYOUT_VERSION)
+        let trusted = frame_layout_is_current(prefs.frame_layout_version)
             .then_some(prefs.overlay_frame)
             .flatten()
             .filter(|frame| {
@@ -446,15 +472,19 @@ impl OverlayWindowManager {
                     SubtitleOverlayMetrics::MAXIMUM_WIDTH,
                     SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
                 )
-                .position(frame.x, frame.y)
                 .transparent(true)
                 .decorations(false)
                 .always_on_top(true)
-                .visible_on_all_workspaces(true)
                 .skip_taskbar(true)
                 .shadow(false)
                 .resizable(true)
                 .visible(false);
+        #[cfg(not(target_os = "windows"))]
+        let builder = builder
+            .position(frame.x, frame.y)
+            .visible_on_all_workspaces(true);
+        #[cfg(target_os = "windows")]
+        let builder = builder.focusable(false).focused(false);
 
         match builder.build() {
             Ok(window) => {
@@ -462,6 +492,12 @@ impl OverlayWindowManager {
                     let _ = window.destroy();
                     pipeline_log!("overlay window failed label=panel_conversion_failed");
                     return;
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    set_desktop_position(&window, frame.x, frame.y);
+                    let scale = desktop_scale_for_frame(app, &window, &frame);
+                    set_desktop_size(&window, frame.width, frame.height, scale);
                 }
                 if let Some(presentation) = app.try_state::<OverlayPresentationState>() {
                     presentation.invalidate();
@@ -657,12 +693,13 @@ impl OverlayWindowManager {
             geometry.max.1,
         )));
         if let Some(animation) = animation {
-            let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-            let _ = window.set_position(tauri::LogicalPosition::new(geometry.x, geometry.y));
+            let scale = desktop_scale_for_frame(app, &window, &frame);
+            set_desktop_position(&window, geometry.x, geometry.y);
             animate_resize(&window, animation, scale, geometry.width, geometry.height);
         } else {
-            let _ = window.set_position(tauri::LogicalPosition::new(geometry.x, geometry.y));
-            let _ = window.set_size(tauri::LogicalSize::new(geometry.width, geometry.height));
+            let scale = desktop_scale_for_frame(app, &window, &frame);
+            set_desktop_position(&window, geometry.x, geometry.y);
+            set_desktop_size(&window, geometry.width, geometry.height, scale);
         }
     }
 
@@ -722,8 +759,9 @@ impl OverlayWindowManager {
                 let Some(window) = app_for_main.get_webview_window("overlay") else {
                     return;
                 };
-                let _ = window.set_position(tauri::LogicalPosition::new(frame.x, frame.y));
-                let _ = window.set_size(tauri::LogicalSize::new(frame.width, frame.height));
+                let scale = desktop_scale_for_frame(&app_for_main, &window, &frame);
+                set_desktop_position(&window, frame.x, frame.y);
+                set_desktop_size(&window, frame.width, frame.height, scale);
             })
             .is_err()
         {
@@ -928,7 +966,8 @@ impl OverlayWindowManager {
 
     /// Begins an overlay resize drag. `region` is one of topLeft/top/topRight/
     /// left/right/bottomLeft/bottom/bottomRight; `x`/`y` are the pointer
-    /// position in screen (logical) coordinates.
+    /// position in the WebView's screen coordinates. Windows replaces those
+    /// values with the native physical cursor position.
     pub fn resize_start(
         app: &AppHandle,
         overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
@@ -938,6 +977,11 @@ impl OverlayWindowManager {
     ) -> Result<(), String> {
         let region = ResizeRegion::from_name(region_name)
             .ok_or_else(|| format!("unknown resize region: {region_name}"))?;
+        let Some(window) = app.get_webview_window("overlay") else {
+            return Ok(());
+        };
+        let work_area = current_work_area_logical(app, &window);
+        let pointer = resize_pointer_position((x, y));
         let (mut state, observed_frame, _, _) =
             lock_overlay_after_native_geometry_read(app, overlay_state);
         // Resizing is meaningless (and corrupting) in any transient mode.
@@ -953,7 +997,11 @@ impl OverlayWindowManager {
             state.user_frame = observed_frame;
         }
         state.resize_drag = Some(region);
-        state.resize_start = Some((x, y, state.user_frame));
+        state.resize_start = Some(ResizeGesture {
+            pointer,
+            frame: state.user_frame,
+            work_area,
+        });
         tracing::info!(
             "resize start region={region:?} frame={:?}",
             (
@@ -966,19 +1014,18 @@ impl OverlayWindowManager {
         Ok(())
     }
 
-    /// Continues a resize drag with the current pointer position (screen
-    /// logical px). The dragged edge/corner stays anchored, sizes clamp to
-    /// min/max, and the frame keeps at least 48 px on screen.
+    /// Continues a resize drag with the current pointer position. The dragged
+    /// edge/corner stays anchored, sizes clamp to min/max, and the frame keeps
+    /// at least 48 logical px on screen.
     pub fn resize_move(
         app: &AppHandle,
         overlay_state: &Arc<std::sync::Mutex<OverlayState>>,
         x: f64,
         y: f64,
     ) {
-        let Some(window) = app.get_webview_window("overlay") else {
+        if app.get_webview_window("overlay").is_none() {
             return;
-        };
-        let work_area = current_work_area_logical(app, &window);
+        }
         let mut state = overlay_state.lock().unwrap();
         if state.mode != OverlayMode::Expanded {
             return;
@@ -986,30 +1033,10 @@ impl OverlayWindowManager {
         let Some(region) = state.resize_drag else {
             return;
         };
-        let Some((start_x, start_y, start_frame)) = state.resize_start else {
+        let Some(start) = state.resize_start else {
             return;
         };
-        let mut local_start_frame = start_frame;
-        local_start_frame.x -= work_area.x;
-        local_start_frame.y -= work_area.y;
-        let mut frame = apply_drag(
-            region,
-            (start_x - work_area.x, start_y - work_area.y),
-            &local_start_frame,
-            (x - work_area.x, y - work_area.y),
-            (
-                SubtitleOverlayMetrics::MINIMUM_WIDTH,
-                SubtitleOverlayMetrics::MINIMUM_HEIGHT,
-            ),
-            (
-                SubtitleOverlayMetrics::MAXIMUM_WIDTH,
-                SubtitleOverlayMetrics::MAXIMUM_HEIGHT,
-            ),
-            (work_area.width, work_area.height),
-            48.0,
-        );
-        frame.x += work_area.x;
-        frame.y += work_area.y;
+        let frame = resized_frame_for_pointer(region, start, resize_pointer_position((x, y)));
         // Skip sub-pixel jitter: unchanged frames do not need window ops.
         if (frame.x - state.user_frame.x).abs() < 0.5
             && (frame.y - state.user_frame.y).abs() < 0.5
@@ -1058,6 +1085,61 @@ impl OverlayWindowManager {
         Self::apply_if_geometry_current(app, overlay_state, expected_state, false);
         tracing::info!("resize end");
     }
+}
+
+/// WebView `screenX`/`screenY` are not a stable global coordinate space on a
+/// mixed-DPI Windows desktop. Read the native cursor position there; retain
+/// the existing logical event coordinates on other platforms.
+fn resize_pointer_position(fallback: (f64, f64)) -> (f64, f64) {
+    #[cfg(target_os = "windows")]
+    {
+        use ::windows::Win32::Foundation::POINT;
+        use ::windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+        let mut point = POINT::default();
+        if unsafe { GetCursorPos(&mut point) }.is_ok() {
+            return (point.x as f64, point.y as f64);
+        }
+    }
+    fallback
+}
+
+/// Applies a resize entirely in the work area's desktop coordinate space,
+/// then converts only the resulting dimensions back to logical pixels.
+fn resized_frame_for_pointer(
+    region: ResizeRegion,
+    start: ResizeGesture,
+    pointer: (f64, f64),
+) -> OverlayFrame {
+    let work_area = start.work_area;
+    let scale = work_area.coordinate_scale;
+    let local_start_frame = OverlayFrame {
+        x: start.frame.x - work_area.x,
+        y: start.frame.y - work_area.y,
+        width: start.frame.width * scale,
+        height: start.frame.height * scale,
+    };
+    let mut frame = apply_drag(
+        region,
+        (start.pointer.0 - work_area.x, start.pointer.1 - work_area.y),
+        &local_start_frame,
+        (pointer.0 - work_area.x, pointer.1 - work_area.y),
+        (
+            SubtitleOverlayMetrics::MINIMUM_WIDTH * scale,
+            SubtitleOverlayMetrics::MINIMUM_HEIGHT * scale,
+        ),
+        (
+            SubtitleOverlayMetrics::MAXIMUM_WIDTH * scale,
+            SubtitleOverlayMetrics::MAXIMUM_HEIGHT * scale,
+        ),
+        (work_area.coordinate_width(), work_area.coordinate_height()),
+        48.0 * scale,
+    );
+    frame.x += work_area.x;
+    frame.y += work_area.y;
+    frame.width /= scale;
+    frame.height /= scale;
+    frame
 }
 
 /// Reasserts presentation-level window behavior whenever the overlay is
@@ -1133,6 +1215,10 @@ fn configure_overlay_window_impl(window: &tauri::WebviewWindow, order_front: boo
     {
         let _ = order_front;
         let _ = window.set_always_on_top(true);
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
         let _ = window.set_visible_on_all_workspaces(true);
     }
 
@@ -1242,16 +1328,63 @@ fn current_work_area_logical(app: &AppHandle, window: &tauri::WebviewWindow) -> 
             y: 0.0,
             width: 1440.0,
             height: 900.0,
+            coordinate_scale: 1.0,
         })
+}
+
+/// Sets a native desktop origin without ever combining global coordinates
+/// from monitors that use different DPI scales. Window dimensions remain in
+/// logical pixels so the overlay keeps the same visual size on every screen.
+fn set_desktop_position(window: &tauri::WebviewWindow, x: f64, y: f64) {
+    #[cfg(target_os = "windows")]
+    let _ = window.set_position(tauri::PhysicalPosition::new(
+        x.round() as i32,
+        y.round() as i32,
+    ));
+
+    #[cfg(not(target_os = "windows"))]
+    let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+}
+
+fn set_desktop_size(window: &tauri::WebviewWindow, width: f64, height: f64, coordinate_scale: f64) {
+    #[cfg(target_os = "windows")]
+    let _ = window.set_size(tauri::PhysicalSize::new(
+        (width * coordinate_scale).round() as u32,
+        (height * coordinate_scale).round() as u32,
+    ));
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = coordinate_scale;
+        let _ = window.set_size(tauri::LogicalSize::new(width, height));
+    }
+}
+
+fn desktop_scale_for_frame(
+    app: &AppHandle,
+    window: &tauri::WebviewWindow,
+    frame: &OverlayFrame,
+) -> f64 {
+    #[cfg(target_os = "windows")]
+    if let Some(area) = work_area_for_saved_frame(app, frame) {
+        return area.coordinate_scale;
+    }
+
+    let _ = (app, frame);
+    window.scale_factor().unwrap_or(1.0).max(1.0)
 }
 
 fn overlay_frame_from_window(app: &AppHandle) -> Option<OverlayFrame> {
     let window = app.get_webview_window("overlay")?;
     let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
     let (size, position) = (window.inner_size().ok()?, window.outer_position().ok()?);
+    #[cfg(target_os = "windows")]
+    let (x, y) = (position.x as f64, position.y as f64);
+    #[cfg(not(target_os = "windows"))]
+    let (x, y) = (position.x as f64 / scale, position.y as f64 / scale);
     Some(OverlayFrame {
-        x: position.x as f64 / scale,
-        y: position.y as f64 / scale,
+        x,
+        y,
         width: size.width as f64 / scale,
         height: size.height as f64 / scale,
     })
@@ -1575,25 +1708,50 @@ fn default_overlay_origin(
     (0.0, 0.0)
 }
 
-/// Logical work area, including its desktop-space origin. Unlike the former
-/// popover placement helpers, this remains correct for monitors positioned to
-/// the left of or above the primary display.
+/// A monitor work area with logical dimensions and a desktop-space origin.
+/// Windows desktop origins are physical pixels and `coordinate_scale` maps
+/// logical distances into that coordinate space. Other platforms keep the
+/// former all-logical representation with a scale of 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct LogicalWorkArea {
     x: f64,
     y: f64,
     width: f64,
     height: f64,
+    coordinate_scale: f64,
+}
+
+impl LogicalWorkArea {
+    fn coordinate_width(self) -> f64 {
+        self.width * self.coordinate_scale
+    }
+
+    fn coordinate_height(self) -> f64 {
+        self.height * self.coordinate_scale
+    }
+
+    fn coordinate_distance(self, logical: f64) -> f64 {
+        logical * self.coordinate_scale
+    }
 }
 
 fn logical_work_area(monitor: &tauri::Monitor) -> LogicalWorkArea {
     let scale = monitor.scale_factor().max(1.0);
     let area = monitor.work_area();
+    #[cfg(target_os = "windows")]
+    let (x, y, coordinate_scale) = (area.position.x as f64, area.position.y as f64, scale);
+    #[cfg(not(target_os = "windows"))]
+    let (x, y, coordinate_scale) = (
+        area.position.x as f64 / scale,
+        area.position.y as f64 / scale,
+        1.0,
+    );
     LogicalWorkArea {
-        x: area.position.x as f64 / scale,
-        y: area.position.y as f64 / scale,
+        x,
+        y,
         width: area.size.width as f64 / scale,
         height: area.size.height as f64 / scale,
+        coordinate_scale,
     }
 }
 
@@ -1622,6 +1780,18 @@ fn choose_work_area_for_frame(
     areas: impl IntoIterator<Item = LogicalWorkArea>,
     fallback: Option<LogicalWorkArea>,
 ) -> Option<LogicalWorkArea> {
+    let areas = areas.into_iter().collect::<Vec<_>>();
+    // A saved frame's origin is always written in its owning monitor's
+    // desktop coordinate space. Prefer that unambiguous signal before
+    // estimating intersection: the same logical width has different physical
+    // extents on neighbouring mixed-DPI displays.
+    if let Some(area) = areas
+        .iter()
+        .copied()
+        .find(|area| frame_origin_is_inside_work_area(frame, *area))
+    {
+        return Some(area);
+    }
     areas
         .into_iter()
         .map(|area| (frame_intersection_area(frame, area), area))
@@ -1629,6 +1799,13 @@ fn choose_work_area_for_frame(
         .max_by(|left, right| left.0.total_cmp(&right.0))
         .map(|(_, area)| area)
         .or(fallback)
+}
+
+fn frame_origin_is_inside_work_area(frame: &OverlayFrame, area: LogicalWorkArea) -> bool {
+    frame.x >= area.x
+        && frame.x < area.x + area.coordinate_width()
+        && frame.y >= area.y
+        && frame.y < area.y + area.coordinate_height()
 }
 
 /// Maps a saved frame into another display's work area without changing its
@@ -1646,15 +1823,18 @@ fn map_frame_between_work_areas(
     } else {
         let horizontal_range = (source.width - frame.width).max(0.0);
         let horizontal_fraction = if horizontal_range > 0.0 {
-            ((frame.x - source.x) / horizontal_range).clamp(0.0, 1.0)
+            ((frame.x - source.x) / source.coordinate_scale / horizontal_range).clamp(0.0, 1.0)
         } else {
             0.5
         };
-        let bottom_inset = (source.y + source.height - frame.y - frame.height).max(0.0);
+        let bottom_inset = ((source.y + source.coordinate_height() - frame.y)
+            / source.coordinate_scale
+            - frame.height)
+            .max(0.0);
         let target_horizontal_range = (target.width - frame.width).max(0.0);
         OverlayFrame {
-            x: target.x + horizontal_fraction * target_horizontal_range,
-            y: target.y + target.height - frame.height - bottom_inset,
+            x: target.x + target.coordinate_distance(horizontal_fraction * target_horizontal_range),
+            y: target.y + target.coordinate_distance(target.height - frame.height - bottom_inset),
             ..frame
         }
     };
@@ -1668,17 +1848,22 @@ fn work_areas_approximately_equal(left: LogicalWorkArea, right: LogicalWorkArea)
         && (left.y - right.y).abs() < 1.0
         && (left.width - right.width).abs() < 1.0
         && (left.height - right.height).abs() < 1.0
+        && (left.coordinate_scale - right.coordinate_scale).abs() < 0.001
 }
 
 fn frame_intersection_area(frame: &OverlayFrame, area: LogicalWorkArea) -> f64 {
-    let width = (frame.x + frame.width).min(area.x + area.width) - frame.x.max(area.x);
-    let height = (frame.y + frame.height).min(area.y + area.height) - frame.y.max(area.y);
+    let width = (frame.x + area.coordinate_distance(frame.width))
+        .min(area.x + area.coordinate_width())
+        - frame.x.max(area.x);
+    let height = (frame.y + area.coordinate_distance(frame.height))
+        .min(area.y + area.coordinate_height())
+        - frame.y.max(area.y);
     width.max(0.0) * height.max(0.0)
 }
 
 fn clamp_frame_origin_to_work_area(frame: &mut OverlayFrame, area: LogicalWorkArea) {
-    let max_x = (area.x + area.width - frame.width).max(area.x);
-    let max_y = (area.y + area.height - frame.height).max(area.y);
+    let max_x = (area.x + area.coordinate_distance(area.width - frame.width)).max(area.x);
+    let max_y = (area.y + area.coordinate_distance(area.height - frame.height)).max(area.y);
     frame.x = frame.x.clamp(area.x, max_x);
     frame.y = frame.y.clamp(area.y, max_y);
 }
@@ -1705,8 +1890,8 @@ fn default_overlay_origin_in_work_area(
     area: LogicalWorkArea,
 ) -> (f64, f64) {
     let mut frame = OverlayFrame {
-        x: area.x + (area.width - width) / 2.0,
-        y: area.y + area.height - height - 72.0,
+        x: area.x + area.coordinate_distance((area.width - width) / 2.0),
+        y: area.y + area.coordinate_distance(area.height - height - 72.0),
         width,
         height,
     };
@@ -1759,11 +1944,14 @@ impl OverlayControlWindowManager {
                 .transparent(true)
                 .decorations(false)
                 .always_on_top(true)
-                .visible_on_all_workspaces(true)
                 .skip_taskbar(true)
                 .shadow(false)
                 .focused(false)
                 .visible(false);
+        #[cfg(not(target_os = "windows"))]
+        let builder = builder.visible_on_all_workspaces(true);
+        #[cfg(target_os = "windows")]
+        let builder = builder.focusable(false);
         let builder = match builder.parent(&overlay) {
             Ok(builder) => builder,
             Err(_) => {
@@ -1910,6 +2098,10 @@ impl OverlayControlWindowManager {
         let Some(window) = app.get_webview_window("overlay-control") else {
             return;
         };
+        #[cfg(target_os = "windows")]
+        let focus_policy = windows_control_focus_policy(mode, focus);
+        #[cfg(target_os = "windows")]
+        let _ = window.set_focusable(focus_policy.focusable_before_show);
         if mode == OverlayControlMode::Hidden {
             let _ = window.hide();
             let _ = window.emit(OVERLAY_CONTROL_MODE_EVENT, mode);
@@ -1921,7 +2113,13 @@ impl OverlayControlWindowManager {
         if !window.is_visible().unwrap_or(false) {
             show_overlay_control_window(app, &window);
         }
-        if focus {
+        #[cfg(target_os = "windows")]
+        let _ = window.set_focusable(focus_policy.focusable_after_show);
+        #[cfg(target_os = "windows")]
+        let should_focus = focus_policy.focus;
+        #[cfg(not(target_os = "windows"))]
+        let should_focus = focus;
+        if should_focus {
             focus_overlay_control(&window);
         }
     }
@@ -1938,13 +2136,17 @@ impl OverlayControlWindowManager {
             .map(|state| state.snapshot().1)
             .unwrap_or(Self::DEFAULT_PANEL_HEIGHT);
         let geometry = overlay_control_geometry(mode, anchor_x, anchor_y, panel_height, work_area);
-        let _ = window.set_size(tauri::LogicalSize::new(geometry.width, geometry.height));
-        let _ = window.set_position(tauri::LogicalPosition::new(geometry.x, geometry.y));
+        set_desktop_size(
+            &window,
+            geometry.width,
+            geometry.height,
+            work_area.coordinate_scale,
+        );
+        set_desktop_position(&window, geometry.x, geometry.y);
     }
 
     fn overlay_anchor(app: &AppHandle) -> Option<(f64, f64, LogicalWorkArea)> {
         let overlay = app.get_webview_window("overlay")?;
-        let scale = overlay.scale_factor().unwrap_or(1.0).max(1.0);
         let position = overlay.outer_position().ok()?;
         let monitor = overlay
             .current_monitor()
@@ -1952,11 +2154,52 @@ impl OverlayControlWindowManager {
             .flatten()
             .or_else(|| app.primary_monitor().ok().flatten())?;
         let work_area = logical_work_area(&monitor);
+        #[cfg(target_os = "windows")]
+        let (x, y) = (position.x as f64, position.y as f64);
+        #[cfg(not(target_os = "windows"))]
+        let (x, y) = {
+            let scale = overlay.scale_factor().unwrap_or(1.0).max(1.0);
+            (position.x as f64 / scale, position.y as f64 / scale)
+        };
         Some((
-            position.x as f64 / scale + Self::ANCHOR_OFFSET_X,
-            position.y as f64 / scale + Self::ANCHOR_OFFSET_Y,
+            x + work_area.coordinate_distance(Self::ANCHOR_OFFSET_X),
+            y + work_area.coordinate_distance(Self::ANCHOR_OFFSET_Y),
             work_area,
         ))
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WindowsControlFocusPolicy {
+    focusable_before_show: bool,
+    focusable_after_show: bool,
+    focus: bool,
+}
+
+/// Windows surfaces are nonactivating while shown. Only an explicit click
+/// that expands the full panel may make it focusable and request focus.
+#[cfg(any(target_os = "windows", test))]
+fn windows_control_focus_policy(
+    mode: OverlayControlMode,
+    explicit_user_action: bool,
+) -> WindowsControlFocusPolicy {
+    match mode {
+        OverlayControlMode::Hidden | OverlayControlMode::Island => WindowsControlFocusPolicy {
+            focusable_before_show: false,
+            focusable_after_show: false,
+            focus: false,
+        },
+        OverlayControlMode::Panel if explicit_user_action => WindowsControlFocusPolicy {
+            focusable_before_show: true,
+            focusable_after_show: true,
+            focus: true,
+        },
+        OverlayControlMode::Panel => WindowsControlFocusPolicy {
+            focusable_before_show: false,
+            focusable_after_show: true,
+            focus: false,
+        },
     }
 }
 
@@ -1992,15 +2235,18 @@ fn overlay_control_geometry(
     };
     let available_height = (work_area.height - margin * 2.0).max(1.0);
     let height = requested_height.min(available_height);
-    let min_x = work_area.x + margin;
-    let max_x = (work_area.x + work_area.width - width - margin).max(min_x);
+    let min_x = work_area.x + work_area.coordinate_distance(margin);
+    let max_x =
+        (work_area.x + work_area.coordinate_distance(work_area.width - width - margin)).max(min_x);
     let x = anchor_x.clamp(min_x, max_x);
-    let min_y = work_area.y + margin;
-    let max_y = (work_area.y + work_area.height - height - margin).max(min_y);
+    let min_y = work_area.y + work_area.coordinate_distance(margin);
+    let max_y = (work_area.y + work_area.coordinate_distance(work_area.height - height - margin))
+        .max(min_y);
     let preferred_y = if mode == OverlayControlMode::Panel && anchor_y > max_y {
         // Grow upward while keeping the panel's bottom aligned with the
         // compact island's bottom.
-        anchor_y + OverlayControlWindowManager::ISLAND_HEIGHT - height
+        anchor_y
+            + work_area.coordinate_distance(OverlayControlWindowManager::ISLAND_HEIGHT - height)
     } else {
         anchor_y
     };
@@ -2315,6 +2561,7 @@ mod geometry_tests {
         y: 24.0,
         width: 1512.0,
         height: 958.0,
+        coordinate_scale: 1.0,
     };
 
     fn state_with_frame(user_frame: OverlayFrame) -> OverlayState {
@@ -2383,18 +2630,110 @@ mod geometry_tests {
     }
 
     #[test]
+    fn persisted_layout_requires_an_exact_coordinate_version() {
+        assert!(frame_layout_is_current(OVERLAY_FRAME_LAYOUT_VERSION));
+        assert!(!frame_layout_is_current(
+            OVERLAY_FRAME_LAYOUT_VERSION.saturating_sub(1)
+        ));
+        assert!(!frame_layout_is_current(OVERLAY_FRAME_LAYOUT_VERSION + 1));
+    }
+
+    #[test]
+    fn windows_control_focus_policy_never_activates_passive_surfaces() {
+        assert_eq!(
+            windows_control_focus_policy(OverlayControlMode::Island, false),
+            WindowsControlFocusPolicy {
+                focusable_before_show: false,
+                focusable_after_show: false,
+                focus: false,
+            }
+        );
+        assert_eq!(
+            windows_control_focus_policy(OverlayControlMode::Panel, false),
+            WindowsControlFocusPolicy {
+                focusable_before_show: false,
+                focusable_after_show: true,
+                focus: false,
+            }
+        );
+        assert_eq!(
+            windows_control_focus_policy(OverlayControlMode::Panel, true),
+            WindowsControlFocusPolicy {
+                focusable_before_show: true,
+                focusable_after_show: true,
+                focus: true,
+            }
+        );
+    }
+
+    #[test]
+    fn mixed_dpi_work_areas_keep_distinct_physical_desktop_origins() {
+        let primary = LogicalWorkArea {
+            x: 0.0,
+            y: 0.0,
+            width: 1920.0,
+            height: 1040.0,
+            coordinate_scale: 1.0,
+        };
+        let right = LogicalWorkArea {
+            x: 1920.0,
+            y: 0.0,
+            width: 2560.0 / 1.5,
+            height: 1400.0 / 1.5,
+            coordinate_scale: 1.5,
+        };
+        let on_right = frame(2070.0, 150.0, 640.0, 136.0);
+
+        assert_eq!(
+            choose_work_area_for_frame(&on_right, [primary, right], Some(primary)),
+            Some(right)
+        );
+        assert_eq!(
+            default_overlay_origin_in_work_area(640.0, 136.0, right),
+            (2720.0, 1088.0)
+        );
+        let straddling_from_primary = frame(1500.0, 150.0, 640.0, 136.0);
+        assert_eq!(
+            choose_work_area_for_frame(&straddling_from_primary, [primary, right], Some(primary)),
+            Some(primary)
+        );
+    }
+
+    #[test]
+    fn mixed_dpi_resize_converts_physical_delta_back_to_logical_size() {
+        let work_area = LogicalWorkArea {
+            x: 1920.0,
+            y: 0.0,
+            width: 2560.0 / 1.5,
+            height: 1400.0 / 1.5,
+            coordinate_scale: 1.5,
+        };
+        let start = ResizeGesture {
+            pointer: (3030.0, 354.0),
+            frame: frame(2070.0, 150.0, 640.0, 136.0),
+            work_area,
+        };
+
+        let resized = resized_frame_for_pointer(ResizeRegion::BottomRight, start, (3180.0, 429.0));
+
+        assert_eq!(resized, frame(2070.0, 150.0, 740.0, 186.0));
+    }
+
+    #[test]
     fn saved_frame_prefers_the_secondary_work_area_it_occupies() {
         let primary = LogicalWorkArea {
             x: 0.0,
             y: 24.0,
             width: 1512.0,
             height: 958.0,
+            coordinate_scale: 1.0,
         };
         let left = LogicalWorkArea {
             x: -1728.0,
             y: -120.0,
             width: 1728.0,
             height: 1080.0,
+            coordinate_scale: 1.0,
         };
         let saved = frame(-1400.0, 680.0, 640.0, 136.0);
 
@@ -2411,6 +2750,7 @@ mod geometry_tests {
             y: -120.0,
             width: 1728.0,
             height: 1080.0,
+            coordinate_scale: 1.0,
         };
         let saved = frame(436.0, 774.0, 640.0, 136.0);
 
@@ -2426,6 +2766,7 @@ mod geometry_tests {
             y: 100.0,
             width: 520.0,
             height: 200.0,
+            coordinate_scale: 1.0,
         };
         let saved = frame(400.0, 400.0, 640.0, 300.0);
 
@@ -2563,7 +2904,11 @@ mod geometry_tests {
     fn resize_end_cancels_a_queued_move_from_the_previous_gesture() {
         let mut state = state_with_frame(frame(400.0, 700.0, 640.0, 136.0));
         state.resize_drag = Some(ResizeRegion::BottomRight);
-        state.resize_start = Some((400.0, 700.0, state.user_frame));
+        state.resize_start = Some(ResizeGesture {
+            pointer: (400.0, 700.0),
+            frame: state.user_frame,
+            work_area: WORK_AREA,
+        });
         let queued_move = OverlayApplySnapshot::from(&state);
 
         state.resize_drag = None;
@@ -2604,6 +2949,7 @@ mod geometry_tests {
             y: -120.0,
             width: 1728.0,
             height: 1080.0,
+            coordinate_scale: 1.0,
         };
         let mut saved = frame(-2200.0, -300.0, 640.0, 136.0);
 
@@ -2629,6 +2975,7 @@ mod geometry_tests {
             y: 50.0,
             width: 520.0,
             height: 320.0,
+            coordinate_scale: 1.0,
         };
         let mut oversized = frame(480.0, 260.0, 1_200.0, 600.0);
 
@@ -2644,6 +2991,7 @@ mod geometry_tests {
             y: -120.0,
             width: 1728.0,
             height: 1080.0,
+            coordinate_scale: 1.0,
         };
         let mut moved = frame(-400.0, 900.0, 640.0, 136.0);
 
@@ -2668,6 +3016,7 @@ mod geometry_tests {
             y: 24.0,
             width: 1512.0,
             height: 958.0,
+            coordinate_scale: 1.0,
         };
         let saved = frame(-2200.0, 700.0, 640.0, 136.0);
 
@@ -2684,6 +3033,7 @@ mod geometry_tests {
             y: -1024.0,
             width: 1280.0,
             height: 984.0,
+            coordinate_scale: 1.0,
         };
 
         assert_eq!(
@@ -2715,6 +3065,7 @@ mod geometry_tests {
             y: -120.0,
             width: 1728.0,
             height: 1080.0,
+            coordinate_scale: 1.0,
         };
         let geometry = overlay_control_geometry(
             OverlayControlMode::Island,
@@ -2734,6 +3085,7 @@ mod geometry_tests {
             y: 50.0,
             width: 320.0,
             height: 180.0,
+            coordinate_scale: 1.0,
         };
         let geometry =
             overlay_control_geometry(OverlayControlMode::Panel, 400.0, 160.0, 520.0, work_area);

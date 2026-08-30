@@ -36,6 +36,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-
 base64 = "0.23"
 uuid = { version = "1", features = ["v4"] }
 keyring = "4"
+keyring-core = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2"
@@ -55,6 +56,7 @@ tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel.git", rev = "c9
 
 [target.'cfg(target_os = "windows")'.dependencies]
 cpal = "0.18"
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-sys = { version = "0.61", features = ["Win32_Globalization"] }
 
 [dev-dependencies]
@@ -68,3 +70,9 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# CPAL 0.18.1 discards WASAPI's AUDCLNT_BUFFERFLAGS_SILENT marker and can
+# expose undefined packet bytes to input callbacks. Keep an exact local copy
+# with only that packet-source fix until an upstream release contains it.
+[patch.crates-io]
+cpal = { path = "vendor/cpal" }
