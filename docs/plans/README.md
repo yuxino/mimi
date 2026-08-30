@@ -25,6 +25,8 @@ Git history, not on the active documentation path.
 - `2026-08-28-efficiency-size-maintenance-design.md` — per-window frontend
   loading, allocation-free buffer slicing, parallel branch bundles, and the
   supported desktop asset boundary.
+- `2026-08-30-windows-audio-format-and-ci-design.md` — complete Windows PCM
+  sample conversion plus native x64 and ARM64 compile/start CI coverage.
 
 ## Runtime behavior
 

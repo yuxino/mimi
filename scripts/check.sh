@@ -29,8 +29,8 @@ echo "==> cargo test"
 cargo test --locked --manifest-path src-tauri/Cargo.toml
 
 # Windows compile-level verification when explicitly requested (the MSVC
-# target's C dependencies cannot cross-compile from macOS; CI runs the full
-# Rust suite on windows-latest instead).
+# target's C dependencies cannot cross-compile from macOS without an external
+# Windows SDK; CI runs the full Rust suite on native x64 and ARM64 Windows).
 if [[ "${MIMI_CHECK_WINDOWS:-0}" == "1" ]]; then
   echo "==> cargo check (windows-msvc)"
   cargo check --locked --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
