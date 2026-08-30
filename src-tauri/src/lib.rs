@@ -697,7 +697,9 @@ mod tests {
         assert_ne!(windows_icon.rgba(), template_icon.rgba());
         assert!(windows_icon
             .rgba()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .any(|pixel| { pixel[3] != 0 && (pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0) }));
     }
 }

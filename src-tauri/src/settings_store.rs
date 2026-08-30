@@ -132,8 +132,8 @@ fn credential_entry(service: &str, account: &str) -> Result<keyring_core::Entry,
             return Err(SecretStoreError::Unavailable);
         }
         let modifiers = HashMap::from([("persistence", WINDOWS_CREDENTIAL_PERSISTENCE)]);
-        return keyring_core::Entry::new_with_modifiers(service, account, &modifiers)
-            .map_err(|_| SecretStoreError::Unavailable);
+        keyring_core::Entry::new_with_modifiers(service, account, &modifiers)
+            .map_err(|_| SecretStoreError::Unavailable)
     }
 
     #[cfg(not(target_os = "windows"))]
