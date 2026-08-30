@@ -8,12 +8,14 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run icons:verify && tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json"
+    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "icons:generate": "node scripts/app-icons.mjs generate",
+    "icons:verify": "node scripts/app-icons.mjs verify"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
