@@ -1,4 +1,4 @@
-export interface OverlayTopChromeLayout {
+interface OverlayTopChromeLayout {
   dragHandleCenterX: number;
   dragHandleWidth: number;
   showActions: boolean;

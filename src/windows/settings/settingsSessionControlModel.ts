@@ -1,11 +1,6 @@
-import type { CredentialState } from "../../lib/types";
+import type { CredentialState, SessionStateEvent } from "../../lib/types";
 
-export type SettingsSessionStatusKind =
-  | "idle"
-  | "connecting"
-  | "listening"
-  | "stopping"
-  | "error";
+type SettingsSessionStatusKind = SessionStateEvent["status"]["kind"];
 
 export type SettingsSessionPendingAction = "start" | "stop" | null;
 
@@ -19,7 +14,7 @@ export type SettingsSessionVisibleStatus =
   | "setupRequired"
   | "credentialUnavailable";
 
-export interface SettingsSessionControlInput {
+interface SettingsSessionControlInput {
   statusKind: SettingsSessionStatusKind;
   isActive: boolean;
   isPaused: boolean;
@@ -27,14 +22,14 @@ export interface SettingsSessionControlInput {
   pendingAction: SettingsSessionPendingAction;
 }
 
-export interface SettingsSessionControlState {
+interface SettingsSessionControlState {
   checked: boolean;
   disabled: boolean;
   canConfigure: boolean;
   visibleStatus: SettingsSessionVisibleStatus;
 }
 
-export interface SettingsSessionNativeState {
+interface SettingsSessionNativeState {
   statusKind: SettingsSessionStatusKind;
   isActive: boolean;
 }

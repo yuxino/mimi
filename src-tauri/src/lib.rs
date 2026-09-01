@@ -642,9 +642,8 @@ fn setup_global_shortcuts(
     let session_for_handler = Arc::clone(&session);
 
     // Register the global shortcut. A failure must not abort startup: another
-    // app (e.g. a second mimi instance) may already own the combo, in which
-    // case macOS delivers the key to that app and this one simply has no
-    // shortcut.
+    // app (e.g. a second mimi instance) may already own the combination, in
+    // which case the OS keeps delivering it to that app.
     let session_register =
         app.global_shortcut()
             .on_shortcut(session_shortcut, move |_app, _shortcut, event| {
@@ -678,7 +677,7 @@ fn setup_global_shortcuts(
         Ok(()) => tracing::info!("global session shortcut registered"),
         Err(error) => tracing::warn!(
             "global session shortcut could not be registered: {error} \
-             (another mimi instance may already own ⌘⇧Space)"
+             (another app may already own the start/stop combination)"
         ),
     }
 

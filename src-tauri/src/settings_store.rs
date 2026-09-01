@@ -117,7 +117,7 @@ pub trait SecretStore: Send + Sync {
 
 struct KeyringSecretStore;
 
-#[cfg(any(target_os = "windows", test))]
+#[cfg(target_os = "windows")]
 // `windows-native-keyring-store` maps `local` to
 // `CRED_PERSIST_LOCAL_MACHINE` in Windows Credential Manager.
 const WINDOWS_CREDENTIAL_PERSISTENCE: &str = "local";
@@ -1159,11 +1159,6 @@ mod tests {
 
     fn persistence_attributes(value: &str) -> HashMap<String, String> {
         HashMap::from([("persistence".to_string(), value.to_string())])
-    }
-
-    #[test]
-    fn windows_credential_modifier_requests_local_persistence() {
-        assert_eq!(WINDOWS_CREDENTIAL_PERSISTENCE, "local");
     }
 
     #[test]

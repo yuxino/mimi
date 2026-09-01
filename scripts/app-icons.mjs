@@ -360,7 +360,7 @@ function generateIcons() {
   const temporaryOutput = mkdtempSync(join(tmpdir(), "mimi-app-icons-"));
   try {
     const cli = join(repoRoot, "node_modules", "@tauri-apps", "cli", "tauri.js");
-    if (!existsSync(cli)) fail("Tauri CLI is not installed; run pnpm install first");
+    if (!existsSync(cli)) fail("Tauri CLI is not installed; run npm install first");
     const result = spawnSync(process.execPath, [cli, "icon", sourceIcon, "--output", temporaryOutput], {
       cwd: repoRoot,
       stdio: "inherit",

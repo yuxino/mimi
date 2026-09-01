@@ -9,7 +9,7 @@ export type UpdateCheckState =
   | { kind: "checkError" }
   | { kind: "openError"; latestVersion: string };
 
-export interface UpdateInteraction {
+interface UpdateInteraction {
   action: "check" | "openRelease";
   busy: boolean;
   emphasized: boolean;

@@ -143,38 +143,11 @@ unsafe fn follow_once(manager: &IVirtualDesktopManager, handles: &[isize]) {
         let on_current = unsafe { manager.IsWindowOnCurrentVirtualDesktop(window) }
             .ok()
             .map(|value| value.as_bool());
-        if should_follow_workspace(true, false, true, on_current) {
+        if on_current == Some(false) {
             // MoveWindowToDesktop is the supported public API and is valid for
             // windows owned by this process. Moving the hidden control surface
             // alongside its visible owner keeps the next expansion local too.
             let _ = unsafe { manager.MoveWindowToDesktop(window, &desktop_id) };
         }
-    }
-}
-
-fn should_follow_workspace(
-    any_surface_visible: bool,
-    foreground_is_mimi: bool,
-    target_desktop_known: bool,
-    window_on_current: Option<bool>,
-) -> bool {
-    any_surface_visible
-        && !foreground_is_mimi
-        && target_desktop_known
-        && window_on_current == Some(false)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::should_follow_workspace;
-
-    #[test]
-    fn visible_surface_follows_only_when_target_and_current_desktops_are_proven() {
-        assert!(should_follow_workspace(true, false, true, Some(false)));
-        assert!(!should_follow_workspace(true, false, true, Some(true)));
-        assert!(!should_follow_workspace(false, false, true, Some(false)));
-        assert!(!should_follow_workspace(true, true, true, Some(false)));
-        assert!(!should_follow_workspace(true, false, false, Some(false)));
-        assert!(!should_follow_workspace(true, false, true, None));
     }
 }

@@ -43,6 +43,10 @@ jobs:
       - name: Test
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml
 
+      - name: Test vendored WASAPI capture packets
+        if: ${{ matrix.os == 'windows-2025' }}
+        run: cargo test --manifest-path src-tauri/vendor/cpal/Cargo.toml --lib capture_packet_tests
+
   windows-arm64:
     runs-on: windows-11-arm
     steps:

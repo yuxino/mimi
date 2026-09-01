@@ -15,7 +15,7 @@ export type CredentialFieldName =
 
 export type CredentialDraft = Record<CredentialFieldName, string>;
 
-export interface CredentialEditorLocalState {
+interface CredentialEditorLocalState {
   draft: CredentialDraft;
   editingSavedCredential: boolean;
 }

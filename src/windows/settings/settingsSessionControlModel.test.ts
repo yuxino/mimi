@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   SettingsSessionActionCoordinator,
   settingsSessionControlState,
-  type SettingsSessionControlInput,
   type SettingsSessionVisibleStatus,
 } from "./settingsSessionControlModel";
+
+type SettingsSessionControlInput = Parameters<
+  typeof settingsSessionControlState
+>[0];
 
 describe("settings session control", () => {
   it.each<{
@@ -153,18 +156,10 @@ describe("settings session control", () => {
     });
   });
 
-  it("keeps an optimistic start pending after command resolution until native confirmation", async () => {
+  it("keeps an optimistic start pending until native confirmation", () => {
     const coordinator = new SettingsSessionActionCoordinator();
-    let resolveCommand: (() => void) | undefined;
-    const command = new Promise<void>((resolve) => {
-      resolveCommand = resolve;
-    });
 
     expect(coordinator.begin("start")).toBe(true);
-    const completion = command.then(() => undefined);
-    resolveCommand?.();
-    await completion;
-
     expect(coordinator.pendingAction).toBe("start");
     expect(coordinator.begin("start")).toBe(false);
     expect(
@@ -175,12 +170,10 @@ describe("settings session control", () => {
     ).toBeNull();
   });
 
-  it("keeps stop optimistic through the native stopping state", async () => {
+  it("keeps stop optimistic through the native stopping state", () => {
     const coordinator = new SettingsSessionActionCoordinator();
 
     expect(coordinator.begin("stop")).toBe(true);
-    await Promise.resolve();
-
     expect(coordinator.pendingAction).toBe("stop");
     expect(
       coordinator.observeNativeState({
@@ -194,32 +187,22 @@ describe("settings session control", () => {
     ).toBeNull();
   });
 
-  it("hands off immediately when native confirmation arrives before command resolution", async () => {
+  it("hands off immediately when native confirmation arrives", () => {
     const coordinator = new SettingsSessionActionCoordinator();
-    let resolveCommand: (() => void) | undefined;
-    const command = new Promise<void>((resolve) => {
-      resolveCommand = resolve;
-    });
 
     expect(coordinator.begin("stop")).toBe(true);
     expect(
       coordinator.observeNativeState({ statusKind: "idle", isActive: false }),
     ).toBeNull();
     expect(coordinator.begin("start")).toBe(true);
-
-    resolveCommand?.();
-    await command;
     expect(coordinator.pendingAction).toBe("start");
   });
 
-  it("clears the matching pending action when its command is rejected", async () => {
+  it("clears the matching pending action when its command is rejected", () => {
     const coordinator = new SettingsSessionActionCoordinator();
 
     expect(coordinator.begin("start")).toBe(true);
-    await Promise.reject(new Error("command failed")).catch(() => {
-      expect(coordinator.commandRejected("start")).toBe(true);
-    });
-
+    expect(coordinator.commandRejected("start")).toBe(true);
     expect(coordinator.pendingAction).toBeNull();
   });
 

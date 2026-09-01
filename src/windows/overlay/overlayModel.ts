@@ -64,7 +64,7 @@ export function computeActivityPhase(
   );
 }
 
-export interface ActivityPhaseSignals {
+interface ActivityPhaseSignals {
   statusKind: SessionStateEvent["status"]["kind"];
   isPaused: boolean;
   detectedLanguage: string | null;
@@ -133,7 +133,7 @@ export function emptyStateIsError(session: SessionStateEvent): boolean {
   return session.status.kind === "error";
 }
 
-export type EmptyStateDensity = "minimal" | "compact" | "comfortable";
+type EmptyStateDensity = "minimal" | "compact" | "comfortable";
 
 /**
  * Empty-state chrome adapts to the freely resized overlay height. At the
@@ -206,7 +206,7 @@ export function computeVisibleRows(
  * updates never look like a separate pile at the bottom. Returns `null` when
  * there is nothing to preview.
  */
-export function visibleDraft(
+function visibleDraft(
   translation: SubtitleSnapshot["translation"],
   history: SubtitleSnapshot["history"],
 ): { text: string; isFinal: boolean } | null {
@@ -218,7 +218,7 @@ export function visibleDraft(
   return { text: translation.text, isFinal: translation.isFinal };
 }
 
-export interface LiveSubtitlePreview {
+interface LiveSubtitlePreview {
   text: string;
   isFinal: boolean;
   kind: "translation" | "source";
