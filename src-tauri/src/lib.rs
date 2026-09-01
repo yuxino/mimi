@@ -8,6 +8,8 @@ mod core;
 mod session_manager;
 mod settings_store;
 mod windows;
+#[cfg(target_os = "windows")]
+mod windows_startup;
 
 use commands::AppState;
 use session_manager::SessionManager;
@@ -27,7 +29,17 @@ pub fn run() {
         )
         .init();
 
-    let builder = tauri::Builder::default()
+    let context = tauri::generate_context!();
+    #[cfg(target_os = "windows")]
+    let startup_gate = windows_startup::StartupGate::acquire(context.config().identifier.as_str())
+        .unwrap_or_else(|label| panic!("mimi startup gate failed: {label}"));
+
+    let builder = tauri::Builder::default();
+    // This must stay first so a secondary Windows launch exits before any
+    // other plugin, renderer, tray, or settings store is initialized.
+    #[cfg(target_os = "windows")]
+    let builder = builder.plugin(windows_startup::single_instance_plugin());
+    let builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
@@ -35,7 +47,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_nspanel::init());
 
     builder
-        .setup(|app| {
+        .setup(move |app| {
             tracing::info!("mimi starting");
 
             // macOS only admits accessory utilities into another app's true
@@ -61,6 +73,11 @@ pub fn run() {
                 return Err("development builds require the isolated Tauri identifier".into());
             }
             let is_ui_test = std::env::var("MIMI_UI_TEST").as_deref() == Ok("1");
+            if is_ui_test {
+                if let Some(window) = app.get_webview_window("settings") {
+                    let _ = window.set_title("mimi UI test settings");
+                }
+            }
             let settings = Arc::new(SettingsStore::load(
                 app.path().app_config_dir().unwrap_or_default(),
                 is_ui_test,
@@ -115,6 +132,27 @@ pub fn run() {
                 });
             }
 
+            // Release queued cold launches only after setup returns to the
+            // Windows event loop. A secondary uses a bounded synchronous,
+            // payload-free activation message; releasing earlier can block it
+            // while this main thread is still creating WebViews, tray state,
+            // and shortcuts.
+            #[cfg(target_os = "windows")]
+            {
+                let app_handle_for_gate = app.handle().clone();
+                std::thread::spawn(move || {
+                    if app_handle_for_gate
+                        .run_on_main_thread(move || drop(startup_gate))
+                        .is_err()
+                    {
+                        // The event loop cannot become a usable primary, and
+                        // this mutex is owned by its main thread. Abort so the
+                        // kernel abandons it for the next launch.
+                        std::process::abort();
+                    }
+                });
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -155,18 +193,58 @@ pub fn run() {
                 WindowEvent::Focused(true) if window.label() == "overlay-control" => {
                     windows::OverlayControlWindowManager::cancel_scheduled_dismiss(app);
                 }
+                WindowEvent::CloseRequested { api, .. } if window.label() == "settings" => {
+                    // Hiding instead of closing keeps the window alive so
+                    // the tray or a repeated launch can restore it instantly.
+                    // Windows users may keep tray icons in the notification
+                    // overflow, so explicitly keep the native icon visible.
+                    api.prevent_close();
+                    let tray_ready = if let Some(tray) = app.tray_by_id("mimi-tray") {
+                        if let Err(error) = tray.set_visible(true) {
+                            tracing::warn!(
+                                error = %error,
+                                "settings close could not keep tray icon visible"
+                            );
+                            false
+                        } else {
+                            record_ui_test_tray_visible();
+                            true
+                        }
+                    } else {
+                        tracing::warn!("settings close could not find tray icon");
+                        false
+                    };
+                    // Never strand the user with neither Settings nor a tray
+                    // entry. `prevent_close` keeps this window visible when
+                    // the native tray handle cannot be confirmed.
+                    if !tray_ready {
+                        return;
+                    }
+                    if let Err(error) = window.hide() {
+                        tracing::warn!(error = %error, "settings close could not hide window");
+                        // A later tray/relaunch activation recreates a missing
+                        // settings window, avoiding an uncloseable stale shell.
+                        if let Err(error) = window.destroy() {
+                            tracing::warn!(
+                                error = %error,
+                                "settings close could not destroy stale window"
+                            );
+                        }
+                    }
+                }
                 WindowEvent::CloseRequested { api, .. }
                     if window.label() == "overlay"
                         || window.label() == "overlay-control"
-                        || window.label() == "tray-panel"
-                        || window.label() == "settings" =>
+                        || window.label() == "tray-panel" =>
                 {
-                    // Hiding instead of closing keeps the window alive so
-                    // later "settings"/"show" actions can always re-show it.
-                    // A destroyed settings window would make the tray's
-                    // "设置" a silent no-op.
                     api.prevent_close();
-                    let _ = window.hide();
+                    if let Err(error) = window.hide() {
+                        tracing::warn!(
+                            window_label = window.label(),
+                            error = %error,
+                            "auxiliary window close could not hide window"
+                        );
+                    }
                 }
                 _ => {}
             }
@@ -204,8 +282,20 @@ pub fn run() {
             commands::app_show_settings,
             commands::app_quit,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
+}
+
+fn record_ui_test_tray_visible() {
+    if std::env::var("MIMI_UI_TEST").as_deref() != Ok("1") {
+        return;
+    }
+    let Some(path) = std::env::var_os("MIMI_UI_TEST_TRAY_VISIBLE_FILE") else {
+        return;
+    };
+    if let Err(error) = std::fs::write(path, b"visible") {
+        tracing::warn!(error = %error, "could not write UI-test tray visibility marker");
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -8,7 +8,7 @@ commands.allow = [
 
 [[permission]]
 identifier = "app-settings"
-description = "Allows the settings window to manage preferences and profiles, check the fixed public release source, and open its fixed release page."
+description = "Allows the settings window to manage the live-subtitle session, preferences, profiles, and fixed public release source."
 commands.allow = [
   "settings_save",
   "app_check_for_updates",
@@ -19,6 +19,8 @@ commands.allow = [
   "profile_delete",
   "profile_save_credentials",
   "profile_delete_api_key",
+  "session_start",
+  "session_stop",
   "session_switch_source_language",
   "overlay_set_locked",
 ]

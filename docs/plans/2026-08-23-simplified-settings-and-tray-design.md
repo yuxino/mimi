@@ -9,10 +9,11 @@ Alibaba's workspace-specific domains are an optional future migration rather
 than something every Mimi user should configure.
 
 The first multi-provider settings UI exposed every profile-management action
-at once and also duplicated session controls from the tray. This made a small
-desktop utility feel like an administration console. The tray had the opposite
-problem: it showed low-frequency interface-language settings but omitted the
-primary start, pause, and stop actions.
+at once. This made a small desktop utility feel like an administration
+console. A later settings simplification removed session controls entirely,
+which made the default idle startup and its global shortcut too easy to miss.
+The tray had the opposite problem: it showed low-frequency interface-language
+settings but originally omitted the primary start, pause, and stop actions.
 
 ## Product direction
 
@@ -35,10 +36,13 @@ window reads like a focused utility instead of one long administration form:
 
 The active category is expressed with a high-contrast monochrome treatment. A
 missing or unavailable credential opens the Translation service category by
-default; otherwise Subtitles is the default. The status/start surface, repeated
-provider descriptions, mode badge, and visible profile editor are removed.
-Session control belongs to the tray; multi-profile support remains available
-without being the default reading path.
+default; otherwise Subtitles is the default. A compact session strip remains
+visible above every category. It exposes only Start/Stop, current status, the
+platform shortcut, and the close-to-tray behavior; pause and detailed live
+controls remain in the tray. Missing credentials disable Start and link to the
+service category. Repeated provider descriptions, mode badges, and the visible
+profile editor remain removed. Multi-profile support stays available without
+being the default reading path.
 
 The tray is for frequent actions:
 
@@ -76,12 +80,19 @@ control.
 - Saved API keys are never read back into frontend state. A replacement draft
   is cleared before the write-only IPC request begins, including on failure.
 - Missing and unavailable credential states remain distinct and visible.
+- The settings window has only the `session_start` and `session_stop` session
+  permissions required by its compact switch; pause, clear, and Quit authority
+  remain scoped to their existing windows.
 - Provider capabilities continue to define available languages and modes; the
   UI never presents an unsupported choice.
 - Errors from tray actions remain visible in the tray instead of being silently
   discarded.
 - Keyboard focus, `aria-live`, reduced-motion, and forced-colors behavior are
   preserved or improved.
+- Clicking the native close button hides Settings and keeps the tray icon
+  visible. If hiding fails, the stale Settings shell is destroyed so tray or
+  repeated-launch activation can recreate it instead of leaving an
+  uncloseable window.
 
 ## Responsive behavior
 

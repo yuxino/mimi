@@ -2503,6 +2503,9 @@ impl TrayPanelManager {
 /// a stale or crashed webview could leave it missing). Mirrors the window
 /// declared in tauri.conf.json.
 pub fn ensure_settings_window(app: &AppHandle) {
+    // The tray panel is always-on-top. Hide it before restoring Settings so
+    // the requested window cannot reopen underneath the popup.
+    TrayPanelManager::hide(app);
     let Some(window) = app.get_webview_window("settings") else {
         let builder =
             WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html".into()))
@@ -2519,12 +2522,34 @@ pub fn ensure_settings_window(app: &AppHandle) {
         let Some(window) = app.get_webview_window("settings") else {
             return;
         };
-        let _ = window.show();
-        let _ = window.set_focus();
+        restore_and_focus_settings_window(&window);
         return;
     };
+    restore_and_focus_settings_window(&window);
+}
+
+fn restore_and_focus_settings_window(window: &tauri::WebviewWindow) {
+    let _ = window.unminimize();
     let _ = window.show();
-    let _ = window.set_focus();
+    let focus_requested = window.set_focus().is_ok();
+    record_ui_test_settings_activation(focus_requested);
+}
+
+fn record_ui_test_settings_activation(focus_requested: bool) {
+    if std::env::var("MIMI_UI_TEST").as_deref() != Ok("1") {
+        return;
+    }
+    let Some(path) = std::env::var_os("MIMI_UI_TEST_SETTINGS_ACTIVATION_FILE") else {
+        return;
+    };
+    let state: &[u8] = if focus_requested {
+        b"focus-requested"
+    } else {
+        b"focus-error"
+    };
+    if let Err(error) = std::fs::write(path, state) {
+        tracing::warn!(error = %error, "could not write UI-test settings activation marker");
+    }
 }
 
 #[cfg(target_os = "macos")]
