@@ -937,17 +937,15 @@ mod tests {
             .connect_with_timeout(Duration::from_millis(500))
             .await
             .unwrap();
-        tokio::time::sleep(Duration::from_millis(60)).await;
-
-        let mut received = Vec::new();
-        while let Ok(event) = events.try_recv() {
-            received.push(event);
-        }
-        assert!(received.iter().any(|event| matches!(
+        let event = tokio::time::timeout(Duration::from_secs(1), events.recv())
+            .await
+            .expect("transport recovery event should arrive before the timeout")
+            .expect("transport recovery event channel should stay open");
+        assert!(matches!(
             event,
             LiveTranslateServerEvent::Error { code, message }
                 if code == "transport_error" && message == GENERIC_TRANSPORT_ERROR
-        )));
+        ));
         client.disconnect().await;
     }
 

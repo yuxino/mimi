@@ -27,6 +27,8 @@ Git history, not on the active documentation path.
   supported desktop asset boundary.
 - `2026-08-30-windows-audio-format-and-ci-design.md` — complete Windows PCM
   sample conversion plus native x64 and ARM64 compile/start CI coverage.
+- `2026-09-01-single-instance-design.md` — process-safe repeated launch,
+  activation, and hidden-settings restoration on Windows.
 
 ## Runtime behavior
 

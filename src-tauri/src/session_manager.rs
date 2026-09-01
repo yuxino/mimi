@@ -2108,6 +2108,7 @@ impl SessionManager {
 
     fn publish_state_now(self: &Arc<Self>) {
         let event = self.current_state_event();
+        self.write_ui_test_session_state(&event);
         let should_show_overlay =
             event.is_active || matches!(&event.status, StatusPayload::Error { .. });
         let is_collapsed = event.is_overlay_collapsed;
@@ -2122,6 +2123,25 @@ impl SessionManager {
             click_through,
             preferences.subtitle_blends_with_background,
         );
+    }
+
+    fn write_ui_test_session_state(&self, event: &SessionStateEvent) {
+        if !self.is_ui_test() {
+            return;
+        }
+        let Some(path) = std::env::var_os("MIMI_UI_TEST_SESSION_STATE_FILE") else {
+            return;
+        };
+        let state = match &event.status {
+            StatusPayload::Idle => "idle",
+            StatusPayload::Connecting => "connecting",
+            StatusPayload::Listening => "listening",
+            StatusPayload::Stopping => "stopping",
+            StatusPayload::Error { .. } => "error",
+        };
+        if let Err(error) = std::fs::write(path, state) {
+            tracing::warn!(error = %error, "could not write UI-test session state marker");
+        }
     }
 
     /// Broadcasts the current settings snapshot to every window (used after

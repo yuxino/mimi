@@ -62,6 +62,144 @@
   letter-spacing: -0.025em;
 }
 
+.settings-session-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 13px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--settings-border-strong);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), transparent 58%),
+    var(--settings-panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.settings-session-card__main,
+.settings-session-card__identity,
+.settings-session-card__control,
+.settings-session-card__details {
+  display: flex;
+  align-items: center;
+}
+
+.settings-session-card__main {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-session-card__identity {
+  min-width: 0;
+  gap: 12px;
+}
+
+.settings-session-card__icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--settings-border-strong);
+  border-radius: 11px;
+  color: var(--settings-text);
+  background: var(--settings-control);
+}
+
+.settings-session-card__icon svg {
+  font-size: 18px;
+}
+
+.settings-session-card__identity h2 {
+  font-size: 15px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+.settings-session-card__identity p {
+  margin-top: 3px;
+  color: var(--settings-text-muted);
+  font-size: 12px;
+}
+
+.settings-session-card__control {
+  flex: 0 0 auto;
+  gap: 11px;
+}
+
+.settings-session-status {
+  display: inline-flex;
+  max-width: 260px;
+  align-items: center;
+  gap: 7px;
+  color: var(--settings-text-muted);
+  font-size: 11.5px;
+  font-weight: 620;
+  text-align: right;
+}
+
+.settings-session-status > span {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--settings-text-faint);
+}
+
+.settings-session-status[data-status="listening"] > span {
+  background: var(--settings-text);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.settings-session-status[data-status="connecting"] > span,
+.settings-session-status[data-status="stopping"] > span,
+.settings-session-status[data-status="paused"] > span {
+  background: var(--settings-text-muted);
+}
+
+.settings-session-status[data-status="error"] > span,
+.settings-session-status[data-status="setupRequired"] > span,
+.settings-session-status[data-status="credentialUnavailable"] > span {
+  border: 1px solid var(--settings-text-muted);
+  background: transparent;
+}
+
+.settings-session-card__details {
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--settings-border);
+}
+
+.settings-session-card__details p {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: var(--settings-text-muted);
+  font-size: 11.5px;
+}
+
+.settings-session-card kbd {
+  padding: 3px 7px;
+  border: 1px solid var(--settings-border-strong);
+  border-bottom-color: rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  color: var(--settings-text);
+  background: var(--settings-control);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+  font: 600 11px/1.35 ui-monospace, "Cascadia Mono", monospace;
+  white-space: nowrap;
+}
+
+.settings-session-card__tray-help {
+  color: var(--settings-text-faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .credential-dot {
   position: relative;
   display: inline-block;
@@ -1133,6 +1271,19 @@
     border-color: CanvasText;
   }
 
+  .settings-session-card,
+  .settings-session-card__icon,
+  .settings-session-card kbd {
+    border-color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+
+  .settings-session-status > span {
+    background: CanvasText !important;
+    box-shadow: none !important;
+  }
+
   .credential-dot {
     forced-color-adjust: none;
   }
@@ -1209,6 +1360,24 @@
   }
 
   .software-update-button {
+    width: 100%;
+  }
+
+  .settings-session-card__main {
+    align-items: flex-start;
+  }
+
+  .settings-session-card__control {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+  }
+
+  .settings-session-card__details {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-session-card__details .settings-button {
     width: 100%;
   }
 

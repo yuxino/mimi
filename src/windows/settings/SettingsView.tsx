@@ -7,7 +7,11 @@ import {
   isTauri,
   listenSettingsNavigation,
 } from "../../lib/ipc";
-import { selectSessionStatusKind, useStore } from "../../lib/store";
+import {
+  selectSessionErrorMessage,
+  selectSessionStatusKind,
+  useStore,
+} from "../../lib/store";
 import {
   effectiveTranslationModeForSettings,
   sourceLanguagesForSettings,
@@ -28,6 +32,12 @@ import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
 import { ServiceProfiles } from "./ServiceProfiles";
 import { SoftwareUpdate } from "./SoftwareUpdate";
 import {
+  SettingsSessionActionCoordinator,
+  settingsSessionControlState,
+  type SettingsSessionPendingAction,
+  type SettingsSessionVisibleStatus,
+} from "./settingsSessionControlModel";
+import {
   SettingsRow,
   SettingsSection,
   SettingsSelect,
@@ -47,8 +57,12 @@ export function SettingsView() {
   // Subscribe only to state rendered in this window. Subtitle text updates do
   // not re-render settings while a stream is active.
   const sessionStatusKind = useStore(selectSessionStatusKind);
+  const sessionErrorMessage = useStore(selectSessionErrorMessage);
   const sessionIsActive = useStore((state) => state.session.isActive);
+  const sessionIsPaused = useStore((state) => state.session.isPaused);
   const settings = useStore((state) => state.settings);
+  const start = useStore((state) => state.start);
+  const stop = useStore((state) => state.stop);
   const switchSourceLanguage = useStore((state) => state.switchSourceLanguage);
   const saveSettings = useStore((state) => state.saveSettings);
   const setOverlayLocked = useStore((state) => state.setOverlayLocked);
@@ -62,6 +76,12 @@ export function SettingsView() {
     activeProfile?.credentialState === "present" ? "subtitles" : "service";
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(
     locationCategory ?? preferredCategory,
+  );
+  const [sessionPendingAction, setSessionPendingAction] =
+    useState<SettingsSessionPendingAction>(null);
+  const [sessionActionError, setSessionActionError] = useState(false);
+  const [sessionActionCoordinator] = useState(
+    () => new SettingsSessionActionCoordinator(),
   );
   const locationSelectedCategory = useRef(locationCategory !== null);
   const initialCredentialState = useRef(activeProfile?.credentialState);
@@ -91,6 +111,13 @@ export function SettingsView() {
     effectiveTranslationModeForSettings(settings);
   const isChangingSession =
     sessionStatusKind === "connecting" || sessionStatusKind === "stopping";
+  const sessionControl = settingsSessionControlState({
+    statusKind: sessionStatusKind,
+    isActive: sessionIsActive,
+    isPaused: sessionIsPaused,
+    credentialState: activeProfile?.credentialState ?? "unavailable",
+    pendingAction: sessionPendingAction,
+  });
 
   const categories: readonly {
     id: SettingsCategory;
@@ -119,6 +146,49 @@ export function SettingsView() {
     setActiveCategory(category);
     window.history.replaceState(null, "", `#${CATEGORY_SECTION_IDS[category]}`);
   }, []);
+
+  const changeSession = useCallback(
+    (checked: boolean) => {
+      const pendingAction: Exclude<SettingsSessionPendingAction, null> =
+        checked ? "start" : "stop";
+      if (!sessionActionCoordinator.begin(pendingAction)) {
+        return;
+      }
+      setSessionPendingAction(pendingAction);
+      setSessionActionError(false);
+      void (checked ? start() : stop()).catch(() => {
+        if (!sessionActionCoordinator.commandRejected(pendingAction)) return;
+        setSessionActionError(true);
+        setSessionPendingAction(null);
+      });
+    },
+    [sessionActionCoordinator, start, stop],
+  );
+
+  useEffect(() => {
+    return useStore.subscribe((state, previousState) => {
+      const statusKind = selectSessionStatusKind(state);
+      const previousStatusKind = selectSessionStatusKind(previousState);
+      const isActive = state.session.isActive;
+      if (
+        statusKind === previousStatusKind &&
+        isActive === previousState.session.isActive
+      ) {
+        return;
+      }
+      // A fresh native transition is authoritative even when it came from the
+      // tray or global shortcut. Do not leave an earlier settings IPC failure
+      // visible beside a subsequently successful session state.
+      setSessionActionError(false);
+      const pendingAction = sessionActionCoordinator.observeNativeState({
+        statusKind,
+        isActive,
+      });
+      setSessionPendingAction((current) =>
+        current === pendingAction ? current : pendingAction,
+      );
+    });
+  }, [sessionActionCoordinator]);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -155,6 +225,72 @@ export function SettingsView() {
           <header className="settings-page-header">
             <h1>{I18N.settings.windowTitle}</h1>
           </header>
+
+          <section
+            className="settings-session-card"
+            aria-labelledby="settings-session-title"
+          >
+            <div className="settings-session-card__main">
+              <div className="settings-session-card__identity">
+                <span className="settings-session-card__icon" aria-hidden="true">
+                  <Icon name="captions-bubble" />
+                </span>
+                <div>
+                  <h2 id="settings-session-title">
+                    {I18N.settings.liveSubtitles}
+                  </h2>
+                  <p>{I18N.settings.liveSubtitlesDescription}</p>
+                </div>
+              </div>
+
+              <div className="settings-session-card__control">
+                <span
+                  id="settings-session-status"
+                  className="settings-session-status"
+                  data-status={sessionControl.visibleStatus}
+                  aria-live="polite"
+                >
+                  <span aria-hidden="true" />
+                  {settingsSessionStatusText(
+                    sessionControl.visibleStatus,
+                    sessionErrorMessage,
+                  )}
+                </span>
+                <Switch
+                  checked={sessionControl.checked}
+                  disabled={sessionControl.disabled}
+                  aria-label={I18N.settings.liveSubtitles}
+                  aria-describedby="settings-session-status settings-session-shortcut"
+                  onChange={changeSession}
+                />
+              </div>
+            </div>
+
+            <div className="settings-session-card__details">
+              <p id="settings-session-shortcut">
+                <span>{I18N.settings.startStopShortcut}</span>
+                <kbd>{startStopShortcut()}</kbd>
+              </p>
+              {sessionControl.canConfigure && (
+                <button
+                  type="button"
+                  className="settings-button settings-button--primary settings-button--compact"
+                  onClick={() => selectCategory("service")}
+                >
+                  {I18N.settings.configureService}
+                </button>
+              )}
+            </div>
+
+            <p className="settings-session-card__tray-help">
+              {I18N.settings.closeToTrayHelp}
+            </p>
+            {sessionActionError && (
+              <p className="settings-feedback" data-tone="error" role="alert">
+                {I18N.settings.sessionActionFailed}
+              </p>
+            )}
+          </section>
 
           <div className="settings-workspace">
             <nav
@@ -409,6 +545,37 @@ export function SettingsView() {
       </div>
     </main>
   );
+}
+
+function startStopShortcut(): string {
+  return typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    ? "⌘⇧Space"
+    : "Ctrl+Shift+Space";
+}
+
+function settingsSessionStatusText(
+  status: SettingsSessionVisibleStatus,
+  sessionErrorMessage: string | null,
+): string {
+  switch (status) {
+    case "idle":
+      return I18N.settings.sessionIdle;
+    case "connecting":
+      return I18N.settings.sessionConnecting;
+    case "listening":
+      return I18N.settings.sessionListening;
+    case "paused":
+      return I18N.settings.sessionPaused;
+    case "stopping":
+      return I18N.settings.sessionStopping;
+    case "error":
+      return sessionErrorMessage ?? I18N.settings.sessionError;
+    case "setupRequired":
+      return I18N.settings.sessionSetupRequired;
+    case "credentialUnavailable":
+      return I18N.settings.sessionCredentialUnavailable;
+  }
 }
 
 const SUBTITLE_ALIGNMENTS: readonly SubtitleAlignment[] = [
