@@ -442,8 +442,12 @@ jobs:
             fi
           fi
 
+          generate_notes_args=(-f tag_name="$GITHUB_REF_NAME")
+          if [[ -n "$latest_tag" ]]; then
+            generate_notes_args+=(-f previous_tag_name="$latest_tag")
+          fi
           gh api --method POST "repos/$GH_REPO/releases/generate-notes" \
-            -f tag_name="$GITHUB_REF_NAME" --jq '.body' > generated-notes.md
+            "${generate_notes_args[@]}" --jq '.body' > generated-notes.md
           bootstrap=0
           if [[ -z "$latest_tag" ]] || ! gh release download "$latest_tag" --pattern latest.json --dir "$RUNNER_TEMP/previous-updater" >/dev/null 2>&1; then
             bootstrap=1
