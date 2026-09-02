@@ -162,6 +162,8 @@ jobs:
 
       - uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
         if: ${{ matrix.os == 'windows-2025' }}
+        with:
+          args: --config src-tauri/tauri.ci.conf.json
 
       - name: Smoke launch x64 UI-test app
         if: ${{ matrix.os == 'windows-2025' }}
