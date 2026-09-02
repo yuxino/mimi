@@ -16,6 +16,7 @@
 - **Live subtitles and translation** — captures system output audio; source languages, targets, and quality modes vary by provider.
 - **Service configurations** — save and switch between services without repeatedly entering credentials.
 - **Flexible overlay** — move, resize, collapse, pause, enable click-through, or use Immersive Mode.
+- **Signed in-app updates** — manually check, download, and install updates in Settings; every download must pass signature verification.
 - **Privacy** — no mimi account, microphone, or screen capture; no saved audio or subtitles; audio goes only to the active provider.
 - **Shortcuts** — macOS uses **⌘ ⇧ Space** / **⌘ ⇧ M** and Windows uses **Ctrl+Shift+Space** / **Ctrl+Shift+M** to control listening and Immersive Mode.
 
@@ -24,6 +25,8 @@
 1. Download the macOS Apple silicon DMG or Windows x64 EXE / MSI from the [latest release](https://github.com/yuxino/mimi/releases/latest), or build from source.
 2. Open **Translation Service**, choose a provider, and save its credentials.
 3. Play something and select **Start** from the mimi menu bar/system tray icon; on first use, macOS then prompts for **Screen & System Audio Recording**.
+
+**v1.3.7 is the in-app updater bootstrap release.** Upgrading from v1.3.6 or earlier requires one manual download and installation from GitHub Releases. Later releases can be installed from **Settings → Software Update**. On Windows, installing an update closes Mimi; reopen it manually after the installer finishes.
 
 Credentials are stored per service configuration in macOS Keychain or Windows Credential Manager; Settings shows only whether they are saved. Provider usage may incur charges.
 

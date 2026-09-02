@@ -466,6 +466,85 @@
   border: 0;
 }
 
+.software-update {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.software-update__details:empty {
+  display: none;
+}
+
+.software-update__details,
+.software-update__release,
+.software-update__progress {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.software-update__details {
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.software-update__release {
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--settings-border);
+  border-radius: 10px;
+  background: var(--settings-selection-soft);
+}
+
+.software-update__version,
+.software-update__notes-label,
+.software-update__notes {
+  margin: 0;
+}
+
+.software-update__version,
+.software-update__notes-label {
+  color: var(--settings-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.software-update__notes-label {
+  margin-top: 4px;
+  color: var(--settings-text-muted);
+  font-size: 11px;
+}
+
+.software-update__notes {
+  max-height: 132px;
+  overflow: auto;
+  color: var(--settings-text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.software-update__progress {
+  gap: 6px;
+  color: var(--settings-text-faint);
+  font-size: 11px;
+}
+
+.software-update__progress progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--settings-text);
+}
+
+.software-update__recovery {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--settings-text);
+  font-size: 11px;
+}
+
 .settings-select-wrap {
   position: relative;
   display: inline-flex;
@@ -1361,6 +1440,11 @@
 
   .software-update-button {
     width: 100%;
+  }
+
+  .software-update__recovery {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .settings-session-card__main {

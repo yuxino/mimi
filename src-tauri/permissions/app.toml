@@ -8,10 +8,10 @@ commands.allow = [
 
 [[permission]]
 identifier = "app-settings"
-description = "Allows the settings window to manage the live-subtitle session, preferences, profiles, and fixed public release source."
+description = "Allows the settings window to manage the live-subtitle session, preferences, profiles, updater fixture mode, and fixed release recovery source."
 commands.allow = [
   "settings_save",
-  "app_check_for_updates",
+  "app_is_ui_test",
   "app_open_releases",
   "profile_create",
   "profile_update",

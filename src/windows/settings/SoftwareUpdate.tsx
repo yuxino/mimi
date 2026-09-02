@@ -1,32 +1,47 @@
-import { useEffect, useState } from "react";
-import { getVersion } from "@tauri-apps/api/app";
+import { useEffect, useRef, useState } from "react";
 import { I18N } from "../../lib/i18n";
-import {
-  appCheckForUpdates,
-  appOpenReleases,
-  isTauri,
-} from "../../lib/ipc";
+import { appIsUiTest, appOpenReleases, isTauri } from "../../lib/ipc";
 import { InlineFeedback, SettingsRow } from "./SettingsPrimitives";
 import {
-  stateFromUpdateResult,
+  applyDownloadEvent,
+  downloadPercent,
+  isErrorState,
+  normalizeReleaseNotes,
   updateInteraction,
+  withRecoveryStatus,
+  type AvailableUpdate,
   type UpdateCheckState,
 } from "./softwareUpdateModel";
+import {
+  createFixtureSoftwareUpdater,
+  createTauriSoftwareUpdater,
+  type SoftwareUpdater,
+  type UpdateCandidate,
+} from "./softwareUpdater";
 
-/** User-initiated release check. It never polls or performs an installation. */
+/** User-initiated signed updater. It never polls, downloads, or installs in the
+ * background. */
 export function SoftwareUpdate() {
   const [currentVersion, setCurrentVersion] = useState<string>();
+  const [updater, setUpdater] = useState<SoftwareUpdater>();
   const [state, setState] = useState<UpdateCheckState>({ kind: "idle" });
+  const candidateRef = useRef<UpdateCandidate | undefined>(undefined);
+  const operationRef = useRef(false);
 
   useEffect(() => {
-    if (!isTauri) return;
-
     let disposed = false;
-    void getVersion()
-      .then((version) => {
-        if (!disposed) setCurrentVersion(version);
+
+    void createUpdaterForEnvironment()
+      .then((nextUpdater) => {
+        if (disposed) return;
+        setUpdater(nextUpdater);
+        setCurrentVersion(nextUpdater.currentVersion);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!disposed) {
+          setState({ kind: "checkError", recovery: "idle" });
+        }
+      });
 
     return () => {
       disposed = true;
@@ -36,44 +51,95 @@ export function SoftwareUpdate() {
   const interaction = updateInteraction(state);
 
   const handleAction = async () => {
-    if (interaction.action === "openRelease") {
-      if (!("latestVersion" in state)) return;
-      const latestVersion = state.latestVersion;
-      setState({ kind: "opening", latestVersion });
-      try {
-        await appOpenReleases();
-        setState({ kind: "available", latestVersion });
-      } catch {
-        setState({ kind: "openError", latestVersion });
-      }
-      return;
-    }
+    if (!updater || !interaction.action || operationRef.current) return;
+    operationRef.current = true;
 
-    // Plain Vite preview is a deterministic UI fixture, not an update client.
-    if (!isTauri) {
-      setState({ kind: "noUpdate", latestVersion: "preview" });
-      return;
-    }
-
-    setState({ kind: "checking" });
     try {
-      const result = await appCheckForUpdates();
-      setCurrentVersion(result.currentVersion);
-      setState(stateFromUpdateResult(result));
-    } catch {
-      setState({ kind: "checkError" });
+      if (interaction.action === "check") {
+        await candidateRef.current?.close().catch(() => {});
+        candidateRef.current = undefined;
+        setState({ kind: "checking" });
+        try {
+          const candidate = await updater.check();
+          if (!candidate) {
+            setState({ kind: "noUpdate" });
+            return;
+          }
+
+          candidateRef.current = candidate;
+          setState({
+            kind: "available",
+            update: candidateMetadata(candidate),
+          });
+        } catch {
+          setState({ kind: "checkError", recovery: "idle" });
+        }
+        return;
+      }
+
+      const candidate = candidateRef.current;
+      if (!candidate || !("update" in state)) return;
+      const update = state.update;
+
+      if (interaction.action === "download") {
+        setState({
+          kind: "downloading",
+          update,
+          downloadedBytes: 0,
+        });
+        try {
+          await candidate.download((event) => {
+            setState((current) => applyDownloadEvent(current, event));
+          });
+          setState({ kind: "downloaded", update });
+        } catch {
+          setState({ kind: "downloadError", update, recovery: "idle" });
+        }
+        return;
+      }
+
+      if (interaction.action === "install") {
+        setState({ kind: "installing", update, platform: updater.platform });
+        try {
+          await candidate.install({ restartAfterInstall: false });
+          setState(
+            updater.platform === "windows"
+              ? { kind: "windowsInstallerStarted", update }
+              : { kind: "restartReady", update },
+          );
+        } catch {
+          setState({ kind: "installError", update, recovery: "idle" });
+        }
+        return;
+      }
+
+      setState({ kind: "restarting", update });
+      try {
+        await updater.relaunch();
+        setState({ kind: "restartRequested", update });
+      } catch {
+        setState({ kind: "restartError", update, recovery: "idle" });
+      }
+    } finally {
+      operationRef.current = false;
     }
   };
 
-  const busyMessage =
-    state.kind === "checking"
-      ? I18N.settings.checkingForUpdates
-      : state.kind === "opening"
-        ? I18N.settings.openingUpdate
-        : "";
+  const handleRecovery = async () => {
+    if (!isErrorState(state) || state.recovery === "opening") return;
+    setState((current) => withRecoveryStatus(current, "opening"));
+    try {
+      await appOpenReleases();
+      setState((current) => withRecoveryStatus(current, "idle"));
+    } catch {
+      setState((current) => withRecoveryStatus(current, "error"));
+    }
+  };
+
+  const busy = interaction.busy || !updater;
 
   return (
-    <>
+    <div className="software-update">
       <SettingsRow
         label={I18N.settings.softwareUpdate}
         description={
@@ -81,26 +147,23 @@ export function SoftwareUpdate() {
             ? I18N.settings.currentVersion(currentVersion)
             : I18N.settings.updateDescription
         }
+        align="start"
       >
-        <button
-          type="button"
-          className={`settings-button software-update-button ${
-            interaction.emphasized
-              ? "settings-button--primary"
-              : "settings-button--quiet"
-          }`}
-          disabled={interaction.busy}
-          aria-busy={interaction.busy}
-          onClick={() => void handleAction()}
-        >
-          {state.kind === "checking"
-            ? I18N.settings.checkingForUpdates
-            : state.kind === "opening"
-              ? I18N.settings.openingUpdate
-              : interaction.action === "openRelease"
-              ? I18N.settings.viewUpdate
-              : I18N.settings.checkForUpdates}
-        </button>
+        {interaction.action && (
+          <button
+            type="button"
+            className={`settings-button software-update-button ${
+              interaction.emphasized
+                ? "settings-button--primary"
+                : "settings-button--quiet"
+            }`}
+            disabled={busy}
+            aria-busy={interaction.busy}
+            onClick={() => void handleAction()}
+          >
+            {actionLabel(state, updater?.platform)}
+          </button>
+        )}
       </SettingsRow>
 
       <span
@@ -109,30 +172,188 @@ export function SoftwareUpdate() {
         aria-live="polite"
         aria-atomic="true"
       >
-        {busyMessage}
+        {stateStatus(state)}
       </span>
 
+      <UpdateDetails state={state} onRecovery={handleRecovery} />
+    </div>
+  );
+}
+
+async function createUpdaterForEnvironment(): Promise<SoftwareUpdater> {
+  if (!isTauri) {
+    return createFixtureSoftwareUpdater({
+      currentVersion: "preview",
+      updateVersion: null,
+    });
+  }
+
+  if (await appIsUiTest()) {
+    const { getVersion } = await import("@tauri-apps/api/app");
+    return createFixtureSoftwareUpdater({ currentVersion: await getVersion() });
+  }
+
+  return createTauriSoftwareUpdater();
+}
+
+function candidateMetadata(candidate: UpdateCandidate): AvailableUpdate {
+  return {
+    version: candidate.version,
+    notes: normalizeReleaseNotes(candidate.notes),
+  };
+}
+
+function actionLabel(
+  state: UpdateCheckState,
+  platform?: SoftwareUpdater["platform"],
+): string {
+  switch (state.kind) {
+    case "checking":
+      return I18N.settings.checkingForUpdates;
+    case "downloading":
+      return I18N.settings.downloadingUpdate;
+    case "installing":
+      return state.platform === "windows"
+        ? I18N.settings.installingWindowsUpdate
+        : I18N.settings.installingUpdate;
+    case "restarting":
+      return I18N.settings.restartingUpdate;
+    case "downloadError":
+    case "installError":
+    case "restartError":
+    case "checkError":
+      return I18N.settings.retryUpdate;
+    case "available":
+      return I18N.settings.downloadUpdate;
+    case "downloaded":
+      return platform === "windows"
+        ? I18N.settings.installAndCloseWindows
+        : I18N.settings.installUpdate;
+    case "restartReady":
+      return I18N.settings.restartAndFinishUpdate;
+    default:
+      return I18N.settings.checkForUpdates;
+  }
+}
+
+function stateStatus(state: UpdateCheckState): string {
+  switch (state.kind) {
+    case "checking":
+      return I18N.settings.checkingForUpdates;
+    case "downloading": {
+      const percent = downloadPercent(state);
+      return percent === undefined
+        ? I18N.settings.downloadingUnknown(formatBytes(state.downloadedBytes))
+        : I18N.settings.downloadingKnown(
+            percent,
+            formatBytes(state.downloadedBytes),
+            formatBytes(state.totalBytes ?? 0),
+          );
+    }
+    case "installing":
+      return state.platform === "windows"
+        ? I18N.settings.installingWindowsUpdate
+        : I18N.settings.installingUpdate;
+    case "restarting":
+      return I18N.settings.restartingUpdate;
+    case "restartRequested":
+      return I18N.settings.restartRequested;
+    case "windowsInstallerStarted":
+      return I18N.settings.windowsInstallerStarted;
+    default:
+      return "";
+  }
+}
+
+function UpdateDetails({
+  state,
+  onRecovery,
+}: {
+  state: UpdateCheckState;
+  onRecovery: () => Promise<void>;
+}) {
+  const update = "update" in state ? state.update : undefined;
+  const percent = downloadPercent(state);
+
+  return (
+    <div className="software-update__details">
+      {update && (
+        <div className="software-update__release">
+          <p className="software-update__version">
+            {I18N.settings.updateAvailable(update.version)}
+          </p>
+          <p className="software-update__notes-label">
+            {I18N.settings.releaseNotes}
+          </p>
+          <p className="software-update__notes">
+            {update.notes || I18N.settings.noReleaseNotes}
+          </p>
+        </div>
+      )}
+
+      {state.kind === "downloading" && (
+        <div className="software-update__progress">
+          <progress
+            aria-label={I18N.settings.downloadingUpdate}
+            {...(percent === undefined ? {} : { value: percent, max: 100 })}
+          />
+          <span>{stateStatus(state)}</span>
+        </div>
+      )}
+
       <UpdateFeedback state={state} />
-    </>
+
+      {isErrorState(state) && (
+        <div className="software-update__recovery">
+          <button
+            type="button"
+            className="settings-button settings-button--quiet"
+            disabled={state.recovery === "opening"}
+            onClick={() => void onRecovery()}
+          >
+            {state.recovery === "opening"
+              ? I18N.settings.openingUpdateRecovery
+              : I18N.settings.openReleaseRecovery}
+          </button>
+          {state.recovery === "error" && (
+            <span role="alert">{I18N.settings.openUpdateFailed}</span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 function UpdateFeedback({ state }: { state: UpdateCheckState }) {
   switch (state.kind) {
-    case "idle":
-    case "checking":
-    case "opening":
-      return null;
     case "noUpdate":
       return (
         <InlineFeedback tone="success">
           {I18N.settings.noUpdateAvailable}
         </InlineFeedback>
       );
-    case "available":
+    case "downloaded":
+      return (
+        <InlineFeedback tone="success">
+          {I18N.settings.updateDownloadVerified}
+        </InlineFeedback>
+      );
+    case "restartReady":
+      return (
+        <InlineFeedback tone="success">
+          {I18N.settings.restartAndFinishUpdate}
+        </InlineFeedback>
+      );
+    case "restartRequested":
+      return (
+        <InlineFeedback tone="success">
+          {I18N.settings.restartRequested}
+        </InlineFeedback>
+      );
+    case "windowsInstallerStarted":
       return (
         <InlineFeedback tone="info">
-          {I18N.settings.updateAvailable(state.latestVersion)}
+          {I18N.settings.windowsInstallerStarted}
         </InlineFeedback>
       );
     case "checkError":
@@ -141,11 +362,31 @@ function UpdateFeedback({ state }: { state: UpdateCheckState }) {
           {I18N.settings.updateCheckFailed}
         </InlineFeedback>
       );
-    case "openError":
+    case "downloadError":
       return (
         <InlineFeedback tone="error">
-          {I18N.settings.openUpdateFailed}
+          {I18N.settings.updateDownloadFailed}
         </InlineFeedback>
       );
+    case "installError":
+      return (
+        <InlineFeedback tone="error">
+          {I18N.settings.updateInstallFailed}
+        </InlineFeedback>
+      );
+    case "restartError":
+      return (
+        <InlineFeedback tone="error">
+          {I18N.settings.updateRestartFailed}
+        </InlineFeedback>
+      );
+    default:
+      return null;
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1_024) return `${Math.max(0, bytes)} B`;
+  if (bytes < 1_048_576) return `${(bytes / 1_024).toFixed(1)} KB`;
+  return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }

@@ -62,14 +62,8 @@ export function settingsGet(): Promise<SettingsSnapshot> {
   return invoke<SettingsSnapshot>("settings_get");
 }
 
-export interface AppUpdateCheck {
-  currentVersion: string;
-  latestVersion: string;
-  updateAvailable: boolean;
-}
-
-export function appCheckForUpdates(): Promise<AppUpdateCheck> {
-  return invoke<AppUpdateCheck>("app_check_for_updates");
+export function appIsUiTest(): Promise<boolean> {
+  return invoke<boolean>("app_is_ui_test");
 }
 
 export function appOpenReleases(): Promise<void> {

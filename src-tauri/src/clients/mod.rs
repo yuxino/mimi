@@ -11,6 +11,5 @@ pub mod provider_events;
 pub mod qwen_mt_client;
 pub mod tencent_cloud_client;
 pub mod translation_client;
-pub mod update_client;
 pub mod volcano_engine_client;
 pub mod xai_realtime_client;

@@ -208,16 +208,17 @@ jobs:
             exit 1
           fi
 
-  # GitHub macOS releases are developer-installable packages. They use an
-  # explicit ad-hoc signature so no private signing credential is required.
-  # Gatekeeper may require Open Anyway and macOS may treat each update as a new
-  # privacy/Keychain identity; stable local signing remains the QA path.
+  # GitHub macOS releases remain ad-hoc code-signed developer packages. The
+  # separate updater signature is mandatory and protects update integrity; it
+  # does not replace Apple code signing, notarization, or stable TCC identity.
   release-macos:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-latest
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
       APPLE_SIGNING_IDENTITY: "-"
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     needs: [rust, msrv, frontend, release-preflight]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -235,6 +236,14 @@ jobs:
 
       - run: npm ci
 
+      - name: Verify updater signing secrets are configured
+        shell: bash
+        run: |
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" || -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]]; then
+            echo "Updater signing secrets are not configured." >&2
+            exit 1
+          fi
+
       - name: Remove stale macOS package outputs
         shell: bash
         run: |
@@ -244,7 +253,7 @@ jobs:
       - name: Build developer-installable macOS package
         run: npm run tauri -- build -- --locked
 
-      - name: Verify and stage the macOS release asset
+      - name: Verify and stage the macOS release assets
         shell: bash
         run: |
           set -euo pipefail
@@ -256,8 +265,12 @@ jobs:
           while IFS= read -r -d '' candidate; do
             dmg_paths+=("$candidate")
           done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print0)
-          if [[ "${#app_paths[@]}" != "1" || "${#dmg_paths[@]}" != "1" ]]; then
-            echo "Expected exactly one macOS app and one DMG artifact." >&2
+          updater_paths=()
+          while IFS= read -r -d '' candidate; do
+            updater_paths+=("$candidate")
+          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 \( -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) -type f -print0)
+          if [[ "${#app_paths[@]}" != "1" || "${#dmg_paths[@]}" != "1" || "${#updater_paths[@]}" != "2" ]]; then
+            echo "Expected one macOS app, one DMG, one updater archive, and one updater signature." >&2
             exit 1
           fi
           app_path="${app_paths[0]}"
@@ -266,6 +279,13 @@ jobs:
           staging_dir="$RUNNER_TEMP/mimi-release-assets"
           mkdir -p "$staging_dir"
           cp "$dmg_path" "$staging_dir/"
+          cp "${updater_paths[@]}" "$staging_dir/"
+          [[ -s "$staging_dir/mimi.app.tar.gz" && -s "$staging_dir/mimi.app.tar.gz.sig" ]]
+          public_key="$(node -p 'require("./src-tauri/tauri.conf.json").plugins.updater.pubkey')"
+          cargo run --release --locked --manifest-path src-tauri/Cargo.toml \
+            --example verify_updater_signature -- \
+            "$public_key" "$staging_dir/mimi.app.tar.gz.sig" \
+            "$staging_dir/mimi.app.tar.gz"
 
       - name: Upload verified macOS release asset
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -278,6 +298,9 @@ jobs:
   release-windows:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: windows-2025
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     needs: [rust, msrv, frontend, release-preflight]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -294,6 +317,13 @@ jobs:
           workspaces: src-tauri
 
       - run: npm ci
+
+      - name: Verify updater signing secrets are configured
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY) -or [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw "Updater signing secrets are not configured."
+          }
 
       - name: Remove stale Windows package outputs
         shell: pwsh
@@ -310,14 +340,19 @@ jobs:
           $bundleDir = "$env:GITHUB_WORKSPACE/src-tauri/target/release/bundle"
           $expectedPaths = @(
             "$bundleDir/msi/mimi_${version}_x64_en-US.msi",
-            "$bundleDir/nsis/mimi_${version}_x64-setup.exe"
+            "$bundleDir/msi/mimi_${version}_x64_en-US.msi.sig",
+            "$bundleDir/nsis/mimi_${version}_x64-setup.exe",
+            "$bundleDir/nsis/mimi_${version}_x64-setup.exe.sig"
           )
-          $actualFiles = @(
+          $actualInstallers = @(
             Get-ChildItem $bundleDir -Recurse -File |
               Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*-setup.exe' }
           )
-          if ($actualFiles.Count -ne 2) {
-            throw "Expected exactly one MSI and one setup EXE; found $($actualFiles.Count) package files."
+          $actualSignatures = @(
+            Get-ChildItem $bundleDir -Recurse -File -Filter '*.sig'
+          )
+          if ($actualInstallers.Count -ne 2 -or $actualSignatures.Count -ne 2) {
+            throw "Expected exactly two Windows installers and their two updater signatures."
           }
           foreach ($expectedPath in $expectedPaths) {
             if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) {
@@ -325,6 +360,7 @@ jobs:
             }
           }
           $expectedNames = @($expectedPaths | ForEach-Object { Split-Path $_ -Leaf } | Sort-Object)
+          $actualFiles = @($actualInstallers) + @($actualSignatures)
           $actualNames = @($actualFiles | ForEach-Object { $_.Name } | Sort-Object)
           if (Compare-Object $actualNames $expectedNames) {
             throw "Windows package output contains an unexpected installer."
@@ -332,6 +368,10 @@ jobs:
           $stagingDir = "$env:RUNNER_TEMP/mimi-release-assets"
           New-Item -ItemType Directory -Force $stagingDir | Out-Null
           Copy-Item -LiteralPath $expectedPaths -Destination $stagingDir
+          $publicKey = (Get-Content "$env:GITHUB_WORKSPACE/src-tauri/tauri.conf.json" | ConvertFrom-Json).plugins.updater.pubkey
+          foreach ($installer in @("mimi_${version}_x64_en-US.msi", "mimi_${version}_x64-setup.exe")) {
+            cargo run --release --locked --manifest-path src-tauri/Cargo.toml --example verify_updater_signature -- $publicKey "$stagingDir/$installer.sig" "$stagingDir/$installer"
+          }
 
       - name: Upload verified Windows release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -351,13 +391,15 @@ jobs:
       actions: read
       contents: write
     steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: mimi-release-*
           path: release-assets
           merge-multiple: true
 
-      - name: Publish verified installers
+      - name: Create, verify, and publish signed updater release
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -366,8 +408,12 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           expected_names=(
             "mimi_${version}_aarch64.dmg"
+            "mimi.app.tar.gz"
+            "mimi.app.tar.gz.sig"
             "mimi_${version}_x64-setup.exe"
+            "mimi_${version}_x64-setup.exe.sig"
             "mimi_${version}_x64_en-US.msi"
+            "mimi_${version}_x64_en-US.msi.sig"
           )
           mapfile -t actual_names < <(printf '%s\n' "${assets[@]##*/}" | sort)
           mapfile -t expected_names < <(printf '%s\n' "${expected_names[@]}" | sort)
@@ -394,6 +440,41 @@ jobs:
             fi
           fi
 
+          gh api --method POST "repos/$GH_REPO/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" --jq '.body' > generated-notes.md
+          bootstrap=0
+          if [[ -z "$latest_tag" ]] || ! gh release download "$latest_tag" --pattern latest.json --dir "$RUNNER_TEMP/previous-updater" >/dev/null 2>&1; then
+            bootstrap=1
+          fi
+          MIMI_BOOTSTRAP="$bootstrap" node -e '
+            const fs = require("node:fs");
+            const generated = fs.readFileSync("generated-notes.md", "utf8").trim();
+            const bootstrap = process.env.MIMI_BOOTSTRAP === "1"
+              ? "## In-app updater bootstrap\n\nThis is the first Mimi release that can install future signed updates in the app. Users on v1.3.6 or earlier must download and install this release manually once. After that, use Settings → Software Update for later releases.\n\n"
+              : "";
+            const platform = "## Installation notes\n\nThe macOS package is ad-hoc signed and not notarized; Gatekeeper, Screen & System Audio Recording, or Keychain approval may be required again. Windows packages are not Authenticode-signed, so SmartScreen may warn. The updater signature verifies update integrity but does not replace platform code signing.\n\n";
+            fs.writeFileSync("release-notes.md", `${bootstrap}${platform}${generated}\n`);
+          '
+
+          pub_date="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          node scripts/updater-manifest.mjs create \
+            release-assets release-assets/latest.json "$version" "$GH_REPO" \
+            "$GITHUB_REF_NAME" "$pub_date" release-notes.md
+          node scripts/updater-manifest.mjs verify \
+            release-assets release-assets/latest.json "$version" "$GH_REPO" \
+            "$GITHUB_REF_NAME"
+          (
+            cd release-assets
+            sha256sum \
+              "mimi_${version}_aarch64.dmg" \
+              mimi.app.tar.gz mimi.app.tar.gz.sig \
+              "mimi_${version}_x64-setup.exe" \
+              "mimi_${version}_x64-setup.exe.sig" \
+              "mimi_${version}_x64_en-US.msi" \
+              "mimi_${version}_x64_en-US.msi.sig" \
+              latest.json > SHA256SUMS.txt
+          )
+
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             is_draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')"
             if [[ "$is_draft" != "true" ]]; then
@@ -401,9 +482,10 @@ jobs:
               exit 1
             fi
           else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "mimi $GITHUB_REF_NAME" --notes "Release assets are still being verified."
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "mimi $GITHUB_REF_NAME" --notes-file release-notes.md
           fi
 
+          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0)
           gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
 
           mapfile -t expected_names < <(printf '%s\n' "${assets[@]##*/}" | sort)
@@ -431,4 +513,37 @@ jobs:
             exit 1
           fi
 
-          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes "Developer-installable packages for macOS (Apple Silicon) and Windows x64. The macOS package is ad-hoc signed and not notarized; on first launch, choose Open Anyway in System Settings → Privacy & Security if macOS blocks it. Updates may require approving Screen & System Audio Recording and Keychain access again. The Windows MSI and NSIS installers are an unsigned preview without Authenticode signing, so Windows Defender SmartScreen may warn; real-device acceptance is still incomplete." --draft=false --latest
+          gh release edit "$GITHUB_REF_NAME" --title "mimi $GITHUB_REF_NAME" --notes-file release-notes.md --draft=false --latest
+
+          public_manifest="public-latest.json"
+          expected_manifest_digest="$(sha256sum release-assets/latest.json | cut -d ' ' -f 1)"
+          manifest_ready=0
+          for _ in {1..12}; do
+            if curl --fail --silent --show-error --location \
+              "https://github.com/$GH_REPO/releases/latest/download/latest.json" \
+              --output "$public_manifest" \
+              && [[ "$(sha256sum "$public_manifest" | cut -d ' ' -f 1)" == "$expected_manifest_digest" ]]; then
+              manifest_ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$manifest_ready" != "1" ]]; then
+            echo "The public latest.json does not match the published manifest." >&2
+            exit 1
+          fi
+          for asset_name in "${assets[@]##*/}"; do
+            asset_ready=0
+            for _ in {1..12}; do
+              if curl --fail --silent --show-error --location --head \
+                "https://github.com/$GH_REPO/releases/download/$GITHUB_REF_NAME/$asset_name" >/dev/null; then
+                asset_ready=1
+                break
+              fi
+              sleep 5
+            done
+            if [[ "$asset_ready" != "1" ]]; then
+              echo "Release asset is not publicly accessible: $asset_name" >&2
+              exit 1
+            fi
+          done

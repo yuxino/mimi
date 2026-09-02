@@ -42,6 +42,8 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -251,7 +253,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::settings_get,
-            commands::app_check_for_updates,
+            commands::app_is_ui_test,
             commands::app_open_releases,
             commands::settings_save,
             commands::profile_create,

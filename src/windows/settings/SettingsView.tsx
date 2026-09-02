@@ -495,11 +495,11 @@ export function SettingsView() {
                 </div>
               )}
 
-              {activeCategory === "general" && (
-                <div
-                  id="application-settings-panel"
-                  className="settings-category-panel"
-                >
+              <div
+                id="application-settings-panel"
+                className="settings-category-panel"
+                hidden={activeCategory !== "general"}
+              >
                 <SettingsSection
                   id="application-settings"
                   title={I18N.settings.applicationTitle}
@@ -537,8 +537,7 @@ export function SettingsView() {
 
                   <SoftwareUpdate />
                   </SettingsSection>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

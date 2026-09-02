@@ -44,6 +44,9 @@ npm run lint
 echo "==> frontend tests"
 npm run test
 
+echo "==> updater release manifest tests"
+node --test scripts/updater-manifest.node.mjs
+
 echo "==> frontend typecheck and build"
 npm run build
 

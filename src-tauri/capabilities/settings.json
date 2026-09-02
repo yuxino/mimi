@@ -6,6 +6,10 @@
   "permissions": [
     "core:app:allow-version",
     "core:event:allow-emit",
+    "process:allow-restart",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
     "app-settings"
   ]
 }

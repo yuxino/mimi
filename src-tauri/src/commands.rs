@@ -4,7 +4,6 @@
 use crate::core::credentials::ProviderCredentials;
 use crate::core::models::{SourceLanguage, TargetLanguage, TranslationMode};
 use crate::core::provider::{ProviderKind, ServiceProfile};
-use crate::core::update::compare_release_versions;
 use crate::session_manager::{SessionManager, SessionStateEvent};
 use crate::settings_store::{CredentialState, SettingsStore, SubtitleAlignment};
 use crate::windows::{
@@ -17,6 +16,7 @@ use tauri_plugin_opener::OpenerExt;
 
 const SETTINGS_NAVIGATION_EVENT: &str = "settings-navigate";
 const SETTINGS_NAVIGATION_READY_EVENT: &str = "settings-navigation-ready";
+const RELEASES_LATEST_URL: &str = "https://github.com/yuxino/mimi/releases/latest";
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -76,14 +76,6 @@ pub struct SettingsSnapshotPayload {
     pub is_overlay_locked: bool,
     #[serde(rename = "uiLanguage")]
     pub ui_language: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AppUpdateCheckPayload {
-    pub current_version: String,
-    pub latest_version: String,
-    pub update_available: bool,
 }
 
 #[cfg(test)]
@@ -164,20 +156,6 @@ mod tests {
         assert!(json.get("apiKey").is_none());
         assert!(json.get("hasAPIKey").is_none());
         assert!(!json.to_string().contains("secret"));
-    }
-
-    #[test]
-    fn update_check_payload_uses_the_frontend_contract() {
-        let payload = AppUpdateCheckPayload {
-            current_version: "1.3.1".into(),
-            latest_version: "1.4.0".into(),
-            update_available: true,
-        };
-
-        let json = serde_json::to_value(payload).unwrap();
-        assert_eq!(json["currentVersion"], "1.3.1");
-        assert_eq!(json["latestVersion"], "1.4.0");
-        assert_eq!(json["updateAvailable"], true);
     }
 
     #[test]
@@ -302,33 +280,11 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsSnapshot
     Ok(SettingsSnapshotPayload::from_store(&state.settings))
 }
 
-/// Checks the fixed public mimi repository only when requested by the settings
-/// window. No credentials, settings, or subtitle content leave the app.
+/// Lets the frontend select a deterministic updater adapter during native UI
+/// tests. The production updater never receives this flag or fixture data.
 #[tauri::command]
-pub async fn app_check_for_updates(app: AppHandle) -> Result<AppUpdateCheckPayload, String> {
-    let release_tag = crate::clients::update_client::latest_release_tag()
-        .await
-        .map_err(|error| {
-            tracing::warn!(
-                label = error.diagnostic_label(),
-                status = ?error.status_code(),
-                "update check failed"
-            );
-            "Could not check for updates.".to_string()
-        })?;
-    let availability =
-        compare_release_versions(&app.package_info().version.to_string(), &release_tag).map_err(
-            |error| {
-                tracing::warn!(label = %error, "update version comparison failed");
-                "Could not check for updates.".to_string()
-            },
-        )?;
-
-    Ok(AppUpdateCheckPayload {
-        current_version: availability.current_version,
-        latest_version: availability.latest_version,
-        update_available: availability.update_available,
-    })
+pub fn app_is_ui_test() -> bool {
+    std::env::var("MIMI_UI_TEST").as_deref() == Ok("1")
 }
 
 /// Opens a single hard-coded release destination. The frontend cannot supply
@@ -336,10 +292,7 @@ pub async fn app_check_for_updates(app: AppHandle) -> Result<AppUpdateCheckPaylo
 #[tauri::command]
 pub fn app_open_releases(app: AppHandle) -> Result<(), String> {
     app.opener()
-        .open_url(
-            crate::clients::update_client::RELEASES_LATEST_URL,
-            None::<&str>,
-        )
+        .open_url(RELEASES_LATEST_URL, None::<&str>)
         .map_err(|_| {
             tracing::warn!(label = "system_opener_failed", "release page open failed");
             "Could not open the release page.".to_string()
