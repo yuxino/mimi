@@ -293,7 +293,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mimi-release-macos
-          path: ${{ runner.temp }}/mimi-release-assets/*.dmg
+          path: ${{ runner.temp }}/mimi-release-assets/*
           if-no-files-found: error
           retention-days: 7
 
@@ -452,7 +452,7 @@ jobs:
             const fs = require("node:fs");
             const generated = fs.readFileSync("generated-notes.md", "utf8").trim();
             const bootstrap = process.env.MIMI_BOOTSTRAP === "1"
-              ? "## In-app updater bootstrap\n\nThis is the first Mimi release that can install future signed updates in the app. Users on v1.3.6 or earlier must download and install this release manually once. After that, use Settings → Software Update for later releases.\n\n"
+              ? "## In-app updater bootstrap\n\nThis is the first published Mimi release that can install future signed updates in the app. Users upgrading from the previous public release, v1.3.6, must download and install this release manually once. After that, use Settings → Software Update for later releases.\n\n"
               : "";
             const platform = "## Installation notes\n\nThe macOS package is ad-hoc signed and not notarized; Gatekeeper, Screen & System Audio Recording, or Keychain approval may be required again. Windows packages are not Authenticode-signed, so SmartScreen may warn. The updater signature verifies update integrity but does not replace platform code signing.\n\n";
             fs.writeFileSync("release-notes.md", `${bootstrap}${platform}${generated}\n`);

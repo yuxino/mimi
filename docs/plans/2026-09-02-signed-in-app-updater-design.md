@@ -76,10 +76,12 @@ values, uploaded GitHub digests, and tag-to-commit immutability.
 It then verifies the public manifest and every referenced asset can be
 downloaded.
 
-The first signed-updater release is a bootstrap release. Versions through
-v1.3.6 do not contain the updater public key or plugin and cannot discover it.
-The README and bootstrap release notes must therefore tell existing users to
-install this release manually once; later releases can use the in-app flow.
+The first published signed-updater release is a bootstrap release. The latest
+previous public version, v1.3.6, does not contain the updater public key or
+plugin and cannot discover it. The v1.3.7 tag never became a published Release
+and has no public package assets. The README and bootstrap release notes must
+therefore tell existing users to install v1.3.8 manually once; later releases
+can use the in-app flow.
 
 ## Verification
 

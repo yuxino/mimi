@@ -26,7 +26,7 @@
 2. Open **Translation Service**, choose a provider, and save its credentials.
 3. Play something and select **Start** from the mimi menu bar/system tray icon; on first use, macOS then prompts for **Screen & System Audio Recording**.
 
-**v1.3.7 is the in-app updater bootstrap release.** Upgrading from v1.3.6 or earlier requires one manual download and installation from GitHub Releases. Later releases can be installed from **Settings → Software Update**. On Windows, installing an update closes Mimi; reopen it manually after the installer finishes.
+**v1.3.8 is the first published in-app updater bootstrap release.** Upgrading from the previous public release, v1.3.6, requires one manual download and installation from GitHub Releases. Later releases can be installed from **Settings → Software Update**. On Windows, installing an update closes Mimi; reopen it manually after the installer finishes.
 
 Credentials are stored per service configuration in macOS Keychain or Windows Credential Manager; Settings shows only whether they are saved. Provider usage may incur charges.
 
