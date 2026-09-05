@@ -1,41 +1,43 @@
 # yuxino installer theme v1.0.0
 
 Shared lavender/cat NSIS branding for Kiri, Mimi, Satori, Viva, Tick and WNACG.
-Fuwa is excluded. The source illustration is cropped from the user-approved design.
-Each app keeps its real name and icon; English, Simplified Chinese and Japanese
-welcome/finish text follows the installer's language.
+Fuwa is excluded. The artwork comes from the user-approved design; each app keeps
+its real name and icon. Welcome/finish copy supports English, Chinese and Japanese.
 
-## Boundaries
+This decorates Tauri's stock NSIS installer, not a replacement installer or a
+pixel-identical rendering of the concept board. Native controls, progress, install
+policy, shortcuts, resources, user data, updater keys/feeds and uninstall remain
+unchanged. In-app update UI, MSI, macOS, versions and releases are out of scope.
 
-Keep Tauri's stock installer. This changes only NSIS artwork and presentation.
-It does not change app versions, bundle IDs, install-directory policy, resources,
-shortcuts, user data, updater feeds, signing keys or install/update/uninstall logic.
-Native controls and progress remain native, not pixel-identical rounded cards from
-the concept board. In-app updater UI, MSI and macOS packages are unchanged.
+## Build and verify
 
-## Build and reuse
-
-The Windows-only before-build command generates the BMPs, then runs the project's
-original frontend build. Node 22+ is required; no npm dependency is added.
-`artwork.lock.json` pins an immutable Kiri commit, exact file sizes and SHA-256.
-The first build fetches only these small artwork data files from that commit.
-Later builds reuse the verified cache. No remote JavaScript or executable is loaded.
-Missing network access fails closed. For offline builds, copy the exact locked
-`artwork/` directory from Kiri in advance. No font files are distributed.
+Windows beforeBuildCommand generates the artwork before the original app build.
+Node 22+ is sufficient; there are no extra npm dependencies. The common artwork is
+held in Kiri and pinned by immutable commit, exact size and SHA-256 in the lock.
+Kiri has a tracked copy; other projects fetch only the locked data on first build
+and reuse the verified cache. No remote JavaScript or executable is downloaded.
+For offline builds, pre-copy the exact locked artwork directory. Preserve its bytes
+with the included .gitattributes. A corrupt or missing source fails closed.
 
 ```sh
 node src-tauri/installer-theme/build.mjs
-node --test src-tauri/installer-theme/theme.test.mjs
+node --test src-tauri/installer-theme/theme.node.mjs
 node src-tauri/installer-theme/build.mjs --check
 ```
 
-For direct `tauri bundle`, run the generator first because that command can skip
-before-build hooks. To reuse in another app, copy this folder and merge the NSIS
-appearance fields without replacing existing configuration. Keep the original build
-command after the generator. Update source art and all six locks together; remove
-only this theme's obsolete cached art when deliberately updating its version.
+The .node.mjs suffix keeps Node-only checks out of browser/Vitest discovery; all
+seven checks still run in the dedicated Windows theme workflow. The renderer emits
+opaque 24-bit BMPs: sidebar 164x314 and header 150x57. No font files are included.
+Run the generator explicitly before direct tauri bundle commands that skip hooks.
 
-The focused Windows workflow compiles `preview.nsi`; its preview-only executable
-installs no application. Before a release, still test real app installation,
-cancellation, upgrade, uninstall, all three languages, keyboard focus and 100/150/200%
-DPI scaling on each supported Windows architecture. No release is created here.
+## Reuse and acceptance
+
+Copy this folder and merge the NSIS appearance fields into the receiving project's
+Windows overlay without replacing its existing configuration/build command.
+Update common artwork and all six reviewed locks together; remove only this theme's
+obsolete cached artwork when deliberately updating the theme version.
+
+preview.nsi produces a clearly named, harmless UI preview with no app installation,
+registry edits or shortcuts. It does not replace real package acceptance. Before
+releasing, verify first install, cancel, signed passive update, uninstall, keyboard
+navigation, all languages and 100/150/200% DPI on each supported Windows architecture.
