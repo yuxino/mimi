@@ -1,0 +1,46 @@
+{
+  "project": "mimi",
+  "source_commit": "4bbcde72b9bcb9a2540f0b230c8ce45d842a50dc",
+  "capture": "Unmodified production frontend in Chrome, documentation-only native-boundary fixtures",
+  "limitations": "Settings UI · built-in browser preview · no live transcription",
+  "steps": [
+    {
+      "zh": "选择主要语言，保留熟悉的翻译方向。",
+      "en": "Choose the source and translation language."
+    },
+    {
+      "zh": "字号、对齐，都按自己的习惯来。",
+      "en": "Adjust subtitle size and alignment."
+    },
+    {
+      "zh": "需要更少干扰时，切换沉浸模式。",
+      "en": "Explore immersive mode in the settings preview."
+    }
+  ],
+  "browser": "152.0.7977.64",
+  "duration": 33.04,
+  "sha256": "52d904fc191c5c9a38b15d789d4021d8c7a3287a9f1363a5f3e2e624e6e5fd33",
+  "recording_tool_sha256": "4167ddf8ad21f68b88e09fccfe56ce753ba4275b9c129b4cc3e2c5c7bbbee1f0",
+  "fixture_sha256": {
+    "page-1.png": "4d3c3aa80d2b0cd34bb8bcb6082273a10359d4fa6db1fbda0c891b9d9ab99518",
+    "page-2.png": "39aa63b25ac99652921004658f87bfc960cd6e13f0873a2141549879b85a72a5",
+    "page-3.png": "c0a63e7280fdcde7a64e7ea24b645853851a863c01d3af40db8780b8250c75d1",
+    "sample.pdf": "3780d846aa7ca61b185d52fa78ecc9b8d9d82555c7a7a77e4b7eefc45bf66444",
+    "source.png": "97d3fefc662fe60947efd6e9870b16164f2fb72fb6aac8883a552c8f0bb41572"
+  },
+  "media": {
+    "demo.mp4": {
+      "bytes": 515104,
+      "sha256": "52d904fc191c5c9a38b15d789d4021d8c7a3287a9f1363a5f3e2e624e6e5fd33"
+    },
+    "poster.png": {
+      "bytes": 101592,
+      "sha256": "e7dc31b0949b087fda788c4261cbb40bf104388209c344ca0611cfac0e2c1228"
+    },
+    "preview.gif": {
+      "bytes": 1439194,
+      "sha256": "6cfb9526005a9a49651f88a26572542505bbf34e787a894b9c3e0d3350254de2"
+    }
+  },
+  "disclosure": "Real frontend interaction recording with synthetic local data and mocked native boundaries. Not native end-to-end validation. No personal data, external content, provider requests, audio capture or task execution."
+}

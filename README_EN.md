@@ -11,6 +11,16 @@
 
 `mimi` comes from the Japanese word 耳（みみ, “ear”）. It turns the system audio playing on your device into live subtitles and provider-dependent translation into Simplified Chinese, English, or Japanese.
 
+<!-- project-demo-v1 -->
+## Demo
+
+[![mimi — Demo](docs/demos/preview.gif)](docs/demos/demo.mp4)
+
+[Full video (MP4)](docs/demos/demo.mp4) · [About this demo](docs/demos/README.md)
+
+Subtitle language, size, alignment and immersive-mode settings. Recorded from the actual frontend with sample data. Uses the built-in browser preview; no real audio transcription or translation is shown.
+<!-- /project-demo-v1 -->
+
 ## Features
 
 - **Live subtitles and translation** — captures system output audio; source languages, targets, and quality modes vary by provider.
