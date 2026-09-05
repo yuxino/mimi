@@ -18,7 +18,7 @@
 
 [Full video (MP4)](docs/demos/demo.mp4) · [About this demo](docs/demos/README.md)
 
-Subtitle language, size, alignment and immersive-mode settings. Recorded from the actual frontend with sample data. Uses the built-in browser preview; no real audio transcription or translation is shown.
+Language pairs, translation modes, size, alignment, immersive/lock controls, service configurations and UI language. **10x actions with 0.8-second result holds.** Actual frontend with sample data. Uses the built-in browser preview; no live transcription or translation.
 <!-- /project-demo-v1 -->
 
 ## Features

@@ -1,57 +1,118 @@
 {
   "project": "mimi",
   "source_commit": "4bbcde72b9bcb9a2540f0b230c8ce45d842a50dc",
-  "capture": "Unmodified production frontend in Chrome, documentation-only native-boundary fixtures",
+  "capture": "Unmodified production frontend in Chrome with isolated local sample data and mocked native APIs",
   "limitations": "Settings UI · built-in browser preview · no live transcription",
-  "steps": [
+  "browser": "152.0.7977.64",
+  "speed_factor": 10,
+  "result_hold_seconds": 0.8,
+  "duration": 16.766667,
+  "source_duration": 87.90549999999999,
+  "sha256": "f469164749a6146eaa8e6ba8c377b91e97c10632a24c960181b3ce5f117ce18d",
+  "scenes": [
     {
-      "zh": "选择主要语言，保留熟悉的翻译方向。",
-      "en": "Choose the source and translation language."
+      "zh": "日语输入，英语字幕",
+      "en": "01 / Source and target languages",
+      "start": 3.5352999999999883,
+      "end": 8.395299999999988,
+      "poster": "01.png"
     },
     {
-      "zh": "字号、对齐，都按自己的习惯来。",
-      "en": "Adjust subtitle size and alignment."
+      "zh": "随时切换翻译方向",
+      "en": "02 / Change the language pair",
+      "start": 8.395299999999988,
+      "end": 15.795699999999982,
+      "poster": "02.png"
     },
     {
-      "zh": "需要更少干扰时，切换沉浸模式。",
-      "en": "Explore immersive mode in the settings preview."
+      "zh": "按需要选择翻译模式",
+      "en": "03 / Translation quality controls",
+      "start": 15.795699999999982,
+      "end": 18.066899999999993,
+      "poster": "03.png"
+    },
+    {
+      "zh": "字号放大，远一点也能看清",
+      "en": "04 / Enlarge subtitles",
+      "start": 18.066899999999993,
+      "end": 25.713399999999993,
+      "poster": "04.png"
+    },
+    {
+      "zh": "左、中、右，选习惯的对齐方式",
+      "en": "05 / Three subtitle alignments",
+      "start": 25.713399999999993,
+      "end": 47.73259999999998,
+      "poster": "05.png"
+    },
+    {
+      "zh": "沉浸显示，也能锁定字幕位置",
+      "en": "06 / Immersive and position-lock controls",
+      "start": 47.73259999999998,
+      "end": 58.432,
+      "poster": "06.png"
+    },
+    {
+      "zh": "翻译服务集中管理",
+      "en": "07 / Translation service settings",
+      "start": 58.432,
+      "end": 64.70869999999998,
+      "poster": "07.png"
+    },
+    {
+      "zh": "查看可添加的实时服务",
+      "en": "08 / Explore supported provider choices",
+      "start": 64.70869999999998,
+      "end": 75.80309999999997,
+      "poster": "08.png"
+    },
+    {
+      "zh": "通用设置与界面语言",
+      "en": "09 / General settings",
+      "start": 75.80309999999997,
+      "end": 88.61869999999998,
+      "poster": "09.png"
+    },
+    {
+      "zh": "中英文界面，一键切换",
+      "en": "10 / Switch the interface language",
+      "start": 88.61869999999998,
+      "end": 91.44079999999998,
+      "poster": "10.png"
     }
   ],
-  "browser": "152.0.7977.64",
-  "duration": 16.52,
-  "sha256": "0838cd3ecc7d22d06030122c2fc0d3aae30748fce01628c7d8f19aeb50ad0ad5",
-  "recording_tool_sha256": "4167ddf8ad21f68b88e09fccfe56ce753ba4275b9c129b4cc3e2c5c7bbbee1f0",
-  "fixture_sha256": {
-    "page-1.png": "4d3c3aa80d2b0cd34bb8bcb6082273a10359d4fa6db1fbda0c891b9d9ab99518",
-    "page-2.png": "39aa63b25ac99652921004658f87bfc960cd6e13f0873a2141549879b85a72a5",
-    "page-3.png": "c0a63e7280fdcde7a64e7ea24b645853851a863c01d3af40db8780b8250c75d1",
-    "sample.pdf": "3780d846aa7ca61b185d52fa78ecc9b8d9d82555c7a7a77e4b7eefc45bf66444",
-    "source.png": "97d3fefc662fe60947efd6e9870b16164f2fb72fb6aac8883a552c8f0bb41572"
-  },
+  "actions": [
+    "Switch to Japanese recognition and keep the current translation mode",
+    "Select translation target: English",
+    "Switch to English recognition and keep the current translation mode",
+    "Switch translation quality mode",
+    "Subtitle Size",
+    "Align Left",
+    "Align Right",
+    "Align Center",
+    "Immersive Mode",
+    "Lock Subtitle Position",
+    "Translation Service",
+    "Manage Configurations\n1 configuration",
+    "Add Configuration",
+    "Cancel",
+    "General",
+    "Switch UI language to Chinese"
+  ],
+  "disclosure": "New, expanded frontend interaction recording. Every action interval is retimed at 10x; each result receives a 0.8-second hold. Native API boundaries use original sample data. No live AI request, system capture, task execution or native filesystem acceptance is claimed.",
+  "recording_tool_sha256": "9a88822bb8cffe05bc0c48e805c9d0b843e9b7b8a5bb2e68c64d4e37c108005e",
   "media": {
     "demo.mp4": {
-      "bytes": 316329,
-      "sha256": "0838cd3ecc7d22d06030122c2fc0d3aae30748fce01628c7d8f19aeb50ad0ad5"
-    },
-    "poster.png": {
-      "bytes": 101592,
-      "sha256": "e7dc31b0949b087fda788c4261cbb40bf104388209c344ca0611cfac0e2c1228"
+      "bytes": 454294,
+      "sha256": "f469164749a6146eaa8e6ba8c377b91e97c10632a24c960181b3ce5f117ce18d"
     },
     "preview.gif": {
-      "bytes": 1143503,
-      "sha256": "5377b2b200db5bccfba30aafa9d775e4a441ca4ba5c335b359c8777bd37f6437"
+      "bytes": 1662867,
+      "sha256": "2579a81846fd05009730b6351e5285099cd08528deeffc6c0844435b5c3f0425"
+    },
+    "poster.png": {
+      "bytes": 84896,
+      "sha256": "5194f760fb21c843b21b675e946bc243955acfd75641a30f93bbfb8b67642cb5"
     }
-  },
-  "disclosure": "Real frontend interaction recording with synthetic local data and mocked native boundaries. Not native end-to-end validation. No personal data, external content, provider requests, audio capture or task execution.",
-  "retiming": {
-    "speed": 2.0,
-    "source_duration": 33.04,
-    "source_video_sha256": "52d904fc191c5c9a38b15d789d4021d8c7a3287a9f1363a5f3e2e624e6e5fd33",
-    "source_preview_sha256": "6cfb9526005a9a49651f88a26572542505bbf34e787a894b9c3e0d3350254de2",
-    "tool_sha256": "d761d3bdbb5c3903f6654e3d9bc109d8baf026cfe5b899199274e5e1e5cdfd9f",
-    "video_fps": 25,
-    "gif_fps": 10,
-    "method": "Uniform timestamp acceleration; no scene removal, cropping, new UI or audio.",
-    "disclosures_preserved": true
   }
 }
