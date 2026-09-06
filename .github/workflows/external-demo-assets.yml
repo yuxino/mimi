@@ -22,29 +22,27 @@ jobs:
           node-version: 22
       - name: Install cover tooling without changing app dependencies
         run: python -m pip install Pillow==11.3.0
-      - name: Publish the exact approved files separately from application releases
+      - name: Publish verified media without touching application releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
-          import hashlib,json,os,re,shutil,subprocess,time,urllib.request
+          import hashlib,json,os,re,shutil,subprocess,time,urllib.parse,urllib.request
           from pathlib import Path
           from PIL import Image
-          REPO='yuxino/mimi'
-          BRANCH='docs/external-demo-assets'
+          REPO='yuxino/mimi';BRANCH='docs/external-demo-assets'
           SOURCE='b6944c67f12e3fd9e6c508670baf51dfd64855db'
-          TAG='demo-2026-09-06-788172a6'
+          TAG='demo-2026-09-06-788172a6';RELEASE_ID=383639953
           assert os.environ['GITHUB_REPOSITORY']==REPO
           assert subprocess.check_output(['git','branch','--show-current'],text=True).strip()==BRANCH
           assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip()
-          root=Path('docs/demos')
-          work=Path(os.environ['RUNNER_TEMP'])/'mimi-demo-assets';work.mkdir()
+          root=Path('docs/demos');work=Path(os.environ['RUNNER_TEMP'])/'mimi-demo-assets';work.mkdir()
           review=Path('external-demo-review');review.mkdir()
           original=json.loads((root/'provenance.json').read_text(encoding='utf-8'))
           expected={
-            'demo.mp4':'788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef',
-            'preview.gif':'7b1e0045c7ea4e062273a59c9c90327cdd844b0e0b5d02aefcec2f31cb26747d',
-            'poster.png':'de0bfb1d3e1a957bde3b4687f9c84349cb2d57253957b9148b1f02459e397d6d',
+              'demo.mp4':'788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef',
+              'preview.gif':'7b1e0045c7ea4e062273a59c9c90327cdd844b0e0b5d02aefcec2f31cb26747d',
+              'poster.png':'de0bfb1d3e1a957bde3b4687f9c84349cb2d57253957b9148b1f02459e397d6d',
           }
           names={'demo.mp4':'mimi-demo-1080p.mp4','preview.gif':'mimi-demo-preview.gif','poster.png':'mimi-demo-poster.png'}
           def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -55,11 +53,8 @@ jobs:
           for old,digest in expected.items():
               path=root/old
               assert sha(path)==digest and original['media'][old]['sha256']==digest
-              old_bytes+=path.stat().st_size
-              shutil.copyfile(path,work/names[old])
-          # A small still is the only media loaded by the project README.
-          im=Image.open(root/'poster.png').convert('RGB')
-          im.thumbnail((1440,810),Image.Resampling.LANCZOS)
+              old_bytes+=path.stat().st_size;shutil.copyfile(path,work/names[old])
+          im=Image.open(root/'poster.png').convert('RGB');im.thumbnail((1440,810),Image.Resampling.LANCZOS)
           im.save(work/'poster.jpg',quality=84,optimize=True,progressive=True,subsampling=0)
           assert (work/'poster.jpg').stat().st_size<150_000
           shutil.copyfile(root/'provenance.json',work/'mimi-demo-provenance.json')
@@ -67,53 +62,48 @@ jobs:
           assets=[work/n for n in [*names.values(),'mimi-demo-provenance.json','CREDITS.md']]
           (work/'SHA256SUMS.txt').write_text(''.join(sha(p)+'  '+p.name+'\n' for p in assets),encoding='utf-8')
           assets.append(work/'SHA256SUMS.txt')
-          def cli(*args):
-              return subprocess.check_output(['gh',*args],text=True).strip()
+          def cli(*args):return subprocess.check_output(['gh',*args],text=True).strip()
           def api(path):return json.loads(cli('api','repos/'+REPO+'/'+path))
           latest_before=api('releases/latest')
-          assert latest_before['tag_name']=='v1.3.8' and not latest_before['prerelease']
+          assert latest_before['id']==381034535 and latest_before['tag_name']=='v1.3.8'
           url='https://github.com/'+REPO+'/releases/download/'+TAG+'/'
           page='https://github.com/'+REPO+'/releases/tag/'+TAG
-          notes='\n\n'.join([
-              '# Mimi 演示视频',
-              '[完整视频 · 40 秒 · 1080p · 英文原声]('+url+names['demo.mp4']+')',
-              '英文视频与中文字幕，包含快捷键切换的纯字幕沉浸模式。',
-              '这是独立的演示附件，不是应用安装包或新版本。应用下载和自动更新仍使用现有正式版本。',
-              '**Sintel** — © copyright Blender Foundation | [www.sintel.org](https://www.sintel.org). [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) · [Official sharing terms](https://durian.blender.org/sharing/).',
-              '使用从 02:07 开始的 31 秒对白片段，叠加 Mimi 界面与中文字幕，保留英文原声。实际前端显示此前取得的真实服务返回；本演示不是原生系统音频或全局快捷键端到端验收。未暗示影片作者为 Mimi 背书。',
-              '原始 MP4、GIF、PNG 均保持审核版本的完整字节，没有重新压缩视频。授权、录制边界和校验值见附件 CREDITS.md、mimi-demo-provenance.json、SHA256SUMS.txt。',
-          ])+'\n'
-          (work/'release-notes.md').write_text(notes,encoding='utf-8')
-          found=subprocess.run(['gh','api','repos/'+REPO+'/releases/tags/'+TAG],capture_output=True,text=True)
-          if found.returncode:
-              assert '404' in found.stderr,found.stderr
-              cli('release','create',TAG,'--repo',REPO,'--target',SOURCE,'--draft','--prerelease','--latest=false','--title','Mimi 演示视频（非应用版本）','--notes-file',str(work/'release-notes.md'))
-              release=api('releases/tags/'+TAG)
-          else:release=json.loads(found.stdout)
-          assert release['tag_name']==TAG and release['prerelease']
+          release=api('releases/'+str(RELEASE_ID))
+          assert release['tag_name']==TAG and release['prerelease'] and release['target_commitish']==SOURCE
+          assert release['name']=='Mimi 演示视频（非应用版本）'
           by_name={a['name']:a for a in release['assets']}
           assert set(by_name).issubset({p.name for p in assets})
+          # Upload to the exact draft ID: GitHub does not expose drafts by tag.
+          upload=release['upload_url'].split('{',1)[0]
+          assert upload=='https://uploads.github.com/repos/'+REPO+'/releases/'+str(RELEASE_ID)+'/assets'
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,*args,**kwargs):return None
+          sender=urllib.request.build_opener(NoRedirect)
+          mime={'.mp4':'video/mp4','.gif':'image/gif','.png':'image/png','.json':'application/json','.md':'text/markdown','.txt':'text/plain'}
           for p in assets:
               existing=by_name.get(p.name)
               if existing:
                   assert existing['size']==p.stat().st_size and existing['digest']=='sha256:'+sha(p)
-              else:
-                  assert release['draft'],'Refuse to mutate a published release'
-                  cli('release','upload',TAG,str(p),'--repo',REPO)
-          release=api('releases/tags/'+TAG)
-          by_name={a['name']:a for a in release['assets']}
+                  continue
+              assert release['draft'],'Refuse to mutate a published release'
+              req=urllib.request.Request(upload+'?'+urllib.parse.urlencode({'name':p.name}),data=p.read_bytes(),method='POST',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':mime[p.suffix],'Accept':'application/vnd.github+json','User-Agent':'mimi-docs-migration'})
+              with sender.open(req,timeout=120) as response:
+                  assert response.status==201
+                  uploaded=json.load(response)
+              assert uploaded['name']==p.name and uploaded['digest']=='sha256:'+sha(p)
+          release=api('releases/'+str(RELEASE_ID));by_name={a['name']:a for a in release['assets']}
           assert set(by_name)=={p.name for p in assets}
           for p in assets:
               a=by_name[p.name]
-              assert a['state']=='uploaded' and a['size']==p.stat().st_size
-              assert a['digest']=='sha256:'+sha(p)
-              assert a['browser_download_url']==url+p.name
+              assert a['state']=='uploaded' and a['size']==p.stat().st_size and a['digest']=='sha256:'+sha(p)
           assert by_name[names['demo.mp4']]['content_type']=='video/mp4'
           if release['draft']:
-              cli('release','edit',TAG,'--repo',REPO,'--draft=false','--prerelease','--latest=false')
-          release=api('releases/tags/'+TAG)
-          assert not release['draft'] and release['prerelease']
-          # Read public bytes back with no token before removing working-tree copies.
+              cli('api','repos/'+REPO+'/releases/'+str(RELEASE_ID),'--method','PATCH','-F','draft=false','-F','prerelease=true','-f','make_latest=false')
+          release=api('releases/'+str(RELEASE_ID));assert not release['draft'] and release['prerelease']
+          assert release['html_url']==page
+          by_name={a['name']:a for a in release['assets']}
+          for p in assets:assert by_name[p.name]['browser_download_url']==url+p.name
+          # Verify anonymously available full bytes before removing local originals.
           public=[]
           for p in assets:
               for attempt in range(4):
@@ -127,50 +117,37 @@ jobs:
                               if not chunk:break
                               h.update(chunk);total+=len(chunk)
                       assert total==p.stat().st_size and h.hexdigest()==sha(p)
-                      public.append({'name':p.name,'bytes':total,'sha256':h.hexdigest(),'url':url+p.name})
-                      break
+                      public.append({'name':p.name,'bytes':total,'sha256':h.hexdigest(),'url':url+p.name});break
                   except Exception:
                       if attempt==3:raise
                       time.sleep(3*(attempt+1))
           latest_after=api('releases/latest')
           assert latest_after['id']==latest_before['id'] and latest_after['tag_name']==latest_before['tag_name']
           assert {a['name']:a['digest'] for a in latest_before['assets']}=={a['name']:a['digest'] for a in latest_after['assets']}
-          # Replace the existing single demo entry; retain every feature sentence.
           for filename in ['README.md','README_ZH.md','README_EN.md','README_JA.md']:
               f=Path(filename);text=f.read_text(encoding='utf-8')
               assert text.count('docs/demos/preview.gif')==1
-              text,n=re.subn(r'\[!\[Mimi\]\]\(never-match\)',lambda m:m.group(),text)
               pattern=r'\[!\[Mimi\]\(docs/demos/preview\.gif(?:\?v=[0-9a-f]+)?\)\]\(docs/demos/demo\.mp4\)'
               cover='<a href="'+url+names['demo.mp4']+'"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>'
-              text,n=re.subn(pattern,lambda _:cover,text)
-              assert n==1,filename
+              text,n=re.subn(pattern,lambda _:cover,text);assert n==1,filename
               assert text.count('docs/demos/demo.mp4')==1,filename
               text=text.replace('docs/demos/demo.mp4',url+names['demo.mp4'])
               text=text.replace('[观看视频]','[观看完整视频]').replace('[Watch video]','[Watch full video]').replace('[動画を見る]','[動画全編を見る]')
-              assert 'docs/demos/preview.gif' not in text
-              assert text.count('<!-- project-demo-v1 -->')==1
+              assert 'docs/demos/preview.gif' not in text and text.count('<!-- project-demo-v1 -->')==1
               f.write_text(text,encoding='utf-8')
-          f=root/'README.md';text=f.read_text(encoding='utf-8')
-          heading='# Mimi video demonstration\n'
+          f=root/'README.md';text=f.read_text(encoding='utf-8');heading='# Mimi video demonstration\n'
           assert text.startswith(heading)
           storage='\n[Full video (1080p, original audio)]('+url+names['demo.mp4']+') · [Media attachments]('+page+')\n\nThe approved full video, animated preview and original PNG are stored as GitHub Release attachments, not in the current source tree. The repository README loads only poster.jpg; the MP4 bytes and soundtrack are unchanged. The dedicated demo tag is a non-latest prerelease and is not an application update. No personal CDN is used. Existing Git history is not rewritten.\n'
           f.write_text(text.replace(heading,heading+storage,1),encoding='utf-8')
-          original['hosting']={
-              'provider':'GitHub Release attachments','tag':TAG,'release_id':release['id'],'release_url':page,
-              'prerelease':True,'make_latest':False,'personal_cdn_used':False,'video_reencoded':False,
-              'source_commit':SOURCE,'public_roundtrip_verified':True,
-              'application_latest_release_id':latest_after['id'],'application_latest_tag':latest_after['tag_name'],
-              'git_history_rewritten':False,
-          }
+          original['hosting']={'provider':'GitHub Release attachments','tag':TAG,'release_id':RELEASE_ID,'release_url':page,'prerelease':True,'make_latest':False,'personal_cdn_used':False,'video_reencoded':False,'source_commit':SOURCE,'public_roundtrip_verified':True,'application_latest_release_id':latest_after['id'],'application_latest_tag':latest_after['tag_name'],'git_history_rewritten':False}
           for old,name in names.items():original['media'][old].update({'url':url+name,'storage':'release-asset'})
           original['readme_preview']={'path':'docs/demos/poster.jpg','bytes':(work/'poster.jpg').stat().st_size,'sha256':sha(work/'poster.jpg'),'dimensions':list(im.size),'display_width':640,'animated':False}
           (root/'provenance.json').write_text(json.dumps(original,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           shutil.copyfile(work/'poster.jpg',root/'poster.jpg')
           for old in expected:(root/old).unlink()
-          report={'success':True,'release_id':release['id'],'release_url':page,'video_url':url+names['demo.mp4'],'public_assets':public,'latest_unchanged':True,'latest_tag':latest_after['tag_name'],'personal_cdn_used':False,'video_reencoded':False,'old_worktree_media_bytes':old_bytes,'new_readme_image_bytes':(work/'poster.jpg').stat().st_size,'git_history_rewritten':False}
+          report={'success':True,'release_id':RELEASE_ID,'release_url':page,'video_url':url+names['demo.mp4'],'public_assets':public,'latest_unchanged':True,'latest_tag':latest_after['tag_name'],'personal_cdn_used':False,'video_reencoded':False,'old_worktree_media_bytes':old_bytes,'new_readme_image_bytes':(work/'poster.jpg').stat().st_size,'git_history_rewritten':False}
           (review/'verification.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          shutil.copyfile(work/'poster.jpg',review/'poster.jpg')
-          print(json.dumps(report,ensure_ascii=False,indent=2))
+          shutil.copyfile(work/'poster.jpg',review/'poster.jpg');print(json.dumps(report,ensure_ascii=False,indent=2))
           PY
       - name: Verify documentation and unchanged app
         run: |
@@ -190,8 +167,7 @@ jobs:
                   if re.match(r'^[a-z]+:',target) or target.startswith('#'):continue
                   path=target.split('#',1)[0].split('?',1)[0]
                   assert (f.parent/path).exists(),(str(f),target)
-          assert not Path('docs/demos/demo.mp4').exists()
-          assert not Path('docs/demos/preview.gif').exists()
+          assert not Path('docs/demos/demo.mp4').exists() and not Path('docs/demos/preview.gif').exists()
           assert Path('docs/demos/poster.jpg').stat().st_size<150_000
           PY
       - name: Commit only the migration and remove this one-use workflow
