@@ -14,11 +14,11 @@ mimi は、日本語の「耳（みみ）」に由来する名前です。デバ
 <!-- project-demo-v1 -->
 ## デモ
 
-[![mimi — デモ](docs/demos/preview.gif)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif)](docs/demos/demo.mp4)
 
-[動画（MP4）](docs/demos/demo.mp4) · [デモについて](docs/demos/README.md)
+[動画を見る](docs/demos/demo.mp4)
 
-操作パネルから翻訳を開始し、字幕ウィンドウに訳文が現れる様子を確認。一時停止、字幕の見た目、サービス設定も紹介します。サンプル音声と**実際の翻訳結果**を使用しています。
+再生中の音声を字幕に翻訳。言語・文字サイズ・表示方法をいつでも調整できます。
 <!-- /project-demo-v1 -->
 
 ## 機能

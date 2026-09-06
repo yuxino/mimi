@@ -14,11 +14,11 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-[![mimi — 演示](docs/demos/preview.gif)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif)](docs/demos/demo.mp4)
 
-[完整视频（MP4）](docs/demos/demo.mp4) · [演示说明](docs/demos/README.md)
+[观看视频](docs/demos/demo.mp4)
 
-从控制面板启动翻译，译文逐步出现在字幕浮窗里；再试试暂停、字幕样式和服务设置。示例音频，**真实翻译返回**。
+把正在播放的内容翻译成字幕，随时调整语言、字号和显示方式。
 <!-- /project-demo-v1 -->
 
 ## 功能

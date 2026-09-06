@@ -14,11 +14,11 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-[![mimi — Demo](docs/demos/preview.gif)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif)](docs/demos/demo.mp4)
 
-[Full video (MP4)](docs/demos/demo.mp4) · [About this demo](docs/demos/README.md)
+[Watch video](docs/demos/demo.mp4)
 
-Start translation from the control panel, watch subtitles appear in the floating overlay, then explore pause, subtitle styling and service settings. Sample audio, **real translation responses**.
+Translate what is playing into live subtitles, with language, size, and display controls close at hand.
 <!-- /project-demo-v1 -->
 
 ## Features
