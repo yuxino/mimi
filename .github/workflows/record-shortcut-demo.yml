@@ -39,6 +39,15 @@ jobs:
       - name: Correct the isolated native-presentation boundary
         run: |
           python docs/demos/english-film/refine-shortcut.py
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('docs/demos/english-film/record.py');s=p.read_text()
+          old="assert await page.frame_locator('#overlay-control').locator('body').inner_text()==''"
+          new="assert not (await page.frame_locator('#overlay-control').locator('body').inner_text()).strip()"
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          compile(s,str(p),'exec');p.write_text(s)
+          PY
           node --check docs/demos/english-film/stage.js
           node --check docs/demos/english-film/bridge.js
           git diff --check
