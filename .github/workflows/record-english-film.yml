@@ -2,7 +2,7 @@ name: Record English film and immersive subtitles
 on:
   push:
     branches: [docs/english-video-demo]
-    paths: [.github/workflows/record-english-film.yml, docs/demos/english-film/record.py, docs/demos/english-film/stage.html, docs/demos/english-film/stage.js, docs/demos/english-film/bridge.js]
+    paths: [.github/workflows/record-english-film.yml]
 permissions:
   contents: read
   actions: read
@@ -32,24 +32,48 @@ jobs:
           name: film-translation-review
           github-token: ${{ github.token }}
           path: translation
-      - name: Install capture tools and verify recorder selectors
+      - name: Prepare the reviewed capture and preview settings
         run: |
           python -m pip install playwright==1.55.0
           sudo apt-get install -y ffmpeg fonts-noto-cjk
-          node --check docs/demos/english-film/bridge.js
-          node --check docs/demos/english-film/stage.js
           python - <<'PY'
           from pathlib import Path
-          path=Path('docs/demos/english-film/record.py');s=path.read_text(encoding='utf-8')
-          for old,new in [("name='暂停',exact=True","name='暂停翻译',exact=True"),("name='继续',exact=True","name='继续翻译',exact=True")]:
-              assert s.count(old)==1
-              s=s.replace(old,new)
-          compile(s,str(path),'exec');path.write_text(s,encoding='utf-8')
+          root=Path('docs/demos/english-film')
+          p=root/'record.py';s=p.read_text(encoding='utf-8')
+          changes={
+            "name='暂停',exact=True":"name='暂停翻译',exact=True",
+            "name='继续',exact=True":"name='继续翻译',exact=True",
+            "frames=r['frames'];assert len(frames)>300":"frames=sorted({f['t']:f for f in r['frames']}.values(),key=lambda f:f['t']);assert len(frames)>300",
+            "ff(['-i',str(delivery/'demo.mp4'),'-filter_complex','fps=10,scale=1440:810":"preview_start=audio_delay/1000+10.5\n    preview_seconds=6.5\n    ff(['-ss',str(preview_start),'-t',str(preview_seconds),'-i',str(delivery/'demo.mp4'),'-filter_complex','fps=6,scale=1440:810",
+            "s['name']=='02-blended-subtitles'":"s['name']=='03-blended-result'",
+            "abs(float(probe(delivery/'preview.gif')['format']['duration'])-duration)<.2":"abs(float(probe(delivery/'preview.gif')['format']['duration'])-preview_seconds)<.25",
+            "'response_events_consumed':r['state']['eventCount']":"'preview':{'start':preview_start,'seconds':preview_seconds,'fps':6,'dimensions':[1440,810]},'response_events_consumed':r['state']['eventCount']",
+          }
+          for old,new in changes.items():
+            assert s.count(old)==1,old
+            s=s.replace(old,new)
+          compile(s,str(p),'exec');p.write_text(s,encoding='utf-8')
+          p=root/'stage.html';s=p.read_text()
+          for old,new in [('top:668px','top:706px'),('height:180px','height:136px'),('top:682px','top:720px')]:
+            assert s.count(old)==1
+            s=s.replace(old,new)
+          p.write_text(s)
+          p=root/'stage.js';s=p.read_text();assert s.count("'682px'")==1;p.write_text(s.replace("'682px'","'720px'"))
           PY
+          node --check docs/demos/english-film/bridge.js
+          node --check docs/demos/english-film/stage.js
       - name: Record and verify the uninterrupted movie demonstration
         run: |
           python -I docs/demos/english-film/record.py
-          cp docs/demos/english-film/record.py english-film-delivery/record.py
+          mkdir -p english-film-delivery/capture
+          cp docs/demos/english-film/{record.py,stage.html,stage.js,bridge.js} english-film-delivery/capture/
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          root=Path('english-film-delivery')
+          manifest={str(p.relative_to(root)):{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(root.rglob('*')) if p.is_file()}
+          (root/'manifest.json').write_text(json.dumps(manifest,sort_keys=True,indent=2)+'\n')
+          PY
       - uses: actions/upload-artifact@v7
         if: always()
         with:
