@@ -14,11 +14,11 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-[![Mimi](docs/demos/preview.gif)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif?v=a2ee2b05d023)](docs/demos/demo.mp4)
 
-[观看视频](docs/demos/demo.mp4)
+[观看视频](docs/demos/demo.mp4) · [片源与演示说明](docs/demos/README.md)
 
-把正在播放的内容翻译成字幕，随时调整语言、字号和显示方式。
+播放英文视频，切换普通字幕浮窗与融入背景显示。
 <!-- /project-demo-v1 -->
 
 ## 功能

@@ -1,0 +1,1385 @@
+{
+  "source": {
+    "title": "Sintel",
+    "source_url": "https://download.blender.org/demo/movies/Sintel.2010.1080p.mkv",
+    "source_page": "https://durian.blender.org/",
+    "license": "CC BY 3.0",
+    "license_url": "https://creativecommons.org/licenses/by/3.0/",
+    "attribution": "© copyright Blender Foundation | www.sintel.org",
+    "sharing_terms": "https://durian.blender.org/sharing/",
+    "excerpt_start": 127,
+    "excerpt_duration": 31,
+    "changes": "A dialogue excerpt used in a software-interface demonstration, with live translated subtitles overlaid. Not a redistribution of the full movie.",
+    "sha256": "c0a2105d746bd2f6b636cb090857fa30e625b017412b98f99100d8fe6e40f0c8"
+  },
+  "events": [
+    {
+      "type": "conversation.item.created",
+      "item": {
+        "id": "item_CHgPHBoMkOkBzSmmYSee8",
+        "role": "assistant"
+      },
+      "received_at": 0.745142
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 0.745226
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So.",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 0.747367
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "item": {
+        "id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+        "role": "assistant"
+      },
+      "received_at": 0.907719
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "所以",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 0.911613
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "那么",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 1.109277
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "那么，",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.432589
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.438376
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.444322
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.450352
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.456127
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.462196
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.46819
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到这儿",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.474212
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到这儿来了",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.48032
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到这儿来了？",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 3.486296
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 4.433642
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了守",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 4.439164
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了守门",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 4.444893
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了守门人的",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 4.450547
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了守门人的领地",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 4.456473
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.458067
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.46215
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了守门人的领地？",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 4.46216
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.467483
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.472297
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to the",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.477406
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to the land",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.482724
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to the land of",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.488082
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to the land of the",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.493808
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to the land of the gate",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.499144
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to the land of the gatekeeper",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.511116
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "So. What brings you to the land of the gatekeeper?",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 4.511145
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了守门人的国度",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 5.465145
+    },
+    {
+      "type": "response.text.text",
+      "text": "那么，",
+      "stash": "是什么风把你吹到了守门人的国度？",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 5.469839
+    },
+    {
+      "type": "response.text.done",
+      "text": "那么，是什么风把你吹到了守门人的国度？",
+      "item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "response_id": "resp_EzXiizSlEQFIRggC7sU8K",
+      "received_at": 5.477515
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "So. What brings you to the",
+      "stash": " land of the gatekeepers",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 5.519564
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "So. What brings you to the land",
+      "stash": " of the gatekeepers?",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 5.521864
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "So. What brings you to the land of the gatekeepers?",
+      "item_id": "item_CHgPHBoMkOkBzSmmYSee8",
+      "received_at": 5.526031
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_Yr3zJWNxpuLwjXcrVDiPC",
+      "item": {
+        "id": "item_Ex8FKwsy4jek5fKd6dvpN",
+        "role": "assistant"
+      },
+      "received_at": 6.659141
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "Um",
+      "item_id": "item_Ex8FKwsy4jek5fKd6dvpN",
+      "received_at": 6.65917
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "Um.",
+      "item_id": "item_Ex8FKwsy4jek5fKd6dvpN",
+      "received_at": 6.659224
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_Ex8FKwsy4jek5fKd6dvpN",
+      "item": {
+        "id": "item_Lbx3whsrRrEdb9UWycVcH",
+        "role": "assistant"
+      },
+      "received_at": 6.866946
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "嗯",
+      "item_id": "item_Lbx3whsrRrEdb9UWycVcH",
+      "response_id": "resp_UTgtJauAprakS8T6GNNAO",
+      "received_at": 6.956344
+    },
+    {
+      "type": "response.text.done",
+      "text": "  ",
+      "item_id": "item_Lbx3whsrRrEdb9UWycVcH",
+      "response_id": "resp_UTgtJauAprakS8T6GNNAO",
+      "received_at": 7.413317
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "Um.",
+      "item_id": "item_Ex8FKwsy4jek5fKd6dvpN",
+      "received_at": 7.470044
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "item": {
+        "id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+        "role": "assistant"
+      },
+      "received_at": 8.619707
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我是",
+      "item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "response_id": "resp_NPQMCtgQRvp4g3iJUlviQ",
+      "received_at": 8.622451
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_Lbx3whsrRrEdb9UWycVcH",
+      "item": {
+        "id": "item_S66s4I9p8XRyyul8bRpj7",
+        "role": "assistant"
+      },
+      "received_at": 8.63121
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 8.631221
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I'm.",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 8.656802
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我在",
+      "item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "response_id": "resp_NPQMCtgQRvp4g3iJUlviQ",
+      "received_at": 8.815447
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我在搜索",
+      "item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "response_id": "resp_NPQMCtgQRvp4g3iJUlviQ",
+      "received_at": 8.820843
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I'm sorry",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 8.866038
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I'm sorry.",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 8.872298
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我在寻找",
+      "item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "response_id": "resp_NPQMCtgQRvp4g3iJUlviQ",
+      "received_at": 9.137253
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I'm searching",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 9.45384
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I'm searching for",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 9.459139
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I'm searching for someone",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 9.464587
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I'm searching for someone.",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 9.473681
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我在寻找某人",
+      "item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "response_id": "resp_NPQMCtgQRvp4g3iJUlviQ",
+      "received_at": 10.14541
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我在寻找某人。",
+      "item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "response_id": "resp_NPQMCtgQRvp4g3iJUlviQ",
+      "received_at": 10.150572
+    },
+    {
+      "type": "response.text.done",
+      "text": "我在寻找某人。",
+      "item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "response_id": "resp_NPQMCtgQRvp4g3iJUlviQ",
+      "received_at": 10.343928
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "I'm searching for someone.",
+      "item_id": "item_S66s4I9p8XRyyul8bRpj7",
+      "received_at": 10.405339
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_EM4EhoHQx4ZGY1W6Bu4fN",
+      "item": {
+        "id": "item_RYEWqgHPDdGJODDQhAG5U",
+        "role": "assistant"
+      },
+      "received_at": 11.040926
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "三",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 11.041568
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "三。",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 11.043807
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "item": {
+        "id": "item_QZeovQuo7Pe2SDA1lUGAK",
+        "role": "assistant"
+      },
+      "received_at": 11.201606
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "某人",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 11.206111
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "Someone",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 11.346463
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "Someone.",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 11.351324
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一位",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 11.720183
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一位非常",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 11.724104
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一位非常特别",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 11.730453
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一位非常特别的人",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 11.735843
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "Someone very",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 12.112125
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "Someone very dear",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 12.11662
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "Someone very dear.",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 12.123088
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "Someone very dear.",
+      "item_id": "item_RYEWqgHPDdGJODDQhAG5U",
+      "received_at": 12.766021
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一位非常亲",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 12.808149
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一位非常亲爱的人",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 12.814724
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一位非常亲爱的人。",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 12.821453
+    },
+    {
+      "type": "response.text.done",
+      "text": "一位非常亲爱的人。",
+      "item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "response_id": "resp_IEnhg6rGauY3blUiVAnoo",
+      "received_at": 12.831161
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_QZeovQuo7Pe2SDA1lUGAK",
+      "item": {
+        "id": "item_WfyVoM3Bqlhs33RzHhtjk",
+        "role": "assistant"
+      },
+      "received_at": 13.2376
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 13.237674
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A.",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 13.241582
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "item": {
+        "id": "item_GOSl7WQ8cnjHKfippssnD",
+        "role": "assistant"
+      },
+      "received_at": 13.429391
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一种",
+      "item_id": "item_GOSl7WQ8cnjHKfippssnD",
+      "response_id": "resp_Lrfbfk2QZkl9uOmmniaHn",
+      "received_at": 13.433257
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一个",
+      "item_id": "item_GOSl7WQ8cnjHKfippssnD",
+      "response_id": "resp_Lrfbfk2QZkl9uOmmniaHn",
+      "received_at": 13.622613
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一个同类",
+      "item_id": "item_GOSl7WQ8cnjHKfippssnD",
+      "response_id": "resp_Lrfbfk2QZkl9uOmmniaHn",
+      "received_at": 13.627453
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A kind",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 13.697841
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A kindred",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 13.702579
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A kindred.",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 13.709345
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "志同道合",
+      "item_id": "item_GOSl7WQ8cnjHKfippssnD",
+      "response_id": "resp_Lrfbfk2QZkl9uOmmniaHn",
+      "received_at": 14.031706
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "志同道合的人",
+      "item_id": "item_GOSl7WQ8cnjHKfippssnD",
+      "response_id": "resp_Lrfbfk2QZkl9uOmmniaHn",
+      "received_at": 14.031763
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A kindred spirit",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 14.466351
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A kindred spirit.",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 14.471459
+    },
+    {
+      "type": "response.text.done",
+      "text": "志同道合的人  ",
+      "item_id": "item_GOSl7WQ8cnjHKfippssnD",
+      "response_id": "resp_Lrfbfk2QZkl9uOmmniaHn",
+      "received_at": 14.73124
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "A kindred spirit.",
+      "item_id": "item_WfyVoM3Bqlhs33RzHhtjk",
+      "received_at": 14.767356
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_GOSl7WQ8cnjHKfippssnD",
+      "item": {
+        "id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+        "role": "assistant"
+      },
+      "received_at": 16.747123
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "But",
+      "item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "received_at": 16.74714
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "But.",
+      "item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "received_at": 16.751834
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "item": {
+        "id": "item_YbO3CPGde1xuJs6TrFzTC",
+        "role": "assistant"
+      },
+      "received_at": 16.908517
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一个",
+      "item_id": "item_YbO3CPGde1xuJs6TrFzTC",
+      "response_id": "resp_WjBMkpsXheGA96gNDOTLr",
+      "received_at": 16.912234
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A",
+      "item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "received_at": 17.038627
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A.",
+      "item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "received_at": 17.039511
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一条龙",
+      "item_id": "item_YbO3CPGde1xuJs6TrFzTC",
+      "response_id": "resp_WjBMkpsXheGA96gNDOTLr",
+      "received_at": 17.107525
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dragon",
+      "item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "received_at": 17.753335
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dragon.",
+      "item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "received_at": 17.759489
+    },
+    {
+      "type": "response.text.done",
+      "text": "一条龙  ",
+      "item_id": "item_YbO3CPGde1xuJs6TrFzTC",
+      "response_id": "resp_WjBMkpsXheGA96gNDOTLr",
+      "received_at": 18.019433
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "A dragon.",
+      "item_id": "item_CBfa4tVDZAv4F3bMa5Cg6",
+      "received_at": 18.065168
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_YbO3CPGde1xuJs6TrFzTC",
+      "item": {
+        "id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+        "role": "assistant"
+      },
+      "received_at": 22.603106
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 22.603122
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A day",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 22.607857
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A day.",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 22.613868
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "item": {
+        "id": "item_GeceDrOPGajU8KfhnZr8D",
+        "role": "assistant"
+      },
+      "received_at": 22.702188
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一个",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 22.706159
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "一个危险的",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 22.712064
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 22.853114
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous.",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 22.858336
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "危险的",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 23.210889
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "危险的 quest",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 23.216602
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous quest",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 23.45137
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous quest for",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 23.45677
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous quest for.",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 23.461785
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous quest for a",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 24.204804
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous quest for a lone",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 24.210686
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "对",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.210701
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "对独行",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.21633
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous quest for a lone hunter",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 24.216348
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "对独行猎",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.222616
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "A dangerous quest for a lone hunter.",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 24.222622
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "对独行猎手",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.227833
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "对独行猎手而言",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.233545
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "对独行猎手而言，",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.239519
+    },
+    {
+      "type": "response.text.text",
+      "text": "对独行猎手而言，",
+      "stash": "",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.246116
+    },
+    {
+      "type": "response.text.text",
+      "text": "对独行猎手而言，",
+      "stash": "这是一场",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.251336
+    },
+    {
+      "type": "response.text.text",
+      "text": "对独行猎手而言，",
+      "stash": "这是一场危险的",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.257188
+    },
+    {
+      "type": "response.text.text",
+      "text": "对独行猎手而言，",
+      "stash": "这是一场危险的 quest",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.263318
+    },
+    {
+      "type": "response.text.text",
+      "text": "对独行猎手而言，",
+      "stash": "这是一场危险的 quest。",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.269075
+    },
+    {
+      "type": "response.text.done",
+      "text": "对独行猎手而言，这是一场危险的 quest。",
+      "item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "response_id": "resp_YiL4THeOvhCycEHxCCrar",
+      "received_at": 24.83052
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "A dangerous quest for a lone hunter.",
+      "item_id": "item_WJ8ZLaLE5Fl2ijKDXfX8B",
+      "received_at": 24.895169
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_GeceDrOPGajU8KfhnZr8D",
+      "item": {
+        "id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+        "role": "assistant"
+      },
+      "received_at": 26.746133
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 26.746148
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 26.747804
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 26.753352
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been.",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 26.759172
+    },
+    {
+      "type": "conversation.item.created",
+      "previous_item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "item": {
+        "id": "item_BpDUq3VGtkLixDMwS4vTi",
+        "role": "assistant"
+      },
+      "received_at": 26.902669
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 26.905511
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直都是",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 26.91224
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直都是一个人",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 26.917464
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直都是一个人。",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 26.922923
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 27.082306
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone.",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 27.087169
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直孤",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 27.416762
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直孤身",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 27.422414
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直孤身一人",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 27.42821
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "我一直孤身一人。",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 27.433692
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 27.65476
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 27.660804
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as long",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 27.666164
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as long as",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 27.671995
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as long as.",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 27.67701
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "从我",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.408795
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "从我有",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.414609
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "从我有记忆",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.420833
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "从我有记忆起",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.426619
+    },
+    {
+      "type": "response.text.text",
+      "text": "",
+      "stash": "从我有记忆起，",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.432483
+    },
+    {
+      "type": "response.text.text",
+      "text": "从我有记忆起，",
+      "stash": "",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.438641
+    },
+    {
+      "type": "response.text.text",
+      "text": "从我有记忆起，",
+      "stash": "我就",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.444791
+    },
+    {
+      "type": "response.text.text",
+      "text": "从我有记忆起，",
+      "stash": "我就一直",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.450479
+    },
+    {
+      "type": "response.text.text",
+      "text": "从我有记忆起，",
+      "stash": "我就一直孤",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.456363
+    },
+    {
+      "type": "response.text.text",
+      "text": "从我有记忆起，",
+      "stash": "我就一直孤身",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.462357
+    },
+    {
+      "type": "response.text.text",
+      "text": "从我有记忆起，",
+      "stash": "我就一直孤身一人",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.468281
+    },
+    {
+      "type": "response.text.text",
+      "text": "从我有记忆起，",
+      "stash": "我就一直孤身一人。",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 28.474495
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as long as I",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 28.47847
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as long as I can",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 28.483537
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as long as I can remember",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 28.489308
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.text",
+      "text": "",
+      "stash": "I've been alone for as long as I can remember.",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 28.494242
+    },
+    {
+      "type": "response.text.done",
+      "text": "从我有记忆起，我就一直孤身一人。",
+      "item_id": "item_BpDUq3VGtkLixDMwS4vTi",
+      "response_id": "resp_LIz6MCndeN84gzDRcZk9y",
+      "received_at": 29.145227
+    },
+    {
+      "type": "conversation.item.input_audio_transcription.completed",
+      "transcript": "I've been alone for as long as I can remember.",
+      "item_id": "item_QH4Cnp2rGK4C4eN3LcIkc",
+      "received_at": 29.272629
+    }
+  ],
+  "timing": "original service receive offsets"
+}

@@ -1,90 +1,102 @@
 {
-  "project": "mimi",
-  "success": true,
-  "source_commit": "4bbcde72b9bcb9a2540f0b230c8ce45d842a50dc",
+  "source_commit": "b048092cbe76d5d4fb5836400c7e377a1e3e273e",
+  "native": false,
+  "new_provider_calls_in_capture": 0,
+  "response_capture_run": 34040075430,
+  "response_artifact": 9991423013,
+  "response_sha256": "214f8bf43d0696a4fcf01f35a61e425badd60858803d7d52a875e3b8fb90d861",
+  "single_take": true,
   "dimensions": [
     1920,
     1080
   ],
-  "render_scale": 1.5,
-  "single_take": true,
+  "checks": {
+    "ordinary_overlay": true,
+    "blend_transparent": true,
+    "film_played_to_end": true,
+    "pause_resume_controls": true,
+    "finished_in_immersive_mode": true
+  },
+  "duration": 38.066667,
+  "sha256": "a2ee2b05d0239730be776fd21746a7a752b32f119418f6a417270b791c2a392b",
+  "capture_run": "34040956131",
+  "source": {
+    "title": "Sintel",
+    "source_url": "https://download.blender.org/demo/movies/Sintel.2010.1080p.mkv",
+    "source_page": "https://durian.blender.org/",
+    "license": "CC BY 3.0",
+    "license_url": "https://creativecommons.org/licenses/by/3.0/",
+    "attribution": "© copyright Blender Foundation | www.sintel.org",
+    "sharing_terms": "https://durian.blender.org/sharing/",
+    "excerpt_start": 127,
+    "excerpt_duration": 31,
+    "changes": "31-second English dialogue excerpt, resized and shown beneath the actual Mimi interface; original service responses replayed at their receive times. The normal-to-immersive transition is visible. No endorsement is implied.",
+    "sha256": "c0a2105d746bd2f6b636cb090857fa30e625b017412b98f99100d8fe6e40f0c8"
+  },
+  "dialogue_speed": 1,
+  "control_actions_speed": 10,
+  "audio_delay_ms": 1556,
   "scene_cuts": 0,
-  "added_holds": 0,
-  "speed_factor": 10,
-  "steps": [
+  "scenes": [
     {
-      "name": "Translation controls",
-      "time": 0.00039576499997906467
+      "name": "01-ordinary-subtitles",
+      "at": 7.925
     },
     {
-      "name": "Translated subtitles",
-      "time": 16.527129246999976
+      "name": "02-blended-subtitles",
+      "at": 20.744
     },
     {
-      "name": "Pause",
-      "time": 24.68989860399998
+      "name": "03-blended-result",
+      "at": 33.71
     },
     {
-      "name": "Resume",
-      "time": 30.62890100499999
+      "name": "04-display-controls",
+      "at": 34.075
     },
     {
-      "name": "Settings",
-      "time": 36.50303926699999
-    },
-    {
-      "name": "Subtitle sizing",
-      "time": 41.72022442099998
-    },
-    {
-      "name": "Service profiles",
-      "time": 47.72424785899997
-    },
-    {
-      "name": "General preferences",
-      "time": 53.90956917599999
+      "name": "05-final-immersive",
+      "at": 37.982
     }
   ],
-  "api_calls": 0,
-  "live_provider": false,
-  "response_replay": {
-    "run": 34006715790,
-    "screens": [
-      "mimi/poster.png"
-    ],
-    "model": "qwen3.5-livetranslate-flash-realtime"
+  "preview": {
+    "start": 12.056000000000001,
+    "seconds": 6.5,
+    "fps": 6,
+    "dimensions": [
+      1440,
+      810
+    ]
   },
-  "capture": "Unmodified production frontend in an isolated browser. Native boundaries are documentation fixtures; prior verified response text is replayed offline. No credentials are used.",
-  "capture_timing": {
-    "master_frames": 710,
-    "master_fps": 12,
-    "master_seconds": 59.166666666666664,
-    "wall_seconds": 59.314680556999974
-  },
-  "javascript_errors": [],
-  "sha256": "39a87bb5294d99e5c2de5bf320d96ab252296ae7ee54cf4a08927b48064f357c",
-  "capture_run": 34012662273,
-  "capture_artifact": 9982960944,
-  "duration": 5.9,
-  "previous_media_sha256": "8764e2b74eed173bad740d1eef811f8354bf9d066979d57abf419e482b2331bd",
-  "preview_dimensions": [
-    1440,
-    810
-  ],
-  "preview_fps": 12,
-  "disclosure": "Actual frontend with offline replay of previously verified translation response text. This recording makes no new provider calls and does not verify native audio capture.",
+  "response_events_consumed": 181,
+  "history_count": 7,
+  "disclosure": "Actual unchanged Mimi frontend over a licensed Sintel excerpt. Real provider responses from run 34040075430 are replayed with original receive timing. No subtitle correction or latency shortening. The recorder substitutes native IPC and does not test OS audio capture or keychain integration. Original English soundtrack is synchronized to playback; settings actions after the film ends play at 10x. No API credential is present during recording.",
   "media": {
     "demo.mp4": {
-      "bytes": 201079,
-      "sha256": "39a87bb5294d99e5c2de5bf320d96ab252296ae7ee54cf4a08927b48064f357c"
+      "bytes": 23148590,
+      "sha256": "a2ee2b05d0239730be776fd21746a7a752b32f119418f6a417270b791c2a392b"
     },
     "preview.gif": {
-      "bytes": 510947,
-      "sha256": "33b0009bcf56c1449e1d7257160d5c834b260030fe04bbe68773bb26f77a47b3"
+      "bytes": 14943536,
+      "sha256": "4385cadcd26dd57d94b638bf40b81fb7523e2466e53949193f27d69f89d161e6"
     },
     "poster.png": {
-      "bytes": 97017,
-      "sha256": "0fb2a2cd36692261f3b524ba794af3befb15a98e1eef194dae2f47c54c872261"
+      "bytes": 3387623,
+      "sha256": "6dc7b099440a41aaef3d04cc1a4d5697915a686aa2f1315557803a6906bcd3b7"
     }
+  },
+  "project": "mimi",
+  "success": true,
+  "previous_media_sha256": "39a87bb5294d99e5c2de5bf320d96ab252296ae7ee54cf4a08927b48064f357c",
+  "capture_commit": "41337ad6a1f99ac96c0b4c1be9042c907721a7dc",
+  "capture_artifact": 9991676166,
+  "reviewed_manifest_sha256": "4c97a59436e0ebcef1fb043738b30a123afaf88a201d92b337910aeb58835e31",
+  "verification": {
+    "full_mp4_and_gif_decoded": true,
+    "original_audio_delay_seconds": 1.556,
+    "original_audio_correlation": 0.9997139042,
+    "renderer_errors": 0,
+    "http_errors": 0,
+    "provider_sessions_for_source": 1
   }
 }
