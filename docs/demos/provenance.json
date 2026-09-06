@@ -1,118 +1,80 @@
 {
   "project": "mimi",
   "source_commit": "4bbcde72b9bcb9a2540f0b230c8ce45d842a50dc",
-  "capture": "Unmodified production frontend in Chrome with isolated local sample data and mocked native APIs",
-  "limitations": "Settings UI · built-in browser preview · no live transcription",
-  "browser": "152.0.7977.64",
-  "speed_factor": 10,
-  "result_hold_seconds": 0.8,
-  "duration": 16.766667,
-  "source_duration": 87.90549999999999,
-  "sha256": "f469164749a6146eaa8e6ba8c377b91e97c10632a24c960181b3ce5f117ce18d",
-  "scenes": [
+  "capture": "Actual unmodified frontend; live Alibaba Cloud service responses; native integration replaced only in the documentation harness. Not an installed desktop end-to-end test.",
+  "live_provider": true,
+  "api_calls": [
     {
-      "zh": "日语输入，英语字幕",
-      "en": "01 / Source and target languages",
-      "start": 3.5352999999999883,
-      "end": 8.395299999999988,
-      "poster": "01.png"
-    },
-    {
-      "zh": "随时切换翻译方向",
-      "en": "02 / Change the language pair",
-      "start": 8.395299999999988,
-      "end": 15.795699999999982,
-      "poster": "02.png"
-    },
-    {
-      "zh": "按需要选择翻译模式",
-      "en": "03 / Translation quality controls",
-      "start": 15.795699999999982,
-      "end": 18.066899999999993,
-      "poster": "03.png"
-    },
-    {
-      "zh": "字号放大，远一点也能看清",
-      "en": "04 / Enlarge subtitles",
-      "start": 18.066899999999993,
-      "end": 25.713399999999993,
-      "poster": "04.png"
-    },
-    {
-      "zh": "左、中、右，选习惯的对齐方式",
-      "en": "05 / Three subtitle alignments",
-      "start": 25.713399999999993,
-      "end": 47.73259999999998,
-      "poster": "05.png"
-    },
-    {
-      "zh": "沉浸显示，也能锁定字幕位置",
-      "en": "06 / Immersive and position-lock controls",
-      "start": 47.73259999999998,
-      "end": 58.432,
-      "poster": "06.png"
-    },
-    {
-      "zh": "翻译服务集中管理",
-      "en": "07 / Translation service settings",
-      "start": 58.432,
-      "end": 64.70869999999998,
-      "poster": "07.png"
-    },
-    {
-      "zh": "查看可添加的实时服务",
-      "en": "08 / Explore supported provider choices",
-      "start": 64.70869999999998,
-      "end": 75.80309999999997,
-      "poster": "08.png"
-    },
-    {
-      "zh": "通用设置与界面语言",
-      "en": "09 / General settings",
-      "start": 75.80309999999997,
-      "end": 88.61869999999998,
-      "poster": "09.png"
-    },
-    {
-      "zh": "中英文界面，一键切换",
-      "en": "10 / Switch the interface language",
-      "start": 88.61869999999998,
-      "end": 91.44079999999998,
-      "poster": "10.png"
+      "model": "qwen3.5-livetranslate-flash-realtime",
+      "transport": "WebSocket",
+      "events": 110,
+      "source_finals": 1,
+      "translation_finals": 1,
+      "final_event_fields": [
+        {
+          "type": "conversation.item.input_audio_transcription.completed",
+          "fields": [
+            "event_id",
+            "type",
+            "item_id",
+            "content_index",
+            "transcript",
+            "language",
+            "emotion"
+          ]
+        },
+        {
+          "type": "response.text.done",
+          "fields": [
+            "text",
+            "event_id",
+            "type",
+            "response_id",
+            "item_id",
+            "output_index",
+            "content_index"
+          ]
+        }
+      ],
+      "source_characters": 123,
+      "translation_characters": 47,
+      "success": true
     }
   ],
-  "actions": [
-    "Switch to Japanese recognition and keep the current translation mode",
-    "Select translation target: English",
-    "Switch to English recognition and keep the current translation mode",
-    "Switch translation quality mode",
-    "Subtitle Size",
-    "Align Left",
-    "Align Right",
-    "Align Center",
-    "Immersive Mode",
-    "Lock Subtitle Position",
-    "Translation Service",
-    "Manage Configurations\n1 configuration",
-    "Add Configuration",
-    "Cancel",
-    "General",
-    "Switch UI language to Chinese"
+  "segments": [
+    {
+      "kind": "live_translation",
+      "seconds": 10.066667,
+      "speed": 3
+    },
+    {
+      "kind": "existing_settings_tour",
+      "seconds": 16.766667,
+      "action_speed": 10,
+      "result_hold": 0.8
+    }
   ],
-  "disclosure": "New, expanded frontend interaction recording. Every action interval is retimed at 10x; each result receives a 0.8-second hold. Native API boundaries use original sample data. No live AI request, system capture, task execution or native filesystem acceptance is claimed.",
-  "recording_tool_sha256": "9a88822bb8cffe05bc0c48e805c9d0b843e9b7b8a5bb2e68c64d4e37c108005e",
+  "duration": 26.833333,
+  "sha256": "8764e2b74eed173bad740d1eef811f8354bf9d066979d57abf419e482b2331bd",
+  "previous_media_sha256": "f469164749a6146eaa8e6ba8c377b91e97c10632a24c960181b3ce5f117ce18d",
+  "live_media_sha256": "d5b6514dad910bcdb638bb7b6d9f10ceee333b309f0de7172b3bb7777b2b495a",
+  "sources": {
+    "existing_source": "4bbcde72b9bcb9a2540f0b230c8ce45d842a50dc",
+    "live_run": 34006715790
+  },
+  "disclosure": "Original synthetic speech / original PDF only. Provider responses are real, not fabricated. Credentials stayed in process memory and are not included in the media, application settings, logs or this documentation. Playback is edited; it is not a latency benchmark.",
   "media": {
     "demo.mp4": {
-      "bytes": 454294,
-      "sha256": "f469164749a6146eaa8e6ba8c377b91e97c10632a24c960181b3ce5f117ce18d"
+      "bytes": 801318,
+      "sha256": "8764e2b74eed173bad740d1eef811f8354bf9d066979d57abf419e482b2331bd"
     },
     "preview.gif": {
-      "bytes": 1662867,
-      "sha256": "2579a81846fd05009730b6351e5285099cd08528deeffc6c0844435b5c3f0425"
+      "bytes": 2086001,
+      "sha256": "05954e003137cd2f7dd0cce0bd19fc3199da983172bc2348ac58b5ceab976950"
     },
     "poster.png": {
-      "bytes": 84896,
-      "sha256": "5194f760fb21c843b21b675e946bc243955acfd75641a30f93bbfb8b67642cb5"
+      "bytes": 121128,
+      "sha256": "4b00f7560e6298f031e8aae1144da7d91846d5bd9a4a663ab9e2b9f135e30926"
     }
   }
 }

@@ -18,7 +18,7 @@
 
 [Full video (MP4)](docs/demos/demo.mp4) · [About this demo](docs/demos/README.md)
 
-Language pairs, translation modes, size, alignment, immersive/lock controls, service configurations and UI language. **10x actions with 0.8-second result holds.** Actual frontend with sample data. Uses the built-in browser preview; no live transcription or translation.
+Start translation from the control panel, watch subtitles appear in the floating overlay, then explore pause, subtitle styling and service settings. Sample audio, **real translation responses**.
 <!-- /project-demo-v1 -->
 
 ## Features
