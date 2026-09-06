@@ -1,0 +1,140 @@
+name: Import reviewed English film demonstration
+on:
+  push:
+    branches: [docs/english-video-demo]
+    paths: [.github/workflows/import-english-film.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          run-id: 34040956131
+          name: english-film-demo-review
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/film-delivery
+      - uses: actions/download-artifact@v7
+        with:
+          run-id: 34040075430
+          name: film-translation-review
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/film-response
+      - name: Import exactly the reviewed documentation media
+        env:
+          FILM_DELIVERY: ${{ runner.temp }}/film-delivery/english-film-delivery
+          FILM_RESPONSE: ${{ runner.temp }}/film-response
+        run: |
+          python3 - <<'PY'
+          import ast,hashlib,json,os,re,shutil,subprocess
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY']=='yuxino/mimi'
+          assert subprocess.check_output(['git','branch','--show-current'],text=True).strip()=='docs/english-video-demo'
+          assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip()
+          source=Path(os.environ['FILM_DELIVERY']);response=Path(os.environ['FILM_RESPONSE'])
+          target=Path('docs/demos');capture=target/'english-film'
+          def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+          assert sha(source/'manifest.json')=='4c97a59436e0ebcef1fb043738b30a123afaf88a201d92b337910aeb58835e31'
+          manifest=json.loads((source/'manifest.json').read_text())
+          expected={'demo.mp4','preview.gif','poster.png','provenance.json','capture/record.py','capture/stage.html','capture/stage.js','capture/bridge.js'}
+          assert set(manifest)==expected
+          for name,meta in manifest.items():
+              assert sha(source/name)==meta['sha256'] and (source/name).stat().st_size==meta['bytes']
+          original=sha(target/'demo.mp4')
+          assert original=='39a87bb5294d99e5c2de5bf320d96ab252296ae7ee54cf4a08927b48064f357c','Published video changed since review'
+          p=json.loads((source/'provenance.json').read_text())
+          assert p['sha256']=='a2ee2b05d0239730be776fd21746a7a752b32f119418f6a417270b791c2a392b'
+          assert p['single_take'] and p['scene_cuts']==0 and p['dimensions']==[1920,1080]
+          assert p['checks']['ordinary_overlay'] and p['checks']['blend_transparent'] and p['checks']['finished_in_immersive_mode']
+          assert p['checks']['pause_resume_controls'] and p['checks']['film_played_to_end']
+          assert p['dialogue_speed']==1 and p['new_provider_calls_in_capture']==0
+          assert p['preview']['seconds']==6.5 and p['preview']['dimensions']==[1440,810]
+          assert sha(response/'licensed-sample-response.json')==p['response_sha256']
+          service=json.loads((response/'report.json').read_text())
+          assert service['success'] and service['api_sessions']==1 and service['source_seconds']==31
+          assert service['response_file_sha256']==p['response_sha256']
+          for name in ['demo.mp4','preview.gif','poster.png']:
+              shutil.copyfile(source/name,target/name)
+          capture.mkdir(exist_ok=True)
+          for name in ['record.py','stage.html','stage.js','bridge.js']:
+              shutil.copyfile(source/'capture'/name,capture/name)
+          ast.parse((capture/'record.py').read_text(encoding='utf-8'))
+          shutil.copyfile(response/'licensed-sample-response.json',capture/'response.json')
+          p.update({'project':'mimi','success':True,'previous_media_sha256':original,'capture_commit':'41337ad6a1f99ac96c0b4c1be9042c907721a7dc','capture_artifact':9991676166,'reviewed_manifest_sha256':sha(source/'manifest.json')})
+          p['source']['changes']='31-second English dialogue excerpt, resized and shown beneath the actual Mimi interface; original service responses replayed at their receive times. The normal-to-immersive transition is visible. No endorsement is implied.'
+          p['verification']={'full_mp4_and_gif_decoded':True,'original_audio_delay_seconds':1.556,'original_audio_correlation':0.9997139042,'renderer_errors':0,'http_errors':0,'provider_sessions_for_source':1}
+          (target/'provenance.json').write_text(json.dumps(p,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          text={
+              'zh':('演示','观看视频','片源与演示说明','播放英文视频，切换普通字幕浮窗与融入背景显示。'),
+              'en':('Demo','Watch video','Source and demo notes','Watch an English video with translated subtitles, then switch from the floating panel to Immersive Mode.'),
+              'ja':('デモ','動画を見る','映像の出典とデモについて','英語の動画を翻訳字幕で視聴し、字幕ウィンドウから背景に溶け込む没入モードへ切り替えます。'),
+          }
+          for filename,language in {'README.md':'zh','README_ZH.md':'zh','README_EN.md':'en','README_JA.md':'ja'}.items():
+              f=Path(filename);original_text=f.read_text(encoding='utf-8')
+              pattern=r'<!-- project-demo-v1 -->.*?<!-- /project-demo-v1 -->'
+              assert len(re.findall(pattern,original_text,re.S))==1
+              heading,watch,notes,copy=text[language]
+              block='<!-- project-demo-v1 -->\n## '+heading+'\n\n[![Mimi](docs/demos/preview.gif?v='+p['sha256'][:12]+')](docs/demos/demo.mp4)\n\n['+watch+'](docs/demos/demo.mp4) · ['+notes+'](docs/demos/README.md)\n\n'+copy+'\n<!-- /project-demo-v1 -->'
+              updated=re.sub(pattern,lambda _:block,original_text,flags=re.S)
+              assert updated.count('docs/demos/preview.gif')==1
+              assert re.sub(pattern,'',updated,flags=re.S)==re.sub(pattern,'',original_text,flags=re.S)
+              f.write_text(updated,encoding='utf-8')
+          paragraphs=[
+              '# Mimi video demonstration',
+              'An English film plays with translated Chinese subtitles in the actual Mimi floating panel. The recording switches to Immersive Mode so the panel disappears and the subtitles sit directly over the picture. The closing controls show switching back, pause/resume, and a return to Immersive Mode.',
+              '## Film credit',
+              '**Sintel** — © copyright Blender Foundation | [www.sintel.org](https://www.sintel.org). Used under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/). [Official sharing terms](https://durian.blender.org/sharing/) · [Source movie](https://download.blender.org/demo/movies/Sintel.2010.1080p.mkv).',
+              'Changes: a 31-second dialogue excerpt beginning at 02:07 is shown within a software-interface demonstration, with Chinese subtitles and Mimi controls overlaid. The original English soundtrack is retained. The GIF is a silent 6.5-second preview of the normal-to-immersive transition, not the full film or the full demonstration. No endorsement by the filmmakers is implied.',
+              '## Recording boundaries',
+              'The real Alibaba Cloud service translated this exact public film audio in one bounded session (run 34040075430). Its original text events and receive offsets are replayed without correcting the wording or shortening response latency. The actual, unchanged production frontend renders the subtitles and handles the visible controls. Native IPC is substituted only in the isolated documentation harness; this does not verify OS system-audio capture, keychain access, or an installed desktop session.',
+              'Dialogue plays at normal speed with its original sound. Control actions after the film ends play at 10x. The main video is one uninterrupted 1920×1080 recording. This edited demonstration is not a provider-latency benchmark.',
+              'No credentials are present in the browser, video, fixtures or committed files. The original test key was held in process memory for the separate experiment. No private audio, microphone input or personal documents were used; the application itself still does not save audio or subtitles.',
+              'The public film response fixture under `english-film/response.json` belongs only to this attributed documentation example. It is never loaded by Mimi and is not application telemetry. Source hashes, timing and validation results are in `provenance.json`.'
+          ]
+          (target/'README.md').write_text('\n\n'.join(paragraphs)+'\n',encoding='utf-8')
+          reproduction=[
+              '# English film documentation capture',
+              'These files are an isolated documentation harness, not application code or a supported native test mode. They load the unchanged production frontend and the attributed film response fixture; they never call a provider or accept credentials.',
+              'Use the frontend and 31-second Sintel excerpt from preparation run 34038261225, artifact 9990866707. The preparation source is recorded in Git history at b048092cbe76d5d4fb5836400c7e377a1e3e273e. The exact movie hash is retained in response.json. If rebuilding the film excerpt produces different bytes, review that source and its timing before changing any hash guard.',
+              'Install Python 3.12, Playwright 1.55.0, Chrome, ffmpeg and Noto Sans CJK. From the repository root, set MIMI_PREPARED to the prepared directory containing dist/, sintel-excerpt.mp4 and source-commit.txt. Set MIMI_RESPONSE to the absolute path of docs/demos/english-film/response.json, then run python -I docs/demos/english-film/record.py. Outputs are written to english-film-review/ and english-film-delivery/.',
+              'The recorder verifies the sample hashes, normal and transparent overlay states, pause/resume, full film playback, final immersive mode, media decoding and output dimensions. Only local fixture URLs are allowed in the browser. Captured compositor frames are ordered by timestamp; the source video is not replaced or edited into the UI afterward. The original film audio is aligned to measured playback start.',
+              'See the parent README for film credit, licensing and recording boundaries.'
+          ]
+          (capture/'README.md').write_text('\n\n'.join(reproduction)+'\n',encoding='utf-8')
+          PY
+      - name: Remove only completed one-time capture scaffolding
+        run: |
+          git rm -- .github/workflows/prepare-video-demo.yml .github/workflows/inspect-demo-captions.yml .github/workflows/record-english-film.yml .github/workflows/import-english-film.yml docs/demos/english-film/translate-sample.py
+          git add -- README.md README_ZH.md README_EN.md README_JA.md docs/demos
+          git diff --cached --check
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          assert not list(Path('docs/demos/english-film').glob('envelope-*.json'))
+          staged=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          allowed={'README.md','README_ZH.md','README_EN.md','README_JA.md','.github/workflows/prepare-video-demo.yml','.github/workflows/inspect-demo-captions.yml','.github/workflows/record-english-film.yml','.github/workflows/import-english-film.yml'}
+          assert staged and all(p in allowed or p.startswith('docs/demos/') for p in staged)
+          for path in staged:
+              p=Path(path)
+              if p.exists() and p.suffix in ['.py','.js','.html','.json','.md']:
+                  assert 'sk-ws-' not in p.read_text(encoding='utf-8'),path
+          PY
+      - name: Verify the unchanged frontend and documentation patch
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run build
+          git diff --check
+          git diff --cached --check
+      - name: Commit reviewed documentation only
+        run: |
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'docs: show English film subtitles and the immersive-mode transition'
+          git push origin HEAD:refs/heads/docs/english-video-demo
