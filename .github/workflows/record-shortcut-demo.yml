@@ -1,0 +1,70 @@
+name: Record subtitles-only shortcut demo
+on:
+  push:
+    branches: [docs/immersive-shortcut-demo]
+    paths: [.github/workflows/record-shortcut-demo.yml, docs/demos/english-film/refine-shortcut.py]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mimi-shortcut-demo
+  cancel-in-progress: true
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          run-id: 34038261225
+          name: english-video-preparation
+          path: prepared
+      - uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          run-id: 34040075430
+          name: film-translation-review
+          path: translation
+      - name: Install documentation capture tools
+        run: |
+          python -m pip install playwright==1.55.0 Pillow==11.3.0
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+      - name: Correct the isolated native-presentation boundary
+        run: |
+          python docs/demos/english-film/refine-shortcut.py
+          node --check docs/demos/english-film/stage.js
+          node --check docs/demos/english-film/bridge.js
+          git diff --check
+      - name: Record original dialogue and the actual subtitles-only renderer
+        env:
+          MIMI_PREPARED: ${{ github.workspace }}/prepared
+          MIMI_RESPONSE: ${{ github.workspace }}/translation/licensed-sample-response.json
+        run: python docs/demos/english-film/record.py
+      - name: Keep exact reproduction files with the delivery
+        run: |
+          mkdir -p english-film-delivery/capture
+          cp docs/demos/english-film/{stage.js,stage.html,bridge.js,record.py} english-film-delivery/capture/
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          out=Path('english-film-delivery')
+          manifest={str(p.relative_to(out)):{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in out.rglob('*') if p.is_file()}
+          (out/'manifest.json').write_text(json.dumps(manifest,sort_keys=True,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mimi-shortcut-demo-review
+          path: |
+            english-film-delivery/
+            english-film-review/*.png
+            english-film-review/capture-report.json
+          retention-days: 5
+          if-no-files-found: warn
