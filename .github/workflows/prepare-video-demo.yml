@@ -25,27 +25,28 @@ jobs:
           mkdir -p prepared/dist
           cp -R dist/. prepared/dist/
           git rev-parse HEAD > prepared/source-commit.txt
-      - name: Prepare a short licensed dialogue excerpt, not synthetic speech
+      - name: Prepare a short licensed English dialogue excerpt
         run: |
           sudo apt-get install -y ffmpeg
           python3 - <<'PY'
-          import urllib.request,urllib.parse,re,json,hashlib,subprocess
+          import json,hashlib,subprocess
           from pathlib import Path
-          out=Path('prepared');base='https://download.blender.org/durian/movies/'
-          listing=urllib.request.urlopen(base,timeout=30).read().decode()
-          links=re.findall(r'href="([^"]+)"',listing)
-          candidates=[x for x in links if 'sintel' in x.lower() and x.lower().endswith(('.mp4','.mkv'))]
-          print('Official movie files:',candidates)
-          choices=[x for x in candidates if '2048' in x and x.endswith('.mp4')]+[x for x in candidates if '1080' in x and x.endswith('.mp4')]+[x for x in candidates if '1080' in x and x.endswith('.mkv')]
-          if not choices:raise SystemExit('No HD official movie found')
-          url=urllib.parse.urljoin(base,choices[0])
-          subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-ss','127','-i',url,'-t','31','-map','0:v:0','-map','0:a:0','-vf','scale=1920:-2','-c:v','libx264','-preset','fast','-crf','18','-c:a','aac','-b:a','192k','-ac','2','-movflags','+faststart',str(out/'sintel-excerpt.mp4')],check=True,timeout=240)
+          out=Path('prepared')
+          sources=['https://download.blender.org/demo/movies/Sintel.2010.1080p.mkv','https://ftp.nluug.nl/pub/graphics/blender/demo/movies/Sintel.2010.1080p.mkv','https://download.huihoo.com/video/sintel-2048-surround.mp4']
+          for url in sources:
+            try:
+              result=subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-rw_timeout','20000000','-ss','127','-i',url,'-t','31','-map','0:v:0','-map','0:a:0','-vf','scale=1920:-2','-c:v','libx264','-preset','fast','-crf','18','-c:a','aac','-b:a','192k','-ac','2','-movflags','+faststart',str(out/'sintel-excerpt.mp4')],capture_output=True,text=True,timeout=120)
+              if result.returncode==0:break
+              print('Source unavailable:',url,result.stderr[-300:])
+            except subprocess.TimeoutExpired:print('Source timed out:',url)
+          else:raise SystemExit('No published HD source available')
+          probe=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',str(out/'sintel-excerpt.mp4')],text=True))
+          assert next(s for s in probe['streams'] if s['codec_type']=='video')['width']==1920
+          assert 30<float(probe['format']['duration'])<32
           subprocess.run(['ffmpeg','-v','error','-y','-i',str(out/'sintel-excerpt.mp4'),'-vn','-ar','16000','-ac','1','-f','s16le',str(out/'speech.pcm')],check=True)
-          pages={}
-          for name,url2 in [('sharing','https://durian.blender.org/sharing/'),('subtitles','https://durian.blender.org/wp-content/content/subtitles/sintel_en.srt')]:
-            data=urllib.request.urlopen(url2,timeout=30).read();(out/(name+'.txt')).write_bytes(data);pages[name]=url2
-          meta={'title':'Sintel','source_url':url,'source_page':'https://durian.blender.org/','license':'CC BY 3.0','license_url':'https://creativecommons.org/licenses/by/3.0/','attribution':'© copyright Blender Foundation | www.sintel.org','excerpt_start':127,'excerpt_duration':31,'changes':'Dialogue excerpt, resized to 1920 pixels wide; used as the video playing underneath the app demo.','pages':pages,'sha256':hashlib.sha256((out/'sintel-excerpt.mp4').read_bytes()).hexdigest()}
+          meta={'title':'Sintel','source_url':url,'source_page':'https://durian.blender.org/','license':'CC BY 3.0','license_url':'https://creativecommons.org/licenses/by/3.0/','attribution':'© copyright Blender Foundation | www.sintel.org','sharing_terms':'https://durian.blender.org/sharing/','excerpt_start':127,'excerpt_duration':31,'changes':'A dialogue excerpt used in a software-interface demonstration, with live translated subtitles overlaid. Not a redistribution of the full movie.','sha256':hashlib.sha256((out/'sintel-excerpt.mp4').read_bytes()).hexdigest()}
           (out/'source.json').write_text(json.dumps(meta,indent=2)+'\n')
+          print(json.dumps(meta,indent=2))
           PY
       - uses: actions/upload-artifact@v7
         if: always()
