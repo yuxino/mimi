@@ -14,9 +14,9 @@ mimi は、日本語の「耳（みみ）」に由来する名前です。デバ
 <!-- project-demo-v1 -->
 ## デモ
 
-[![Mimi](docs/demos/preview.gif?v=788172a6ceb0)](docs/demos/demo.mp4)
+<a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
 
-[動画を見る](docs/demos/demo.mp4) · [映像の出典とデモについて](docs/demos/README.md)
+[動画全編を見る](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4) · [映像の出典とデモについて](docs/demos/README.md)
 
 英語の動画に小さな字幕を重ね、ショートカットで没入モードを切り替えます。
 <!-- /project-demo-v1 -->
