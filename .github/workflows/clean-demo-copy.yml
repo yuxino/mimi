@@ -1,0 +1,29 @@
+name: Clean demo descriptions
+on:
+  push:
+    branches: [docs/continuous-preview-v3]
+    paths: [.github/workflows/clean-demo-copy.yml]
+permissions:
+  contents: write
+jobs:
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Keep only the feature description and video link
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          entries={'README.md':('演示','观看视频','把正在播放的内容翻译成字幕，随时调整语言、字号和显示方式。'),'README_ZH.md':('演示','观看视频','把正在播放的内容翻译成字幕，随时调整语言、字号和显示方式。'),'README_EN.md':('Demo','Watch video','Translate what is playing into live subtitles, with language, size, and display controls close at hand.'),'README_JA.md':('デモ','動画を見る','再生中の音声を字幕に翻訳。言語・文字サイズ・表示方法をいつでも調整できます。')}
+          pattern=r'<!-- project-demo-v1 -->.*?<!-- /project-demo-v1 -->'
+          for name,(heading,watch,copy) in entries.items():
+              p=Path(name);text=p.read_text();assert len(re.findall(pattern,text,re.S))==1
+              block=f'<!-- project-demo-v1 -->\n## {heading}\n\n[![Mimi](docs/demos/preview.gif)](docs/demos/demo.mp4)\n\n[{watch}](docs/demos/demo.mp4)\n\n{copy}\n<!-- /project-demo-v1 -->'
+              p.write_text(re.sub(pattern,lambda _:block,text,flags=re.S))
+          PY
+          git add -- README.md README_ZH.md README_EN.md README_JA.md
+          git rm -- .github/workflows/clean-demo-copy.yml
+          git diff --cached --check
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'docs: keep demo descriptions focused on features'
+          git push origin HEAD:refs/heads/docs/continuous-preview-v3
