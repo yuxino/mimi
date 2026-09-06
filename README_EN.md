@@ -14,11 +14,11 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-[![Mimi](docs/demos/preview.gif)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif?v=a2ee2b05d023)](docs/demos/demo.mp4)
 
-[Watch video](docs/demos/demo.mp4)
+[Watch video](docs/demos/demo.mp4) · [Source and demo notes](docs/demos/README.md)
 
-Translate what is playing into live subtitles, with language, size, and display controls close at hand.
+Watch an English video with translated subtitles, then switch from the floating panel to Immersive Mode.
 <!-- /project-demo-v1 -->
 
 ## Features

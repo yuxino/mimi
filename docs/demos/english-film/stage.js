@@ -56,7 +56,7 @@ window.invoke=async(kind,c,a={})=>{
  if(c==='overlay_popover_toggle'||c==='overlay_popover_hide'){
   S.controlMode=c==='overlay_popover_hide'?'island':S.controlMode==='island'?'panel':'island';
   document.getElementById('overlay-control').style.height=S.controlMode==='panel'?'315px':'34px';
-  document.getElementById('overlay-control').style.top=S.controlMode==='panel'?'220px':'682px';
+  document.getElementById('overlay-control').style.top=S.controlMode==='panel'?'220px':'720px';
   emit('overlay-control-mode',S.controlMode);return null;
  }
  if(c==='overlay_control_set_panel_height'){if(S.controlMode==='panel')document.getElementById('overlay-control').style.height=a.height+'px';return null}

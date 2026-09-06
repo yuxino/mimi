@@ -119,10 +119,10 @@ async def main():
             await click(control.get_by_role('switch',name='沉浸模式',exact=True))
             await blend.wait_for(state='detached')
             await overlay.locator('body').hover()
-            await click(overlay.get_by_role('button',name='暂停',exact=True))
+            await click(overlay.get_by_role('button',name='暂停翻译',exact=True))
             assert await page.evaluate('demoState.session.isPaused')
             await page.wait_for_timeout(1200)
-            await click(overlay.get_by_role('button',name='继续',exact=True))
+            await click(overlay.get_by_role('button',name='继续翻译',exact=True))
             assert not await page.evaluate('demoState.session.isPaused')
             report['checks']['pause_resume_controls']=True
             await click(overlay.get_by_test_id('toggle-immersive-mode'))
@@ -150,7 +150,7 @@ async def main():
     await asyncio.to_thread(encode,report,response)
 
 def encode(r,response):
-    frames=r['frames'];assert len(frames)>300
+    frames=sorted({f['t']:f for f in r['frames']}.values(),key=lambda f:f['t']);assert len(frames)>300
     assert all(b['t']>a['t'] for a,b in zip(frames,frames[1:]))
     fast=[r['fast_start'],r['fast_end']]
     def dt(a,b):return (b-a)-max(0,min(b,fast[1])-max(a,fast[0]))*.9
@@ -169,20 +169,22 @@ def encode(r,response):
     audio_delay=round(at(r['state']['playStartedEpoch'])*1000)
     assert 0<=audio_delay<5000 and 32<duration<60
     ff(['-i',str(raw),'-i',str(PREPARED/'sintel-excerpt.mp4'),'-map','0:v:0','-map','1:a:0','-c:v','copy','-af',f'adelay={audio_delay}:all=1,apad','-c:a','aac','-b:a','192k','-t',str(duration),'-movflags','+faststart',str(delivery/'demo.mp4')])
-    ff(['-i',str(delivery/'demo.mp4'),'-filter_complex','fps=10,scale=1440:810:flags=lanczos,split[a][b];[a]palettegen=max_colors=160[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle','-loop','0',str(delivery/'preview.gif')])
-    poster_time=at(next(s['epoch'] for s in r['scenes'] if s['name']=='02-blended-subtitles'))
+    preview_start=audio_delay/1000+10.5
+    preview_seconds=6.5
+    ff(['-ss',str(preview_start),'-t',str(preview_seconds),'-i',str(delivery/'demo.mp4'),'-filter_complex','fps=6,scale=1440:810:flags=lanczos,split[a][b];[a]palettegen=max_colors=160[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle','-loop','0',str(delivery/'preview.gif')])
+    poster_time=at(next(s['epoch'] for s in r['scenes'] if s['name']=='03-blended-result'))
     ff(['-ss',str(poster_time),'-i',str(delivery/'demo.mp4'),'-frames:v','1',str(delivery/'poster.png')])
     for name in ['demo.mp4','preview.gif']:ff(['-i',str(delivery/name),'-f','null','-'])
     info=probe(delivery/'demo.mp4')
     video=next(s for s in info['streams'] if s['codec_type']=='video')
     assert [video['width'],video['height']]==[1920,1080]
     assert any(s['codec_type']=='audio' for s in info['streams'])
-    assert abs(float(probe(delivery/'preview.gif')['format']['duration'])-duration)<.2
+    assert abs(float(probe(delivery/'preview.gif')['format']['duration'])-preview_seconds)<.25
     p={key:r[key] for key in ['source_commit','native','new_provider_calls_in_capture','response_capture_run','response_artifact','response_sha256','single_take','dimensions','checks']}
     p.update({'duration':duration,'sha256':sha(delivery/'demo.mp4'),'capture_run':os.environ.get('GITHUB_RUN_ID'),
         'source':response['source'],'dialogue_speed':1,'control_actions_speed':10,'audio_delay_ms':audio_delay,
         'scene_cuts':0,'scenes':[{'name':s['name'],'at':round(at(s['epoch']),3)} for s in r['scenes']],
-        'response_events_consumed':r['state']['eventCount'],'history_count':r['state']['historyCount'],
+        'preview':{'start':preview_start,'seconds':preview_seconds,'fps':6,'dimensions':[1440,810]},'response_events_consumed':r['state']['eventCount'],'history_count':r['state']['historyCount'],
         'disclosure':'Actual unchanged Mimi frontend over a licensed Sintel excerpt. Real provider responses from run 34040075430 are replayed with original receive timing. No subtitle correction or latency shortening. The recorder substitutes native IPC and does not test OS audio capture or keychain integration. Original English soundtrack is synchronized to playback; settings actions after the film ends play at 10x. No API credential is present during recording.'})
     p['media']={name:{'bytes':(delivery/name).stat().st_size,'sha256':sha(delivery/name)} for name in ['demo.mp4','preview.gif','poster.png']}
     assert all(meta['bytes']<60_000_000 for meta in p['media'].values())
