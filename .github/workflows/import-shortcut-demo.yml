@@ -1,0 +1,102 @@
+name: Import reviewed subtitles-only demo
+on:
+  push:
+    branches: [docs/immersive-shortcut-demo]
+    paths: [.github/workflows/import-shortcut-demo.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          run-id: 34042776100
+          name: mimi-shortcut-demo-review
+          path: ${{ runner.temp }}/reviewed-demo
+      - name: Verify exact reviewed media and update only the existing demonstration
+        env:
+          MIMI_DELIVERY: ${{ runner.temp }}/reviewed-demo
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,re,shutil,subprocess
+          from pathlib import Path
+          source=Path(os.environ['MIMI_DELIVERY'])/'english-film-delivery'
+          expected_manifest='3158dc6829b81cca0547283a6001cbc448566509e39164033df7f823a1de69a4'
+          def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+          assert os.environ['GITHUB_REPOSITORY']=='yuxino/mimi'
+          assert subprocess.check_output(['git','branch','--show-current'],text=True).strip()=='docs/immersive-shortcut-demo'
+          assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip()
+          assert sha(source/'manifest.json')==expected_manifest
+          manifest=json.loads((source/'manifest.json').read_text())
+          expected={'demo.mp4','preview.gif','poster.png','provenance.json','capture/stage.js','capture/stage.html','capture/bridge.js','capture/record.py'}
+          assert set(manifest)==expected
+          for name,meta in manifest.items():
+              assert sha(source/name)==meta['sha256'] and (source/name).stat().st_size==meta['bytes']
+          p=json.loads((source/'provenance.json').read_text())
+          checks=p['checks']
+          for flag in ['ordinary_overlay','blend_transparent','immersive_controls_hidden','immersive_canvas_click_through','late_dismiss_keeps_hidden','film_played_to_end','pause_resume_controls','finished_in_immersive_mode','finished_with_subtitles_only']:
+              assert checks[flag] is True,flag
+          assert checks['subtitle_font_size']==16 and checks['keyboard_immersive_toggles']==3
+          assert p['single_take'] and p['dimensions']==[1920,1080] and p['scene_cuts']==0
+          assert p['new_provider_calls_in_capture']==0
+          old=json.loads(Path('docs/demos/provenance.json').read_text())
+          assert sha(Path('docs/demos/demo.mp4'))==old['sha256']=='a2ee2b05d0239730be776fd21746a7a752b32f119418f6a417270b791c2a392b'
+          for name in ['demo.mp4','preview.gif','poster.png']:
+              shutil.copyfile(source/name,Path('docs/demos')/name)
+          for name in ['stage.js','stage.html','bridge.js','record.py']:
+              shutil.copyfile(source/'capture'/name,Path('docs/demos/english-film')/name)
+          p.update(project='mimi',success=True,previous_media_sha256=old['sha256'],capture_artifact=9992214005,capture_commit='cb211dc47e377ac6779b7c20c7b75f42a07fe014',reviewed_manifest_sha256=expected_manifest,app_defaults_changed=False)
+          p['source']['changes']='The same licensed 31-second English excerpt beneath the actual Mimi renderer. The demonstration enters subtitles-only Immersive Mode near the beginning, hides the language control window, and uses a 16px logical font. Original service response timing is retained. No endorsement is implied.'
+          Path('docs/demos/provenance.json').write_text(json.dumps(p,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          copies={
+           'README.md':('演示','观看视频','片源与演示说明','播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。'),
+           'README_ZH.md':('演示','观看视频','片源与演示说明','播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。'),
+           'README_EN.md':('Demo','Watch video','Source and demo notes','Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.'),
+           'README_JA.md':('デモ','動画を見る','映像の出典とデモについて','英語の動画に小さな字幕を重ね、ショートカットで没入モードを切り替えます。'),
+          }
+          for name,(title,watch,notes,description) in copies.items():
+              path=Path(name);text=path.read_text(encoding='utf-8')
+              pattern=r'<!-- project-demo-v1 -->.*?<!-- /project-demo-v1 -->'
+              assert len(re.findall(pattern,text,re.S))==1
+              block=f'<!-- project-demo-v1 -->\n## {title}\n\n[![Mimi](docs/demos/preview.gif?v={p["sha256"][:12]})](docs/demos/demo.mp4)\n\n[{watch}](docs/demos/demo.mp4) · [{notes}](docs/demos/README.md)\n\n{description}\n<!-- /project-demo-v1 -->'
+              path.write_text(re.sub(pattern,lambda _:block,text,flags=re.S),encoding='utf-8')
+          path=Path('docs/demos/README.md');text=path.read_text(encoding='utf-8')
+          old_intro=text.split('\n\n')[1]
+          new_intro='An English film plays with small Chinese subtitles in the actual Mimi renderer. Near the beginning, Control+Shift+M enters Immersive Mode: the panel, language control island, buttons and borders all disappear. Only the subtitle text remains over the picture. At the end, the shortcut restores the controls briefly for pause/resume, then returns to the subtitles-only view.'
+          text=text.replace(old_intro,new_intro,1)
+          text=text.replace('a silent 6.5-second preview of the normal-to-immersive transition','a silent 6.5-second preview of the subtitles-only view')
+          old_boundary='Native IPC is substituted only in the isolated documentation harness; this does not verify OS system-audio capture, keychain access, or an installed desktop session.'
+          assert old_boundary in text
+          text=text.replace(old_boundary,'Native IPC and the OS shortcut boundary are substituted in the isolated documentation harness; this does not verify OS system-audio capture, native global-shortcut registration, keychain access, or an installed desktop session. The keyboard-driven presentation mirror follows the application window manager: it hides the separate control window, preserves click-through, and cannot reopen a hidden island from a delayed dismissal. The recorder sends Control+Shift+M; the application uses Command+Shift+M on macOS. Subtitle size 16 is a recording preference, not a change to application defaults.')
+          path.write_text(text,encoding='utf-8')
+          path=Path('docs/demos/english-film/README.md');text=path.read_text(encoding='utf-8')
+          text += '\n\nThe corrected recorder hides the entire native-control surrogate in Immersive Mode, not only the subtitle-panel background. It exercises the keyboard toggle and verifies that late control events cannot restore hidden controls. Run `node --test docs/demos/english-film/presentation-check.cjs` for isolated presentation regression checks. No production code, application defaults, credential path or provider fixture is changed.\n'
+          path.write_text(text,encoding='utf-8')
+          PY
+      - name: Remove completed one-time scaffolding
+        run: |
+          git rm -- .github/workflows/record-shortcut-demo.yml .github/workflows/import-shortcut-demo.yml docs/demos/english-film/refine-shortcut.py
+          git mv docs/demos/english-film/presentation.test.cjs docs/demos/english-film/presentation-check.cjs
+      - name: Check presentation regressions and the unchanged application frontend
+        run: |
+          node --test docs/demos/english-film/presentation-check.cjs
+          npm ci
+          npm run lint
+          npm run test
+          npm run build
+          git diff --check
+          git diff --exit-code -- src src-tauri package.json package-lock.json
+      - name: Commit documentation and media only
+        run: |
+          git add -- README.md README_ZH.md README_EN.md README_JA.md docs/demos
+          git diff --cached --check
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'docs: show shortcut Immersive Mode with smaller subtitles and no control island'
+          git push origin HEAD:refs/heads/docs/immersive-shortcut-demo
