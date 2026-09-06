@@ -25,4 +25,5 @@
     }};
   window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
   document.addEventListener('mousemove',e=>parent.pointer(kind,e.clientX,e.clientY));
+  document.addEventListener('keydown',e=>parent.handleShortcut(e));
 })();

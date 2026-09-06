@@ -9,3 +9,6 @@ Install Python 3.12, Playwright 1.55.0, Chrome, ffmpeg and Noto Sans CJK. From t
 The recorder verifies the sample hashes, normal and transparent overlay states, pause/resume, full film playback, final immersive mode, media decoding and output dimensions. Only local fixture URLs are allowed in the browser. Captured compositor frames are ordered by timestamp; the source video is not replaced or edited into the UI afterward. The original film audio is aligned to measured playback start.
 
 See the parent README for film credit, licensing and recording boundaries.
+
+
+The corrected recorder hides the entire native-control surrogate in Immersive Mode, not only the subtitle-panel background. It exercises the keyboard toggle and verifies that late control events cannot restore hidden controls. Run `node --test docs/demos/english-film/presentation-check.cjs` for isolated presentation regression checks. No production code, application defaults, credential path or provider fixture is changed.

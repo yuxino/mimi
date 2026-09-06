@@ -11,15 +11,21 @@
     1080
   ],
   "checks": {
+    "subtitle_font_size": 16,
     "ordinary_overlay": true,
     "blend_transparent": true,
+    "immersive_controls_hidden": true,
+    "immersive_canvas_click_through": true,
+    "late_dismiss_keeps_hidden": true,
     "film_played_to_end": true,
     "pause_resume_controls": true,
-    "finished_in_immersive_mode": true
+    "finished_in_immersive_mode": true,
+    "keyboard_immersive_toggles": 3,
+    "finished_with_subtitles_only": true
   },
-  "duration": 38.066667,
-  "sha256": "a2ee2b05d0239730be776fd21746a7a752b32f119418f6a417270b791c2a392b",
-  "capture_run": "34040956131",
+  "duration": 40.133333,
+  "sha256": "788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef",
+  "capture_run": "34042776100",
   "source": {
     "title": "Sintel",
     "source_url": "https://download.blender.org/demo/movies/Sintel.2010.1080p.mkv",
@@ -30,37 +36,40 @@
     "sharing_terms": "https://durian.blender.org/sharing/",
     "excerpt_start": 127,
     "excerpt_duration": 31,
-    "changes": "31-second English dialogue excerpt, resized and shown beneath the actual Mimi interface; original service responses replayed at their receive times. The normal-to-immersive transition is visible. No endorsement is implied.",
+    "changes": "The same licensed 31-second English excerpt beneath the actual Mimi renderer. The demonstration enters subtitles-only Immersive Mode near the beginning, hides the language control window, and uses a 16px logical font. Original service response timing is retained. No endorsement is implied.",
     "sha256": "c0a2105d746bd2f6b636cb090857fa30e625b017412b98f99100d8fe6e40f0c8"
   },
   "dialogue_speed": 1,
   "control_actions_speed": 10,
-  "audio_delay_ms": 1556,
+  "audio_delay_ms": 1919,
   "scene_cuts": 0,
+  "subtitle_font_size": 16,
+  "shortcut": "Control+Shift+M",
+  "immersive_started_at": 4.686173439025879,
   "scenes": [
     {
       "name": "01-ordinary-subtitles",
-      "at": 7.925
+      "at": 4.141
     },
     {
       "name": "02-blended-subtitles",
-      "at": 20.744
+      "at": 21.223
     },
     {
       "name": "03-blended-result",
-      "at": 33.71
+      "at": 34.382
     },
     {
-      "name": "04-display-controls",
-      "at": 34.075
+      "name": "04-shortcut-restore-controls",
+      "at": 34.695
     },
     {
       "name": "05-final-immersive",
-      "at": 37.982
+      "at": 39.898
     }
   ],
   "preview": {
-    "start": 12.056000000000001,
+    "start": 16.919,
     "seconds": 6.5,
     "fps": 6,
     "dimensions": [
@@ -70,33 +79,26 @@
   },
   "response_events_consumed": 181,
   "history_count": 7,
-  "disclosure": "Actual unchanged Mimi frontend over a licensed Sintel excerpt. Real provider responses from run 34040075430 are replayed with original receive timing. No subtitle correction or latency shortening. The recorder substitutes native IPC and does not test OS audio capture or keychain integration. Original English soundtrack is synchronized to playback; settings actions after the film ends play at 10x. No API credential is present during recording.",
+  "disclosure": "Actual unchanged Mimi frontend over a licensed Sintel excerpt. Real provider responses from run 34040075430 are replayed with original receive timing. No subtitle correction or latency shortening. The recorder substitutes native IPC and the OS shortcut boundary; it does not test OS audio capture, global shortcut registration or keychain integration. Its presentation mirror now hides the complete control window and makes the subtitle canvas click-through when immersive, matching the native window manager. The real keyboard sequence changes that state; the production components render transparent text at font size 16. Original English soundtrack is synchronized to playback; settings actions after the film ends play at 10x. No API credential is present during recording.",
   "media": {
     "demo.mp4": {
-      "bytes": 23148590,
-      "sha256": "a2ee2b05d0239730be776fd21746a7a752b32f119418f6a417270b791c2a392b"
+      "bytes": 23631884,
+      "sha256": "788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef"
     },
     "preview.gif": {
-      "bytes": 14943536,
-      "sha256": "4385cadcd26dd57d94b638bf40b81fb7523e2466e53949193f27d69f89d161e6"
+      "bytes": 12055036,
+      "sha256": "7b1e0045c7ea4e062273a59c9c90327cdd844b0e0b5d02aefcec2f31cb26747d"
     },
     "poster.png": {
-      "bytes": 3387623,
-      "sha256": "6dc7b099440a41aaef3d04cc1a4d5697915a686aa2f1315557803a6906bcd3b7"
+      "bytes": 1465569,
+      "sha256": "de0bfb1d3e1a957bde3b4687f9c84349cb2d57253957b9148b1f02459e397d6d"
     }
   },
   "project": "mimi",
   "success": true,
-  "previous_media_sha256": "39a87bb5294d99e5c2de5bf320d96ab252296ae7ee54cf4a08927b48064f357c",
-  "capture_commit": "41337ad6a1f99ac96c0b4c1be9042c907721a7dc",
-  "capture_artifact": 9991676166,
-  "reviewed_manifest_sha256": "4c97a59436e0ebcef1fb043738b30a123afaf88a201d92b337910aeb58835e31",
-  "verification": {
-    "full_mp4_and_gif_decoded": true,
-    "original_audio_delay_seconds": 1.556,
-    "original_audio_correlation": 0.9997139042,
-    "renderer_errors": 0,
-    "http_errors": 0,
-    "provider_sessions_for_source": 1
-  }
+  "previous_media_sha256": "a2ee2b05d0239730be776fd21746a7a752b32f119418f6a417270b791c2a392b",
+  "capture_artifact": 9992214005,
+  "capture_commit": "cb211dc47e377ac6779b7c20c7b75f42a07fe014",
+  "reviewed_manifest_sha256": "3158dc6829b81cca0547283a6001cbc448566509e39164033df7f823a1de69a4",
+  "app_defaults_changed": false
 }

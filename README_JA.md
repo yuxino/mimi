@@ -14,11 +14,11 @@ mimi は、日本語の「耳（みみ）」に由来する名前です。デバ
 <!-- project-demo-v1 -->
 ## デモ
 
-[![Mimi](docs/demos/preview.gif?v=a2ee2b05d023)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif?v=788172a6ceb0)](docs/demos/demo.mp4)
 
 [動画を見る](docs/demos/demo.mp4) · [映像の出典とデモについて](docs/demos/README.md)
 
-英語の動画を翻訳字幕で視聴し、字幕ウィンドウから背景に溶け込む没入モードへ切り替えます。
+英語の動画に小さな字幕を重ね、ショートカットで没入モードを切り替えます。
 <!-- /project-demo-v1 -->
 
 ## 機能

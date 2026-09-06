@@ -14,11 +14,11 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-[![Mimi](docs/demos/preview.gif?v=a2ee2b05d023)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif?v=788172a6ceb0)](docs/demos/demo.mp4)
 
 [Watch video](docs/demos/demo.mp4) · [Source and demo notes](docs/demos/README.md)
 
-Watch an English video with translated subtitles, then switch from the floating panel to Immersive Mode.
+Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.
 <!-- /project-demo-v1 -->
 
 ## Features

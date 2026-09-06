@@ -14,11 +14,11 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-[![Mimi](docs/demos/preview.gif?v=a2ee2b05d023)](docs/demos/demo.mp4)
+[![Mimi](docs/demos/preview.gif?v=788172a6ceb0)](docs/demos/demo.mp4)
 
 [观看视频](docs/demos/demo.mp4) · [片源与演示说明](docs/demos/README.md)
 
-播放英文视频，切换普通字幕浮窗与融入背景显示。
+播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。
 <!-- /project-demo-v1 -->
 
 ## 功能
