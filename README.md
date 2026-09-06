@@ -16,7 +16,7 @@
 
 <a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
 
-[观看完整视频](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4) · [片源与演示说明](docs/demos/README.md)
+[观看完整视频](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4)
 
 播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。
 <!-- /project-demo-v1 -->
