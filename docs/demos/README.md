@@ -1,5 +1,9 @@
 # Mimi video demonstration
 
+[Full video (1080p, original audio)](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4) · [Media attachments](https://github.com/yuxino/mimi/releases/tag/demo-2026-09-06-788172a6)
+
+The approved full video, animated preview and original PNG are stored as GitHub Release attachments, not in the current source tree. The repository README loads only poster.jpg; the MP4 bytes and soundtrack are unchanged. The dedicated demo tag is a non-latest prerelease and is not an application update. No personal CDN is used. Existing Git history is not rewritten.
+
 An English film plays with small Chinese subtitles in the actual Mimi renderer. Near the beginning, Control+Shift+M enters Immersive Mode: the panel, language control island, buttons and borders all disappear. Only the subtitle text remains over the picture. At the end, the shortcut restores the controls briefly for pause/resume, then returns to the subtitles-only view.
 
 ## Film credit

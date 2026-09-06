@@ -14,9 +14,9 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-[![Mimi](docs/demos/preview.gif?v=788172a6ceb0)](docs/demos/demo.mp4)
+<a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
 
-[Watch video](docs/demos/demo.mp4) · [Source and demo notes](docs/demos/README.md)
+[Watch full video](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4) · [Source and demo notes](docs/demos/README.md)
 
 Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.
 <!-- /project-demo-v1 -->

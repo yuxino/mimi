@@ -83,15 +83,21 @@
   "media": {
     "demo.mp4": {
       "bytes": 23631884,
-      "sha256": "788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef"
+      "sha256": "788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef",
+      "url": "https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4",
+      "storage": "release-asset"
     },
     "preview.gif": {
       "bytes": 12055036,
-      "sha256": "7b1e0045c7ea4e062273a59c9c90327cdd844b0e0b5d02aefcec2f31cb26747d"
+      "sha256": "7b1e0045c7ea4e062273a59c9c90327cdd844b0e0b5d02aefcec2f31cb26747d",
+      "url": "https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-preview.gif",
+      "storage": "release-asset"
     },
     "poster.png": {
       "bytes": 1465569,
-      "sha256": "de0bfb1d3e1a957bde3b4687f9c84349cb2d57253957b9148b1f02459e397d6d"
+      "sha256": "de0bfb1d3e1a957bde3b4687f9c84349cb2d57253957b9148b1f02459e397d6d",
+      "url": "https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-poster.png",
+      "storage": "release-asset"
     }
   },
   "project": "mimi",
@@ -100,5 +106,31 @@
   "capture_artifact": 9992214005,
   "capture_commit": "cb211dc47e377ac6779b7c20c7b75f42a07fe014",
   "reviewed_manifest_sha256": "3158dc6829b81cca0547283a6001cbc448566509e39164033df7f823a1de69a4",
-  "app_defaults_changed": false
+  "app_defaults_changed": false,
+  "hosting": {
+    "provider": "GitHub Release attachments",
+    "tag": "demo-2026-09-06-788172a6",
+    "release_id": 383639953,
+    "release_url": "https://github.com/yuxino/mimi/releases/tag/demo-2026-09-06-788172a6",
+    "prerelease": true,
+    "make_latest": false,
+    "personal_cdn_used": false,
+    "video_reencoded": false,
+    "source_commit": "b6944c67f12e3fd9e6c508670baf51dfd64855db",
+    "public_roundtrip_verified": true,
+    "application_latest_release_id": 381034535,
+    "application_latest_tag": "v1.3.8",
+    "git_history_rewritten": false
+  },
+  "readme_preview": {
+    "path": "docs/demos/poster.jpg",
+    "bytes": 102633,
+    "sha256": "db29c96e91ca7d36e426635fd82004db685c1baab216333023857dcd819f43c3",
+    "dimensions": [
+      1440,
+      810
+    ],
+    "display_width": 640,
+    "animated": false
+  }
 }
