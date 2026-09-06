@@ -1,0 +1,28 @@
+name: Import reviewed live-result demo
+on:
+  push:
+    branches: [docs/live-results-v1]
+    paths: [.github/workflows/import-live-demo.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          repository: yuxino/kiri
+          run-id: 34007211105
+          name: live-demo-deliverables
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/live-bundle
+      - name: Import hash-verified media and README text only
+        env:
+          DEMO_BUNDLE: ${{ runner.temp }}/live-bundle
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location https://raw.githubusercontent.com/yuxino/kiri/ca6b98b3724ab9ba03e08e644ecbaef1794f00af/docs/demos/capture/import-live-results.py -o "$RUNNER_TEMP/import-live.py"
+          python3 -I "$RUNNER_TEMP/import-live.py"
