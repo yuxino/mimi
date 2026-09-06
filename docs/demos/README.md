@@ -1,16 +1,16 @@
 # Mimi video demonstration
 
-An English film plays with translated Chinese subtitles in the actual Mimi floating panel. The recording switches to Immersive Mode so the panel disappears and the subtitles sit directly over the picture. The closing controls show switching back, pause/resume, and a return to Immersive Mode.
+An English film plays with small Chinese subtitles in the actual Mimi renderer. Near the beginning, Control+Shift+M enters Immersive Mode: the panel, language control island, buttons and borders all disappear. Only the subtitle text remains over the picture. At the end, the shortcut restores the controls briefly for pause/resume, then returns to the subtitles-only view.
 
 ## Film credit
 
 **Sintel** — © copyright Blender Foundation | [www.sintel.org](https://www.sintel.org). Used under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/). [Official sharing terms](https://durian.blender.org/sharing/) · [Source movie](https://download.blender.org/demo/movies/Sintel.2010.1080p.mkv).
 
-Changes: a 31-second dialogue excerpt beginning at 02:07 is shown within a software-interface demonstration, with Chinese subtitles and Mimi controls overlaid. The original English soundtrack is retained. The GIF is a silent 6.5-second preview of the normal-to-immersive transition, not the full film or the full demonstration. No endorsement by the filmmakers is implied.
+Changes: a 31-second dialogue excerpt beginning at 02:07 is shown within a software-interface demonstration, with Chinese subtitles and Mimi controls overlaid. The original English soundtrack is retained. The GIF is a silent 6.5-second preview of the subtitles-only view, not the full film or the full demonstration. No endorsement by the filmmakers is implied.
 
 ## Recording boundaries
 
-The real Alibaba Cloud service translated this exact public film audio in one bounded session (run 34040075430). Its original text events and receive offsets are replayed without correcting the wording or shortening response latency. The actual, unchanged production frontend renders the subtitles and handles the visible controls. Native IPC is substituted only in the isolated documentation harness; this does not verify OS system-audio capture, keychain access, or an installed desktop session.
+The real Alibaba Cloud service translated this exact public film audio in one bounded session (run 34040075430). Its original text events and receive offsets are replayed without correcting the wording or shortening response latency. The actual, unchanged production frontend renders the subtitles and handles the visible controls. Native IPC and the OS shortcut boundary are substituted in the isolated documentation harness; this does not verify OS system-audio capture, native global-shortcut registration, keychain access, or an installed desktop session. The keyboard-driven presentation mirror follows the application window manager: it hides the separate control window, preserves click-through, and cannot reopen a hidden island from a delayed dismissal. The recorder sends Control+Shift+M; the application uses Command+Shift+M on macOS. Subtitle size 16 is a recording preference, not a change to application defaults.
 
 Dialogue plays at normal speed with its original sound. Control actions after the film ends play at 10x. The main video is one uninterrupted 1920×1080 recording. This edited demonstration is not a provider-latency benchmark.
 
