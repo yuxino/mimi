@@ -1,0 +1,53 @@
+name: Record English film and immersive subtitles
+on:
+  push:
+    branches: [docs/english-video-demo]
+    paths: [.github/workflows/record-english-film.yml, docs/demos/english-film/record.py, docs/demos/english-film/stage.html, docs/demos/english-film/stage.js, docs/demos/english-film/bridge.js]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mimi-film-demo
+  cancel-in-progress: true
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v7
+        with:
+          run-id: 34038261225
+          name: english-video-preparation
+          github-token: ${{ github.token }}
+          path: prepared
+      - uses: actions/download-artifact@v7
+        with:
+          run-id: 34040075430
+          name: film-translation-review
+          github-token: ${{ github.token }}
+          path: translation
+      - name: Install documentation-only capture tools
+        run: |
+          python -m pip install playwright==1.55.0
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+          node --check docs/demos/english-film/bridge.js
+          node --check docs/demos/english-film/stage.js
+          python -m py_compile docs/demos/english-film/record.py
+      - name: Record and verify the uninterrupted movie demonstration
+        run: python -I docs/demos/english-film/record.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: english-film-demo-review
+          path: |
+            english-film-delivery/
+            english-film-review/*.png
+            english-film-review/capture-report.json
+          retention-days: 5
+          if-no-files-found: error
