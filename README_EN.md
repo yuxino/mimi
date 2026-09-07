@@ -5,7 +5,7 @@
   <p>
     <a href="https://mimi.yuxino.cn">Website</a>
     · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download latest</strong></a>
-    · <a href="README.md">简体中文</a>
+    · <a href="README_ZH.md">简体中文</a>
   </p>
 </div>
 
@@ -14,7 +14,7 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36
+https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3
 
 <p align="center">Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.</p>
 <p align="center"><a href="docs/demos/README.md">Video details and credits</a></p>

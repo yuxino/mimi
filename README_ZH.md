@@ -5,7 +5,7 @@
   <p>
     <a href="https://mimi.yuxino.cn">官网</a>
     · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
-    · <a href="README_EN.md">English</a>
+    · <a href="README.md">English</a>
   </p>
 </div>
 
@@ -14,7 +14,7 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36
+https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3
 
 <p align="center">播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。</p>
 <p align="center"><a href="docs/demos/README.md">视频说明与来源</a></p>
@@ -25,6 +25,7 @@ https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36
 - **实时字幕与翻译** — 采集系统输出音频；输入语言、翻译目标和质量模式随服务商而异。
 - **服务配置** — 保存并切换多套服务配置，无需反复填写凭证。
 - **字幕浮窗** — 支持移动、缩放、收起、暂停、点击穿透和沉浸模式。
+- **签名应用内更新** — 在设置中手动检查、下载和安装更新；下载完成后必须通过签名验证。
 - **隐私** — 无需 mimi 账号，不使用麦克风、不录制屏幕，也不保存音频或字幕；系统音频只发送给当前服务商。
 - **快捷键** — macOS 使用 **⌘ ⇧ Space** / **⌘ ⇧ M**，Windows 使用 **Ctrl+Shift+Space** / **Ctrl+Shift+M**，分别控制监听和沉浸模式。
 
@@ -33,6 +34,8 @@ https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36
 1. 从 [Latest Release](https://github.com/yuxino/mimi/releases/latest) 下载 macOS Apple Silicon DMG 或 Windows x64 EXE / MSI；也可以从源码构建。
 2. 打开「翻译服务」，选择服务商并保存凭证。
 3. 播放内容，从菜单栏/系统托盘的 mimi 图标点击 **开始**；macOS 首次使用时按提示允许「屏幕与系统音频录制」。
+
+**v1.3.8 是首个公开的应用内更新引导版本。** 从上一公开版本 v1.3.6 升级时，需要先从 GitHub Releases 手动下载安装一次；之后的版本可以在「设置 → 版本更新」中完成。Windows 安装更新时会关闭 Mimi，安装结束后需要手动重新打开。
 
 凭证按服务配置保存在 macOS 钥匙串或 Windows 凭据管理器中；设置页只显示是否已保存。服务商调用可能产生费用。
 

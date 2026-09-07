@@ -1,10 +1,10 @@
 # Mimi video demonstration
 
-https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36
+https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3
 
 [Download original video (1080p, original audio)](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4) · [Media attachments](https://github.com/yuxino/mimi/releases/tag/demo-2026-09-06-788172a6)
 
-The repository READMEs play the approved full video directly through GitHub’s native attachment player. Its standalone attachment URL must remain in its own paragraph so GitHub renders playback controls. The uploaded MP4 is byte-for-byte identical to the approved 1080p Release attachment, including its original soundtrack; it has not been re-encoded. The Release retains the original video, animated preview and PNG as downloadable archives outside the source tree. The dedicated demo tag is a non-latest prerelease and is not an application update. No personal CDN is used. Existing Git history is not rewritten.
+The repository READMEs play the approved full video directly through GitHub’s native attachment player. Its standalone attachment URL must remain in its own paragraph so GitHub renders playback controls. The playback copy preserves the complete 40.133-second recording at 1920×1080 and 30 fps. High-quality H.264 compression reduces it from 23,631,884 to 12,746,625 bytes (46.1%); two-second keyframes improve seeking and lower bitrate peaks. The AAC soundtrack is copied without re-encoding. Full-frame SSIM against the original is 0.991973. The unchanged original remains available from the Release link. The Release retains the original video, animated preview and PNG as downloadable archives outside the source tree. The dedicated demo tag is a non-latest prerelease and is not an application update. README playback uses GitHub attachments. The separate product website serves a higher-quality 17,075,906-byte copy through its existing versioned CDN. Existing Git history is not rewritten.
 
 An English film plays with small Chinese subtitles in the actual Mimi renderer. Near the beginning, Control+Shift+M enters Immersive Mode: the panel, language control island, buttons and borders all disappear. Only the subtitle text remains over the picture. At the end, the shortcut restores the controls briefly for pause/resume, then returns to the subtitles-only view.
 

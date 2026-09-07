@@ -1,79 +1,79 @@
 <div align="center">
   <img src="src-tauri/icons/128x128@2x.png" width="96" alt="mimi">
   <h1>mimi</h1>
-  <p>系统音频实时字幕与翻译，支持 Apple 芯片 macOS 13+ 和 Windows x64。</p>
+  <p>Live subtitles and translation for system audio on Apple silicon macOS 13+ and Windows x64.</p>
   <p>
-    <a href="https://mimi.yuxino.cn">官网</a>
-    · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
-    · <a href="README_EN.md">English</a>
+    <a href="https://mimi.yuxino.cn">Website</a>
+    · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download latest</strong></a>
+    · <a href="README_ZH.md">简体中文</a>
   </p>
 </div>
 
-`mimi` 在日语中意为“耳朵”。它把设备正在播放的系统音频变成实时字幕，并按服务商能力翻译成简体中文、英语或日语。
+`mimi` means “ear” in Japanese. It turns the system audio playing on your device into live subtitles and provider-dependent translation into Simplified Chinese, English, or Japanese.
 
 <!-- project-demo-v1 -->
-## 演示
+## Demo
 
-https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36
+https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3
 
-<p align="center">播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。</p>
-<p align="center"><a href="docs/demos/README.md">视频说明与来源</a></p>
+<p align="center">Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.</p>
+<p align="center"><a href="docs/demos/README.md">Video details and credits</a></p>
 <!-- /project-demo-v1 -->
 
-## 功能
+## Features
 
-- **实时字幕与翻译** — 采集系统输出音频；输入语言、翻译目标和质量模式随服务商而异。
-- **服务配置** — 保存并切换多套服务配置，无需反复填写凭证。
-- **字幕浮窗** — 支持移动、缩放、收起、暂停、点击穿透和沉浸模式。
-- **签名应用内更新** — 在设置中手动检查、下载和安装更新；下载完成后必须通过签名验证。
-- **隐私** — 无需 mimi 账号，不使用麦克风、不录制屏幕，也不保存音频或字幕；系统音频只发送给当前服务商。
-- **快捷键** — macOS 使用 **⌘ ⇧ Space** / **⌘ ⇧ M**，Windows 使用 **Ctrl+Shift+Space** / **Ctrl+Shift+M**，分别控制监听和沉浸模式。
+- **Live subtitles and translation** — captures system output audio; source languages, targets, and quality modes vary by provider.
+- **Service configurations** — save and switch between services without repeatedly entering credentials.
+- **Flexible overlay** — move, resize, collapse, pause, enable click-through, or use Immersive Mode.
+- **Signed in-app updates** — manually check, download, and install updates in Settings; every download must pass signature verification.
+- **Privacy** — no mimi account, microphone, or screen capture; no saved audio or subtitles; audio goes only to the active provider.
+- **Shortcuts** — macOS uses **⌘ ⇧ Space** / **⌘ ⇧ M** and Windows uses **Ctrl+Shift+Space** / **Ctrl+Shift+M** to control listening and Immersive Mode.
 
-## 开始使用
+## Get started
 
-1. 从 [Latest Release](https://github.com/yuxino/mimi/releases/latest) 下载 macOS Apple Silicon DMG 或 Windows x64 EXE / MSI；也可以从源码构建。
-2. 打开「翻译服务」，选择服务商并保存凭证。
-3. 播放内容，从菜单栏/系统托盘的 mimi 图标点击 **开始**；macOS 首次使用时按提示允许「屏幕与系统音频录制」。
+1. Download the macOS Apple silicon DMG or Windows x64 EXE / MSI from the [latest release](https://github.com/yuxino/mimi/releases/latest), or build from source.
+2. Open **Translation Service**, choose a provider, and save its credentials.
+3. Play something and select **Start** from the mimi menu bar/system tray icon; on first use, macOS then prompts for **Screen & System Audio Recording**.
 
-**v1.3.8 是首个公开的应用内更新引导版本。** 从上一公开版本 v1.3.6 升级时，需要先从 GitHub Releases 手动下载安装一次；之后的版本可以在「设置 → 版本更新」中完成。Windows 安装更新时会关闭 Mimi，安装结束后需要手动重新打开。
+**v1.3.8 is the first published in-app updater bootstrap release.** Upgrading from the previous public release, v1.3.6, requires one manual download and installation from GitHub Releases. Later releases can be installed from **Settings → Software Update**. On Windows, installing an update closes Mimi; reopen it manually after the installer finishes.
 
-凭证按服务配置保存在 macOS 钥匙串或 Windows 凭据管理器中；设置页只显示是否已保存。服务商调用可能产生费用。
+Credentials are stored per service configuration in macOS Keychain or Windows Credential Manager; Settings shows only whether they are saved. Provider usage may incur charges.
 
-[阿里云](https://help.aliyun.com/zh/model-studio/get-api-key) · [OpenAI](https://platform.openai.com/api-keys) · [Google Gemini](https://aistudio.google.com/app/apikey) · [Azure OpenAI](https://learn.microsoft.com/zh-cn/azure/foundry/openai/concepts/gpt-realtime-translate) · [火山引擎](https://docs.volcengine.com/docs/6561/1631605) · [腾讯云](https://cloud.tencent.com/document/api/1093/127565) · [百度翻译](https://cloud.baidu.com/doc/MT/s/Sl9p2h5k9) · [xAI](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech)
+[Alibaba Cloud](https://help.aliyun.com/en/model-studio/get-api-key) · [OpenAI](https://platform.openai.com/api-keys) · [Google Gemini](https://aistudio.google.com/app/apikey) · [Azure OpenAI](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/gpt-realtime-translate) · [Volcano Engine](https://docs.volcengine.com/docs/6561/1631605) · [Tencent Cloud](https://cloud.tencent.com/document/api/1093/127565) · [Baidu Translate](https://cloud.baidu.com/doc/MT/s/Sl9p2h5k9) · [xAI](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech)
 
-| 服务商 | 音频源语言 | 字幕目标 | 模式 |
+| Provider | Source audio | Subtitle targets | Modes |
 | --- | --- | --- | --- |
-| 阿里云百炼 | 自动、中文、英语、日语、韩语 | 原文、简体中文、英语、日语 | 极速、低延迟、高质量 |
-| OpenAI Realtime | 自动 | 简体中文、英语、日语 | 极速 |
-| Google Gemini Live Translate（预览） | 自动 | 简体中文、英语、日语 | 极速 |
-| Azure OpenAI Realtime Translate | 自动 | 简体中文、英语、日语 | 极速 |
-| 火山引擎豆包同传 2.0 | 中文、英语、日语 | 简体中文、英语、日语 | 极速 |
-| 腾讯云实时语音翻译 | 中文、英语、日语、韩语 | 简体中文、英语、日语 | 极速 |
-| 百度实时语音翻译 | 中文、英语、日语、韩语 | 简体中文、英语、日语 | 极速 |
-| xAI Grok Voice | 自动 | 简体中文、英语、日语 | 极速（回合式） |
+| Alibaba Cloud Model Studio | Auto, Chinese, English, Japanese, Korean | Original, Simplified Chinese, English, Japanese | Turbo, Low latency, High quality |
+| OpenAI Realtime | Auto | Simplified Chinese, English, Japanese | Turbo |
+| Google Gemini Live Translate (Preview) | Auto | Simplified Chinese, English, Japanese | Turbo |
+| Azure OpenAI Realtime Translate | Auto | Simplified Chinese, English, Japanese | Turbo |
+| Volcano Engine Simultaneous Interpretation 2.0 | Chinese, English, Japanese | Simplified Chinese, English, Japanese | Turbo |
+| Tencent Cloud Realtime Speech Translation | Chinese, English, Japanese, Korean | Simplified Chinese, English, Japanese | Turbo |
+| Baidu Realtime Speech Translation | Chinese, English, Japanese, Korean | Simplified Chinese, English, Japanese | Turbo |
+| xAI Grok Voice | Auto | Simplified Chinese, English, Japanese | Turbo (turn based) |
 
-Gemini、Azure OpenAI、豆包、腾讯云、百度和 xAI 已通过协议、模拟 WebSocket 与 UI 逻辑测试；付费账号的端到端质量和延迟尚未逐一验收。
+Gemini, Azure OpenAI, Volcano Engine, Tencent, Baidu, and xAI have protocol, mock-WebSocket, and UI-logic coverage. Paid-account end-to-end quality and latency have not yet been accepted for every service.
 
-### 平台支持
+### Platform support
 
-- **Apple 芯片 macOS 13+**：提供未经 Apple 公证的临时签名 DMG；若首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。系统可能在更新后重新请求录音或钥匙串权限。
-- **Windows x64**：系统音频采集、Windows 凭据管理器、系统托盘、字幕浮窗和全局快捷键均已实现。Release 提供未签名的预览版 MSI 和 NSIS EXE，公开 x64 包的真机端到端验收仍在进行；SmartScreen 可能显示警告。
+- **Apple silicon macOS 13+**: Releases provide an ad-hoc-signed DMG without Apple notarization. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Updates may trigger recording or Keychain permission prompts again.
+- **Windows x64**: System-audio capture, Windows Credential Manager, the system tray, the subtitle overlay, and global shortcuts are implemented. Releases provide unsigned preview MSI and NSIS EXE installers while end-to-end real-device acceptance of the public x64 packages continues; SmartScreen may warn.
 
-## 从源码构建
+## Build from source
 
-需要 Rust 1.88+，以及 Node.js 20.19.x、22.13+ 或 24+。macOS 还需 Xcode Command Line Tools 和 `mimi Local Development` 身份或显式 `MIMI_CODESIGN_IDENTITY`。
+Requires Rust 1.88+ and Node.js 20.19.x, 22.13+, or 24+. macOS also needs the Xcode Command Line Tools and a `mimi Local Development` identity or explicit `MIMI_CODESIGN_IDENTITY`.
 
 ```bash
 git clone https://github.com/yuxino/mimi.git
 cd mimi
 npm ci
-npm run tauri:dev        # Windows：使用独立开发配置运行
-./scripts/dev-app.sh     # macOS：以稳定应用身份运行
-./scripts/check.sh       # 完整检查（fmt/clippy/测试/前端构建）
+npm run tauri:dev        # develop on Windows with isolated dev settings
+./scripts/dev-app.sh     # develop on macOS with a stable app identity
+./scripts/check.sh       # full check (fmt/clippy/tests/frontend build)
 ```
 
-Windows 安装包需在 Windows 上运行 `npm run tauri -- build --config src-tauri/tauri.ci.conf.json -- --locked` 构建；macOS 可使用 `./scripts/package-app.sh`。CI 会在 macOS、Windows x64 和 Windows ARM64 上进行测试或启动检查。
+Build Windows installers on Windows with `npm run tauri -- build --config src-tauri/tauri.ci.conf.json -- --locked`; use `./scripts/package-app.sh` on macOS. CI tests or smoke-launches macOS, Windows x64, and Windows ARM64 builds.
 
-更多内容见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)。
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 [MIT](LICENSE) © 2026 yuxino

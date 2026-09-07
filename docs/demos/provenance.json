@@ -136,13 +136,38 @@
   },
   "readme_playback": {
     "provider": "GitHub user attachment",
-    "url": "https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36",
+    "url": "https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3",
     "uploaded_at": "2026-09-07",
     "source_release_asset": "mimi-demo-1080p.mp4",
-    "bytes": 23631884,
-    "sha256": "788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef",
-    "video_reencoded": false,
+    "bytes": 12746625,
+    "sha256": "02a284df376d19f34d0fc5d327a1e335992497207fa0f6edeb71aefb38ae54fb",
+    "video_reencoded": true,
     "original_audio_preserved": true,
-    "rendering": "Standalone URL paragraph for the GitHub native video player"
+    "rendering": "Standalone URL paragraph for the GitHub native video player",
+    "previous_url": "https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36",
+    "encoding": {
+      "video": "H.264 High 4.1, yuv420p, CRF 22, slow",
+      "maxrate_bps": 4000000,
+      "buffer_size_bits": 8000000,
+      "fps": 30,
+      "frames": 1204,
+      "max_keyframe_interval_seconds": 2,
+      "faststart": true,
+      "audio": "AAC packets copied from original",
+      "audio_packet_md5": "01f89fdde4c1f916821f31d86ae07b73",
+      "ssim_all": 0.991973,
+      "psnr_average_db": 47.314
+    }
+  },
+  "website_playback": {
+    "repository": "yuxino-labs/mimi-web",
+    "asset": "public/mimi/mimi-demo-1080p.mp4",
+    "storage": "Existing versioned website OSS/CDN",
+    "bytes": 17075906,
+    "sha256": "91f0a12f57f5ca49745908502ca8edb4f551bba1d0fde12df2e00e14f41a3913",
+    "encoding": "H.264 High 4.1, CRF 20, slow, 6 Mbps maxrate, two-second keyframes, faststart",
+    "ssim_all": 0.99401,
+    "fps": 30,
+    "original_audio_preserved": true
   }
 }
