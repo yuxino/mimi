@@ -131,6 +131,18 @@
       810
     ],
     "display_width": 640,
-    "animated": false
+    "animated": false,
+    "role": "Historical static poster, replaced by readme_playback on 2026-09-07; retained as an auxiliary asset."
+  },
+  "readme_playback": {
+    "provider": "GitHub user attachment",
+    "url": "https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36",
+    "uploaded_at": "2026-09-07",
+    "source_release_asset": "mimi-demo-1080p.mp4",
+    "bytes": 23631884,
+    "sha256": "788172a6ceb020a44ba7f6b197ea875f98b42312be6e5960c9446d3fbb6401ef",
+    "video_reencoded": false,
+    "original_audio_preserved": true,
+    "rendering": "Standalone URL paragraph for the GitHub native video player"
   }
 }

@@ -14,11 +14,10 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-<p align="center">
-  <a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
-</p>
+https://github.com/user-attachments/assets/71abc98f-063b-4723-97cb-3851d334cd36
+
 <p align="center">播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。</p>
-<p align="center"><a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4">观看完整视频</a></p>
+<p align="center"><a href="docs/demos/README.md">视频说明与来源</a></p>
 <!-- /project-demo-v1 -->
 
 ## 功能
