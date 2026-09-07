@@ -6,11 +6,10 @@
     <a href="https://mimi.yuxino.cn">Website</a>
     · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download latest</strong></a>
     · <a href="README.md">简体中文</a>
-    · <a href="README_JA.md">日本語</a>
   </p>
 </div>
 
-`mimi` comes from the Japanese word 耳（みみ, “ear”）. It turns the system audio playing on your device into live subtitles and provider-dependent translation into Simplified Chinese, English, or Japanese.
+`mimi` means “ear” in Japanese. It turns the system audio playing on your device into live subtitles and provider-dependent translation into Simplified Chinese, English, or Japanese.
 
 <!-- project-demo-v1 -->
 ## Demo

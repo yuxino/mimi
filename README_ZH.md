@@ -6,11 +6,10 @@
     <a href="https://mimi.yuxino.cn">官网</a>
     · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
     · <a href="README_EN.md">English</a>
-    · <a href="README_JA.md">日本語</a>
   </p>
 </div>
 
-`mimi` 取自日语「耳（みみ）」。它把设备正在播放的系统音频变成实时字幕，并按服务商能力翻译成简体中文、英语或日语。
+`mimi` 在日语中意为“耳朵”。它把设备正在播放的系统音频变成实时字幕，并按服务商能力翻译成简体中文、英语或日语。
 
 <!-- project-demo-v1 -->
 ## 演示
