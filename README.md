@@ -3,7 +3,8 @@
   <h1>mimi</h1>
   <p>系统音频实时字幕与翻译，支持 Apple 芯片 macOS 13+ 和 Windows x64。</p>
   <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
+    <a href="https://mimi.yuxino.cn">官网</a>
+    · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
     · <a href="README_EN.md">English</a>
     · <a href="README_JA.md">日本語</a>
   </p>

@@ -3,7 +3,8 @@
   <h1>mimi</h1>
   <p>Live subtitles and translation for system audio on Apple silicon macOS 13+ and Windows x64.</p>
   <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download latest</strong></a>
+    <a href="https://mimi.yuxino.cn">Website</a>
+    · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>Download latest</strong></a>
     · <a href="README.md">简体中文</a>
     · <a href="README_JA.md">日本語</a>
   </p>
