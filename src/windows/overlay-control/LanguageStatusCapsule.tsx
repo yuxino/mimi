@@ -36,11 +36,14 @@ export function LanguageStatusCapsule({
   const modeLabel = translatesAudio
     ? TRANSLATION_MODE_DISPLAY_NAMES[effectiveMode]
     : I18N.overlay.originalOnly;
-  const transientLabel = isPaused
-    ? I18N.overlay.paused
-    : isWaitingForFinalTranslation
-      ? I18N.overlay.translating
-      : null;
+  const transientLabel =
+    phase === "error" || phase === "idle"
+      ? OVERLAY_ACTIVITY_PHASES[phase].accessibilityLabel
+      : isPaused
+        ? I18N.overlay.paused
+        : isWaitingForFinalTranslation
+          ? I18N.overlay.translating
+          : null;
   const actionLabel = expanded
     ? I18N.overlay.closeControls
     : I18N.overlay.openControls;

@@ -231,4 +231,22 @@ describe("activity phase signals", () => {
       ),
     ).toBe("connecting");
   });
+
+  it.each(["error", "idle"] as const)(
+    "never reports %s as listening even when stream or pause flags remain",
+    (statusKind) => {
+      expect(
+        computeActivityPhaseFromSignals(
+          {
+            ...base,
+            statusKind,
+            isPaused: true,
+            isTranslationPending: true,
+            hasRecognizingSourceDraft: true,
+          },
+          settings,
+        ),
+      ).toBe(statusKind);
+    },
+  );
 });

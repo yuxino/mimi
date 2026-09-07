@@ -76,6 +76,8 @@ export function computeActivityPhaseFromSignals(
   signals: ActivityPhaseSignals,
   settings: Pick<SettingsSnapshot, "sourceLanguage" | "targetLanguage">,
 ): OverlayActivityPhaseKind {
+  if (signals.statusKind === "error") return "error";
+  if (signals.statusKind === "idle") return "idle";
   if (signals.isPaused) return "paused";
 
   switch (signals.statusKind) {
@@ -97,9 +99,6 @@ export function computeActivityPhaseFromSignals(
       }
       return "listening";
     }
-    case "idle":
-    case "error":
-      return "listening";
   }
 }
 

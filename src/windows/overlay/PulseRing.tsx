@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from "react";
 import {
+  OVERLAY_ACTIVITY_PHASES,
   overlayPhaseColor,
   type OverlayActivityPhaseKind,
 } from "../../lib/types";
@@ -29,7 +30,7 @@ export const PulseRing = memo(function PulseRing({
   compact = false,
 }: PulseRingProps) {
   const reduceMotion = useReducedMotion();
-  const active = !reduceMotion && phase !== "paused";
+  const active = !reduceMotion && OVERLAY_ACTIVITY_PHASES[phase].animationSpeed > 0;
 
   const dotRef = useRef<HTMLDivElement | null>(null);
   const ringRefs = useRef<Array<HTMLDivElement | null>>([]);

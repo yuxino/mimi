@@ -87,6 +87,39 @@ be used only for content-free labels, timestamps, bundle identifiers, and code
 requirements; never log recognized text, translated text, credentials, or
 audio.
 
+### Recording is enabled in Settings but capture is still denied
+
+After an intentional switch from a local certificate to a published GitHub
+build, an enabled entry in System Settings alone does not prove that the
+current binary can capture. Establish the exact executable path, verify its
+signature, and compare it with the intended package before changing grants.
+
+If a normal restart and the current app's permission grant still produce
+`System audio capture permission was denied.`, use one bounded recovery in
+**System Settings → Privacy & Security → Screen & System Audio Recording**:
+
+1. Quit the current Mimi normally and confirm no other Mimi copy is running.
+2. Select the existing **mimi** recording entry and verify the selection before
+   using Remove. Do not remove `mimi-dev` or another application's entry.
+3. Use Add to select the verified `/Applications/mimi.app`. Check the complete
+   path and version in the file picker; similarly named backups are not the
+   installed app. Let the user complete any system authentication themselves.
+4. Confirm that the newly added Mimi entry is enabled, launch that same app,
+   and test actual system-audio subtitles with non-sensitive test speech.
+   Verify pause/resume/stop and restore any temporary UI settings.
+
+This is a single-app recovery through the normal settings UI, not a reason to
+run `tccutil reset`, edit the TCC database, re-sign the public app, or repeat
+permission changes indefinitely. Stop and preserve the exact failure if this
+one recovery does not work. Keep Keychain authorization separate: do not
+delete or recreate credentials while repairing recording access.
+
+This sequence restored capture for the public v1.3.9 package after an earlier
+locally signed installation; toggling the existing grant and adding the app
+without removing that old entry had not restored capture. An enabled switch
+or a Listening label is insufficient evidence: check the actual session and
+translated output. Record only timing/counts/status, never speech or subtitles.
+
 ## Overlay and UI checks
 
 - AppKit window mutations, including window level and collection behavior,

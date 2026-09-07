@@ -309,6 +309,8 @@ export function targetLanguageTranslatesAudio(target: TargetLanguage): boolean {
 // ---------------------------------------------------------------------------
 
 export type OverlayActivityPhaseKind =
+  | "idle"
+  | "error"
   | "connecting"
   | "listening"
   | "recognizing"
@@ -333,6 +335,20 @@ export const OVERLAY_ACTIVITY_PHASES: Record<
   OverlayActivityPhaseKind,
   OverlayActivityPhaseInfo
 > = {
+  idle: {
+    accessibilityLabel: I18N.overlay.phaseIdle,
+    color: "#FFFFFF",
+    baseOpacity: 0.5,
+    animationSpeed: 0,
+    amplitude: 0,
+  },
+  error: {
+    accessibilityLabel: I18N.overlay.phaseError,
+    color: "#FF8A80",
+    baseOpacity: 1,
+    animationSpeed: 0,
+    amplitude: 0,
+  },
   connecting: {
     accessibilityLabel: I18N.overlay.phaseConnecting,
     color: "#FFFFFF",
