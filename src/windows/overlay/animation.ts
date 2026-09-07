@@ -29,18 +29,19 @@ export function useStableText(
   text: string,
   settleMs = 400,
   maxWaitMs = 1500,
+  streamKey = "",
 ): string {
-  const [stable, setStable] = useState(text);
-  const latestRef = useRef(text);
+  const [stable, setStable] = useState({ text, streamKey });
+  const latestRef = useRef({ text, streamKey });
   const maxTimerRef = useRef<number | null>(null);
 
   // Keep the latest text available to the (non-resetting) force-sync timer.
   useEffect(() => {
-    latestRef.current = text;
-  }, [text]);
+    latestRef.current = { text, streamKey };
+  }, [text, streamKey]);
 
   useEffect(() => {
-    if (text === stable) {
+    if (text === stable.text && streamKey === stable.streamKey) {
       // Already in sync: cancel any pending force-sync timer.
       if (maxTimerRef.current !== null) {
         window.clearTimeout(maxTimerRef.current);
@@ -70,7 +71,7 @@ export function useStableText(
     }
 
     return () => window.clearTimeout(settleTimer);
-  }, [text, stable, settleMs, maxWaitMs]);
+  }, [text, streamKey, stable, settleMs, maxWaitMs]);
 
   // Unmount cleanup for the ref-held force-sync timer.
   useEffect(
@@ -82,5 +83,10 @@ export function useStableText(
     [],
   );
 
-  return stable;
+  // Removal, confirmation, and display-mode changes take effect during the
+  // render itself. A previous source preview must not survive in the timer's
+  // cached value when the next preview is a translation.
+  return text === "" || settleMs === 0 || streamKey !== stable.streamKey
+    ? text
+    : stable.text;
 }

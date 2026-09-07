@@ -3,7 +3,8 @@
   <h1>mimi</h1>
   <p>系统音频实时字幕与翻译，支持 Apple 芯片 macOS 13+ 和 Windows x64。</p>
   <p>
-    <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
+    <a href="https://mimi.yuxino.cn">官网</a>
+    · <a href="https://github.com/yuxino/mimi/releases/latest"><strong>下载最新版</strong></a>
     · <a href="README_EN.md">English</a>
     · <a href="README_JA.md">日本語</a>
   </p>
@@ -14,11 +15,11 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-<a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
-
-[观看完整视频](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4)
-
-播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。
+<p align="center">
+  <a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
+</p>
+<p align="center">播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。</p>
+<p align="center"><a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4">观看完整视频</a></p>
 <!-- /project-demo-v1 -->
 
 ## 功能
@@ -70,7 +71,7 @@ npm run tauri:dev        # Windows：使用独立开发配置运行
 ./scripts/check.sh       # 完整检查（fmt/clippy/测试/前端构建）
 ```
 
-Windows 安装包需在 Windows 上运行 `npm run tauri -- build -- --locked` 构建；macOS 可使用 `./scripts/package-app.sh`。CI 会在 macOS、Windows x64 和 Windows ARM64 上进行测试或启动检查。
+Windows 安装包需在 Windows 上运行 `npm run tauri -- build --config src-tauri/tauri.ci.conf.json -- --locked` 构建；macOS 可使用 `./scripts/package-app.sh`。CI 会在 macOS、Windows x64 和 Windows ARM64 上进行测试或启动检查。
 
 更多内容见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)。
 

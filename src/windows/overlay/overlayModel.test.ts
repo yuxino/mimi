@@ -26,7 +26,7 @@ function subtitles(
   return { source, translation, history };
 }
 
-describe("live subtitle fallback", () => {
+describe("live subtitle display mode", () => {
   it("prefers a translation draft over source recognition", () => {
     expect(
       visibleLiveSubtitle(
@@ -42,7 +42,7 @@ describe("live subtitle fallback", () => {
     ).toEqual({ text: "译文草稿", isFinal: false, kind: "translation" });
   });
 
-  it("shows source recognition while a long utterance has no translation", () => {
+  it("does not flash source recognition before the first translation", () => {
     expect(
       visibleLiveSubtitle(
         subtitles({ text: "still recognizing", isFinal: false }),
@@ -51,10 +51,10 @@ describe("live subtitle fallback", () => {
         false,
         false,
       ),
-    ).toEqual({ text: "still recognizing", isFinal: false, kind: "source" });
+    ).toBeNull();
   });
 
-  it("keeps an unpaired source final visible after translation times out", () => {
+  it("does not replace missing translation with source after timeout", () => {
     expect(
       visibleLiveSubtitle(
         subtitles(
@@ -73,7 +73,7 @@ describe("live subtitle fallback", () => {
         false,
         true,
       ),
-    ).toEqual({ text: "recognized final", isFinal: false, kind: "source" });
+    ).toBeNull();
   });
 
   it("treats same-language recognition as final subtitle text", () => {
@@ -111,7 +111,7 @@ describe("live subtitle fallback", () => {
     ).toBeNull();
   });
 
-  it("keeps a repeated source final visible while its translation is pending", () => {
+  it("does not append a repeated source while the next translation is pending", () => {
     const history = [
       {
         source: "repeated lyric",
@@ -131,10 +131,10 @@ describe("live subtitle fallback", () => {
         true,
         false,
       ),
-    ).toEqual({ text: "repeated lyric", isFinal: false, kind: "source" });
+    ).toBeNull();
   });
 
-  it("keeps a repeated source final visible after its translation times out", () => {
+  it("does not append a repeated source after its translation times out", () => {
     const history = [
       {
         source: "repeated lyric",
@@ -154,7 +154,31 @@ describe("live subtitle fallback", () => {
         false,
         true,
       ),
-    ).toEqual({ text: "repeated lyric", isFinal: false, kind: "source" });
+    ).toBeNull();
+  });
+
+  it("keeps recognition visible in explicitly selected original mode", () => {
+    expect(
+      visibleLiveSubtitle(
+        subtitles({ text: "original draft", isFinal: false }),
+        { ...settings, targetLanguage: "original" },
+        "en",
+        false,
+        false,
+      ),
+    ).toEqual({ text: "original draft", isFinal: false, kind: "source" });
+  });
+
+  it("waits for translation while automatic source language is unknown", () => {
+    expect(
+      visibleLiveSubtitle(
+        subtitles({ text: "unclassified draft", isFinal: false }),
+        settings,
+        null,
+        true,
+        false,
+      ),
+    ).toBeNull();
   });
 });
 

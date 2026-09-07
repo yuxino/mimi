@@ -225,10 +225,9 @@ interface LiveSubtitlePreview {
 }
 
 /**
- * Selects the active subtitle tail. Translation remains the preferred output,
- * but source recognition is a latency and failure fallback: long utterances,
- * same-language audio, and an empty provider translation must never leave the
- * subtitle canvas blank while usable recognition text already exists.
+ * Selects the active subtitle tail for the requested display language. A
+ * delayed, empty, or timed-out translation must not flash the source in its
+ * place. Recognition is display text only in Original or same-language mode.
  */
 export function visibleLiveSubtitle(
   subtitles: SubtitleSnapshot,
@@ -244,6 +243,8 @@ export function visibleLiveSubtitle(
   if (translation !== null) {
     return { ...translation, kind: "translation" };
   }
+
+  if (!isSameLanguageMode(settings, detectedLanguage)) return null;
 
   const source = subtitles.source;
   if (source.text === "") return null;
@@ -263,12 +264,7 @@ export function visibleLiveSubtitle(
 
   return {
     text: source.text,
-    // A final source is durable display text only when no translation is
-    // semantically needed. Otherwise keep the preview treatment until the
-    // provider supplies the translated replacement.
-    isFinal:
-      source.isFinal &&
-      isSameLanguageMode(settings, detectedLanguage),
+    isFinal: source.isFinal,
     kind: "source",
   };
 }

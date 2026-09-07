@@ -55,6 +55,33 @@ pub struct StartupGate {
 }
 
 impl StartupGate {
+    /// Exit a verified secondary before creating Tauri's runtime. Contenders
+    /// are serialized by this guard, so initializing and cleaning up a whole
+    /// runtime for each one can exhaust the cold-launch handoff deadline.
+    pub fn handoff_if_running(&self, identifier: &str) -> Result<bool, &'static str> {
+        let (mutex, already_exists) = open_instance_mutex(identifier)?;
+        if !already_exists {
+            // This is only a probe. The primary plugin will create and retain
+            // its real mutex/listener while we still hold the startup gate.
+            unsafe {
+                ReleaseMutex(mutex);
+                CloseHandle(mutex);
+            }
+            return Ok(false);
+        }
+        let result = register_activation_message(identifier).and_then(|message| {
+            handoff_to_verified_listener(
+                &wide_name(&format!("{identifier}-sic")),
+                &wide_name(&format!("{identifier}-siw")),
+                message,
+                current_process_id(),
+            )
+        });
+        // An existing mutex is not owned by this thread.
+        unsafe { CloseHandle(mutex) };
+        result.map(|()| true)
+    }
+
     pub fn acquire(identifier: &str) -> Result<Self, &'static str> {
         let name = wide_name(&format!("{identifier}-startup-gate-v1"));
 
@@ -169,23 +196,8 @@ pub fn single_instance_plugin() -> TauriPlugin<Wry> {
 }
 
 fn initialize_or_handoff(app: &AppHandle<Wry>, identifier: &str) -> Result<(), &'static str> {
-    let activation_name = wide_name(&format!("{identifier}-activation-v1"));
-    // SAFETY: `activation_name` is live and NUL-terminated.
-    let activation_message = unsafe { RegisterWindowMessageW(activation_name.as_ptr()) };
-    if activation_message == 0 {
-        return Err("activation_message_registration_failed");
-    }
-    ACTIVATION_MESSAGE.store(activation_message, Ordering::SeqCst);
-
-    let mutex_name = wide_name(&format!("{identifier}-sim"));
-    // SAFETY: `mutex_name` is live and NUL-terminated.
-    let mutex = unsafe { CreateMutexW(std::ptr::null(), 1, mutex_name.as_ptr()) };
-    if mutex.is_null() {
-        // Wrong-type objects and access-denied existing mutexes both land here.
-        return Err("single_instance_mutex_invalid");
-    }
-    // SAFETY: read immediately after CreateMutexW.
-    let already_exists = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+    let activation_message = register_activation_message(identifier)?;
+    let (mutex, already_exists) = open_instance_mutex(identifier)?;
 
     let class_name = wide_name(&format!("{identifier}-sic"));
     let window_name = wide_name(&format!("{identifier}-siw"));
@@ -205,6 +217,29 @@ fn initialize_or_handoff(app: &AppHandle<Wry>, identifier: &str) -> Result<(), &
     }
 
     create_primary_listener(app, mutex, class_name, window_name)
+}
+
+fn register_activation_message(identifier: &str) -> Result<u32, &'static str> {
+    let activation_name = wide_name(&format!("{identifier}-activation-v1"));
+    // SAFETY: `activation_name` is live and NUL-terminated.
+    let activation_message = unsafe { RegisterWindowMessageW(activation_name.as_ptr()) };
+    if activation_message == 0 {
+        return Err("activation_message_registration_failed");
+    }
+    ACTIVATION_MESSAGE.store(activation_message, Ordering::SeqCst);
+    Ok(activation_message)
+}
+
+fn open_instance_mutex(identifier: &str) -> Result<(HANDLE, bool), &'static str> {
+    let mutex_name = wide_name(&format!("{identifier}-sim"));
+    // SAFETY: `mutex_name` is live and NUL-terminated.
+    let mutex = unsafe { CreateMutexW(std::ptr::null(), 1, mutex_name.as_ptr()) };
+    if mutex.is_null() {
+        // Wrong-type objects and access-denied existing mutexes both land here.
+        return Err("single_instance_mutex_invalid");
+    }
+    // SAFETY: read immediately after CreateMutexW.
+    Ok((mutex, unsafe { GetLastError() } == ERROR_ALREADY_EXISTS))
 }
 
 fn create_primary_listener(
@@ -538,6 +573,90 @@ fn prepare_primary_for_ui_test() -> Result<(), &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn early_primary_probe_does_not_leave_an_instance_mutex_behind() {
+        let identifier = format!("mimi-test-{}", uuid::Uuid::new_v4());
+        let gate = StartupGate::acquire(&identifier).unwrap();
+        assert!(!gate.handoff_if_running(&identifier).unwrap());
+        let (mutex, already_exists) = open_instance_mutex(&identifier).unwrap();
+        unsafe {
+            ReleaseMutex(mutex);
+            CloseHandle(mutex);
+        }
+        assert!(!already_exists);
+    }
+
+    #[test]
+    fn early_handoff_rejects_an_existing_mutex_without_a_listener() {
+        let identifier = format!("mimi-test-{}", uuid::Uuid::new_v4());
+        let gate = StartupGate::acquire(&identifier).unwrap();
+        let (mutex, _) = open_instance_mutex(&identifier).unwrap();
+        let result = gate.handoff_if_running(&identifier);
+        unsafe {
+            ReleaseMutex(mutex);
+            CloseHandle(mutex);
+        }
+        assert_eq!(result, Err("single_instance_listener_missing"));
+    }
+
+    #[test]
+    fn early_handoff_can_acknowledge_a_verified_listener_without_tauri() {
+        unsafe extern "system" fn acknowledge(
+            window: HWND,
+            message: u32,
+            wparam: WPARAM,
+            lparam: LPARAM,
+        ) -> LRESULT {
+            if message >= 0xc000 {
+                ACTIVATION_ACK as LRESULT
+            } else {
+                DefWindowProcW(window, message, wparam, lparam)
+            }
+        }
+        let identifier = format!("mimi-test-{}", uuid::Uuid::new_v4());
+        let gate = StartupGate::acquire(&identifier).unwrap();
+        let class_name = wide_name(&format!("{identifier}-sic"));
+        let window_name = wide_name(&format!("{identifier}-siw"));
+        let module = unsafe { GetModuleHandleW(std::ptr::null()) };
+        let class = WNDCLASSEXW {
+            cbSize: size_of::<WNDCLASSEXW>() as u32,
+            lpfnWndProc: Some(acknowledge),
+            hInstance: module,
+            lpszClassName: class_name.as_ptr(),
+            ..unsafe { std::mem::zeroed() }
+        };
+        assert_ne!(unsafe { RegisterClassExW(&class) }, 0);
+        let window = unsafe {
+            CreateWindowExW(
+                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                class_name.as_ptr(),
+                window_name.as_ptr(),
+                WS_OVERLAPPED,
+                0,
+                0,
+                0,
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                module,
+                std::ptr::null(),
+            )
+        };
+        let (mutex, _) = open_instance_mutex(&identifier).unwrap();
+        let result = if window.is_null() {
+            Err("test_listener_creation_failed")
+        } else {
+            gate.handoff_if_running(&identifier)
+        };
+        unsafe {
+            DestroyWindow(window);
+            UnregisterClassW(class_name.as_ptr(), module);
+            ReleaseMutex(mutex);
+            CloseHandle(mutex);
+        }
+        assert_eq!(result, Ok(true));
+    }
 
     #[test]
     fn current_process_image_has_stable_file_identity() {

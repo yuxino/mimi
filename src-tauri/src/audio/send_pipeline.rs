@@ -7,7 +7,7 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 const QUEUE_CAPACITY: usize = 20;
 
@@ -71,7 +71,19 @@ pub struct AudioSendPipeline {
     tx: Mutex<Option<mpsc::Sender<Vec<u8>>>>,
     failed: Arc<AtomicBool>,
     accepting: Arc<AtomicBool>,
-    worker: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    finish_tx: Mutex<Option<oneshot::Sender<()>>>,
+    worker: Mutex<Option<AbortOnDropTask>>,
+    abort_worker: tokio::task::AbortHandle,
+}
+
+// A cancelled finish future must not detach a worker that still owns queued
+// audio and a provider client. Keep abort ownership while awaiting the task.
+struct AbortOnDropTask(tokio::task::JoinHandle<bool>);
+
+impl Drop for AbortOnDropTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 impl AudioSendPipeline {
@@ -85,6 +97,7 @@ impl AudioSendPipeline {
         E: Send + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<Vec<u8>>(QUEUE_CAPACITY);
+        let (finish_tx, mut finish_rx) = oneshot::channel();
         let failed = Arc::new(AtomicBool::new(false));
         let failed_worker = failed.clone();
         let accepting = Arc::new(AtomicBool::new(true));
@@ -96,8 +109,23 @@ impl AudioSendPipeline {
             let mut sent_buffer_count: u64 = 0;
             let mut sent_byte_count: u64 = 0;
             let mut peak_audio_sample: i32 = 0;
+            let mut finishing = false;
 
-            while let Some(data) = rx.recv().await {
+            loop {
+                let data = tokio::select! {
+                    biased;
+                    _ = &mut finish_rx, if !finishing => {
+                        finishing = true;
+                        // Native callbacks may retain ingress clones until
+                        // their asynchronous teardown completes.
+                        rx.close();
+                        continue;
+                    }
+                    data = rx.recv() => match data {
+                        Some(data) => data,
+                        None => return true,
+                    },
+                };
                 let started_at = Instant::now();
                 let bytes = data.len();
                 peak_audio_sample = peak_audio_sample.max(peak_pcm16_sample(&data));
@@ -126,17 +154,20 @@ impl AudioSendPipeline {
                         if !failed_worker.swap(true, Ordering::SeqCst) {
                             on_error_worker(AudioPipelineFailure::TransportStopped);
                         }
-                        return;
+                        return false;
                     }
                 }
             }
         });
 
+        let abort_worker = worker.abort_handle();
         Self {
             tx: Mutex::new(Some(tx)),
             failed,
             accepting,
-            worker: Mutex::new(Some(worker)),
+            finish_tx: Mutex::new(Some(finish_tx)),
+            worker: Mutex::new(Some(AbortOnDropTask(worker))),
+            abort_worker,
         }
     }
 
@@ -154,15 +185,18 @@ impl AudioSendPipeline {
     pub async fn finish(&self, timeout: Duration) -> bool {
         self.accepting.store(false, Ordering::SeqCst);
         self.tx.lock().unwrap().take();
+        if let Some(finish_tx) = self.finish_tx.lock().unwrap().take() {
+            let _ = finish_tx.send(());
+        }
         let worker = self.worker.lock().unwrap().take();
         let Some(mut worker) = worker else {
             return true;
         };
-        match tokio::time::timeout(timeout, &mut worker).await {
-            Ok(Ok(())) => true,
+        match tokio::time::timeout(timeout, &mut worker.0).await {
+            Ok(Ok(drained)) => drained,
             Ok(Err(_)) => false,
             Err(_) => {
-                worker.abort();
+                worker.0.abort();
                 false
             }
         }
@@ -172,9 +206,14 @@ impl AudioSendPipeline {
         self.accepting.store(false, Ordering::SeqCst);
         self.failed.store(true, Ordering::SeqCst);
         self.tx.lock().unwrap().take();
-        if let Some(worker) = self.worker.lock().unwrap().take() {
-            worker.abort();
-        }
+        self.abort_worker.abort();
+        self.worker.lock().unwrap().take();
+    }
+}
+
+impl Drop for AudioSendPipeline {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 
@@ -217,10 +256,89 @@ mod tests {
         let ingress = pipeline.ingress().unwrap();
         ingress.try_send(vec![1, 0]).unwrap();
         ingress.try_send(vec![2, 0]).unwrap();
-        drop(ingress);
-
+        // Native teardown can retain the callback and its ingress even after
+        // capture has stopped; that must not keep the receiver open.
         assert!(pipeline.finish(Duration::from_millis(200)).await);
         assert_eq!(sent.load(Ordering::SeqCst), 2);
+        assert_eq!(ingress.try_send(vec![3, 0]), Err(AudioIngressError::Closed));
+    }
+
+    #[tokio::test]
+    async fn graceful_finish_reports_transport_failure() {
+        let pipeline = AudioSendPipeline::spawn(|_data| async { Err::<(), ()>(()) }, |_| {});
+        pipeline.ingress().unwrap().try_send(vec![0, 0]).unwrap();
+
+        assert!(!pipeline.finish(Duration::from_millis(200)).await);
+    }
+
+    struct ReleaseSignal(Option<oneshot::Sender<()>>);
+
+    impl Drop for ReleaseSignal {
+        fn drop(&mut self) {
+            let _ = self.0.take().unwrap().send(());
+        }
+    }
+
+    fn stalled_pipeline() -> (AudioSendPipeline, oneshot::Receiver<()>) {
+        let (released_tx, released_rx) = oneshot::channel();
+        let guard = Arc::new(ReleaseSignal(Some(released_tx)));
+        let pipeline = AudioSendPipeline::spawn(
+            move |_data| {
+                let guard = Arc::clone(&guard);
+                async move {
+                    let _guard = guard;
+                    std::future::pending::<Result<(), ()>>().await
+                }
+            },
+            |_| {},
+        );
+        pipeline.ingress().unwrap().try_send(vec![0, 0]).unwrap();
+        (pipeline, released_rx)
+    }
+
+    #[tokio::test]
+    async fn dropping_pipeline_releases_a_stalled_worker() {
+        let (pipeline, released) = stalled_pipeline();
+        let ingress = pipeline.ingress().unwrap();
+        drop(pipeline);
+
+        tokio::time::timeout(Duration::from_secs(1), released)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(ingress.try_send(vec![0, 0]), Err(AudioIngressError::Closed));
+    }
+
+    #[tokio::test]
+    async fn cancelling_finish_releases_a_stalled_worker() {
+        let (pipeline, released) = stalled_pipeline();
+        // Timing out the caller drops finish after it has taken ownership of
+        // the worker handle, before the pipeline's own drain deadline.
+        assert!(tokio::time::timeout(
+            Duration::from_millis(20),
+            pipeline.finish(Duration::from_secs(60)),
+        )
+        .await
+        .is_err());
+
+        tokio::time::timeout(Duration::from_secs(1), released)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn stop_can_abort_a_worker_already_owned_by_finish() {
+        let (pipeline, released) = stalled_pipeline();
+        let finish = pipeline.finish(Duration::from_secs(60));
+        tokio::pin!(finish);
+        assert!(tokio::time::timeout(Duration::from_millis(20), &mut finish)
+            .await
+            .is_err());
+        pipeline.stop();
+
+        assert!(!finish.await);
+        released.await.unwrap();
     }
 
     #[tokio::test]
@@ -244,7 +362,7 @@ mod tests {
     #[tokio::test]
     async fn graceful_finish_reports_a_cancelled_worker_as_failure() {
         let pipeline = AudioSendPipeline::spawn(|_data| async move { Ok::<(), ()>(()) }, |_| {});
-        pipeline.worker.lock().unwrap().as_ref().unwrap().abort();
+        pipeline.abort_worker.abort();
 
         assert!(!pipeline.finish(Duration::from_millis(200)).await);
     }

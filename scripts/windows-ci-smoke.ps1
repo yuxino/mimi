@@ -582,11 +582,21 @@ try {
         throw 'The intended primary mimi process did not acquire the startup gate.'
     }
 
+    $coldLaunchDeadlines = @{}
     1..4 | ForEach-Object {
-        $secondaryProcesses += Start-Process -FilePath $resolvedExecutable -PassThru
+        $startedAt = [DateTime]::UtcNow
+        $secondaryProcess = Start-Process -FilePath $resolvedExecutable -PassThru
+        $secondaryProcesses += $secondaryProcess
+        $coldLaunchDeadlines[$secondaryProcess.Id] = $startedAt.AddSeconds($HandoffExitSeconds)
     }
     foreach ($secondaryProcess in $secondaryProcesses) {
-        if (-not $secondaryProcess.WaitForExit($HandoffExitSeconds * 1000)) {
+        # Each process gets the original deadline from its own launch, not a
+        # fresh fifteen seconds after waiting for the previous contender.
+        $deadline = $coldLaunchDeadlines[$secondaryProcess.Id]
+        $remainingMs = [int][Math]::Max(0, [Math]::Ceiling(($deadline - [DateTime]::UtcNow).TotalMilliseconds))
+        if (-not $secondaryProcess.WaitForExit($remainingMs) -or $secondaryProcess.ExitTime.ToUniversalTime() -gt $deadline) {
+            $remaining = @(Get-MatchingMimiProcesses $resolvedExecutable)
+            Write-Output "Handoff timeout: primaryExited=$($process.HasExited), pendingPid=$($secondaryProcess.Id), matchingProcesses=$($remaining.Count)."
             throw "A concurrent mimi launch did not hand off and exit within $HandoffExitSeconds seconds."
         }
         if ($secondaryProcess.ExitCode -ne 0) {

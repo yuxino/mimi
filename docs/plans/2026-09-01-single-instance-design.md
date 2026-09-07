@@ -25,6 +25,13 @@ initialization. Wrong-thread destruction aborts the process and lets the kernel
 abandon the mutex rather than failing open. The activation path restores a
 minimized or tray-hidden settings window before showing and focusing it.
 
+While holding that startup gate, a repeated launch now probes and verifies the
+existing listener before creating the Tauri runtime. It sends the same bounded,
+payload-free activation message and returns, releasing the gate on its owner
+thread. This avoids serial runtime initialization/cleanup for cold contenders.
+A primary probe releases its temporary mutex, then the first plugin retains
+the real instance mutex and listener; the plugin's fail-closed recheck remains.
+
 The Windows CI smoke deliberately delays the primary inside that outer gate,
 launches four cold contenders, requires every contender to hand off and exit
 successfully within a bound, and proves that the original PID is the only
@@ -37,6 +44,10 @@ HWND by exact UI-test title and PID, verifies both minimized-window restoration
 and `WM_CLOSE` hiding, and proves a warm launch restores, shows, foregrounds,
 and reuses that specific window. This runs for the existing native x64 and
 ARM64 jobs.
+
+The cold-launch deadline is measured separately from each process's launch
+time, including checking its actual exit time. Waiting for an earlier contender
+must not grant later contenders another full timeout window.
 
 ## Boundaries
 

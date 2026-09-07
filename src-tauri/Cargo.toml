@@ -34,7 +34,9 @@ thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots", "url"] }
 futures-util = { version = "0.3", features = ["sink"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "stream"] }
+# Share the updater's HTTP implementation and existing ring TLS provider.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "stream", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 base64 = "0.23"
 uuid = { version = "1", features = ["v4"] }
 keyring = "4"

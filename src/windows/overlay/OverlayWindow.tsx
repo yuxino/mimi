@@ -68,10 +68,10 @@ export function OverlayWindow() {
   );
   // The live preview line is the timeline's LAST row (dimmed with a trailing
   // ellipsis), so it naturally follows history instead of piling up at the
-  // bottom of the panel. Its text is stabilized: source fallback settles
+  // bottom of the panel. Its text is stabilized: original-mode text settles
   // quickly, translated text stays calmer, and confirmed/removed tails update
-  // immediately. This avoids both per-block flicker and a blank canvas during
-  // long provider-side sentence boundaries.
+  // immediately. Source and translation previews have separate stabilization
+  // identities so a display-mode change cannot retain the previous source.
   const liveSubtitle = useMemo(
     () =>
       visibleLiveSubtitle(
@@ -97,6 +97,7 @@ export function OverlayWindow() {
         ? 180
         : 400,
     liveSubtitle?.kind === "source" ? 750 : 1_500,
+    liveSubtitle?.kind,
   );
   const hasLiveDraft = draftText !== "" && !liveSubtitle?.isFinal;
   // Full row list: history rows plus the stabilized draft segments as the

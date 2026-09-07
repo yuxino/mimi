@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Release packaging for the mimi Tauri application. Produces the native
+# Local QA packaging for the mimi Tauri application. Produces the native
 # bundles for the current platform (macOS: .app + .dmg; Windows: MSI + NSIS EXE)
 # under src-tauri/target/release/bundle/. Never commit dist/ or signing
 # identities.
@@ -13,6 +13,12 @@ set -euo pipefail
 # permission-sensitive QA. Public GitHub releases are separate developer-
 # installable packages and may use ad-hoc signing, so replacing either package
 # can reset macOS privacy or Keychain authorization.
+
+if [[ $# -ne 0 ]]; then
+  echo "Usage: ./scripts/package-app.sh (local QA packages only; no CLI overrides)." >&2
+  echo "Public signed updater artifacts are produced by the tag release workflow." >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -38,7 +44,10 @@ EOF
   echo "using macOS signing identity: $APPLE_SIGNING_IDENTITY"
 fi
 
-npm run tauri -- build -- --locked
+# Local QA packages are signed with the development identity, not the public
+# updater identity. Do not require or use the release updater private key for
+# these bundles; tag CI creates the signed updater artifacts independently.
+npm run tauri -- build --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
 
 BUNDLE_DIR="$PROJECT_DIR/src-tauri/target/release/bundle"
 echo "Bundle produced under: $BUNDLE_DIR"

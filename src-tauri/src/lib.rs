@@ -33,6 +33,15 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     let startup_gate = windows_startup::StartupGate::acquire(context.config().identifier.as_str())
         .unwrap_or_else(|label| panic!("mimi startup gate failed: {label}"));
+    #[cfg(target_os = "windows")]
+    if startup_gate
+        .handoff_if_running(context.config().identifier.as_str())
+        .unwrap_or_else(|label| panic!("mimi early handoff failed: {label}"))
+    {
+        // Returning drops the gate on its owner thread. No Tauri runtime,
+        // WebView, provider, or settings store is created by a secondary.
+        return;
+    }
 
     let builder = tauri::Builder::default();
     // This must stay first so a secondary Windows launch exits before any

@@ -21,7 +21,10 @@ Rules:
 - Use `./scripts/dev-app.sh` for normal local testing. Do not run `tauri dev`, a
   bare `target/*/mimi` executable, or a copy at a disposable path.
 - `./scripts/package-app.sh` creates a local, release-shaped package; it does
-  not turn the local certificate into the GitHub release identity.
+  not turn the local certificate into the GitHub release identity. It disables
+  updater-artifact signing for this local build, so local packaging does not
+  require the public release updater private key. Tag CI retains signed
+  updater artifacts for published releases.
 - Before replacing a formal app, run
   `./scripts/verify-macos-install-identity.sh NEW_APP /Applications/mimi.app`.
   A mismatch fails closed. `MIMI_ALLOW_IDENTITY_CHANGE=1` is reserved for a
@@ -94,9 +97,12 @@ audio.
 - Immersive mode owns its complete state: locked overlay position, hidden
   recognition pill, background treatment, and hidden scrollbar. Toggling it
   must restore the prior normal-mode interaction state.
-- Streaming drafts are replaceable previews; finals are durable. If a source
-  transcript exists while translation is delayed or absent, the bounded source
-  fallback remains visible until the translated final replaces it.
+- Streaming drafts are replaceable previews; finals are durable. During
+  cross-language translation, delayed or absent translations must not reveal
+  source recognition as fallback. Keep translated history and the activity
+  status visible; source previews belong only to Original/same-language mode.
+  Changing preview kind or removing a preview must immediately invalidate the
+  text stabilizer's old display value.
 - Keep accessibility state in `aria-*`, but drive changing selected/checked
   visuals through explicit React class names. macOS WKWebView has previously
   left attribute-selector styling stale after the underlying state changed;

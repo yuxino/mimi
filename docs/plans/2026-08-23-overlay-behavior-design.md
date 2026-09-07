@@ -10,18 +10,17 @@ The timeline uses one scrolling flow for confirmed history plus the active tail.
 Long text wraps, the newest content remains visible, and draft presentation is
 bounded without truncating confirmed history.
 
-The active tail is translation-first but never translation-dependent. A live
-translation draft or uncommitted final takes priority. While no translation is
-available, the latest source recognition is shown as a bounded fallback instead
-of leaving an empty subtitle canvas. If the detected source language already
-matches the target (or the target is Original), a final source line is presented
-as final subtitle text; otherwise the source remains visibly provisional and is
-replaced in place when translation arrives. A source final that is already part
-of the newest confirmed history pair is not rendered twice. The session payload
-also carries an explicit translation-timeout bit: identical spoken lines are not
-enough to distinguish a committed pair from a repeated utterance, so a repeated
-source remains visible when its new translation misses the deadline even if its
-text matches the newest history pair exactly.
+The active tail respects the requested output language. A live translation
+draft or uncommitted final takes priority. During cross-language translation,
+source recognition must not appear as fallback while translation is pending,
+empty, or timed out. Confirmed translated history remains visible and the
+activity status communicates the wait. If the detected source language matches
+the target (or the target is Original), recognition remains valid display text,
+including final source lines. A source final already committed to the newest
+history pair is not rendered twice. Pending/timeout bits distinguish repeated
+utterances from previously committed pairs in modes that display recognition.
+The text stabilizer immediately clears removed tails and confirms final text;
+source/translation identities prevent an old source preview surviving a switch.
 
 The activity presentation is derived from session state:
 

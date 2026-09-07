@@ -15,11 +15,11 @@ mimi は、日本語の「耳（みみ）」に由来する名前です。デバ
 <!-- project-demo-v1 -->
 ## デモ
 
-<a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
-
-[動画全編を見る](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4)
-
-英語の動画に小さな字幕を重ね、ショートカットで没入モードを切り替えます。
+<p align="center">
+  <a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
+</p>
+<p align="center">英語の動画に小さな字幕を重ね、ショートカットで没入モードを切り替えます。</p>
+<p align="center"><a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4">動画全編を見る</a></p>
 <!-- /project-demo-v1 -->
 
 ## 機能
@@ -74,7 +74,7 @@ npm run tauri:dev        # Windows：分離された開発設定で実行
 ./scripts/check.sh       # 全チェック（fmt/clippy/テスト/フロントエンドビルド）
 ```
 
-Windows インストーラーは Windows 上で `npm run tauri -- build -- --locked` を実行してビルドします。macOS では `./scripts/package-app.sh` を使用できます。CI は macOS、Windows x64、Windows ARM64 のビルドをテストまたはスモーク起動します。
+Windows インストーラーは Windows 上で `npm run tauri -- build --config src-tauri/tauri.ci.conf.json -- --locked` を実行してビルドします。macOS では `./scripts/package-app.sh` を使用できます。CI は macOS、Windows x64、Windows ARM64 のビルドをテストまたはスモーク起動します。
 
 詳細は [CONTRIBUTING.md](CONTRIBUTING.md) と [SECURITY.md](SECURITY.md) をご覧ください。
 

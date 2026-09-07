@@ -32,6 +32,8 @@ Git history, not on the active documentation path.
 
 ## Runtime behavior
 
+- `2026-09-07-audio-http-lifecycle-design.md` — cancellation-safe audio drain,
+  bounded Qwen responses, and HTTP dependency consolidation.
 - `2026-08-23-alibaba-pipeline-design.md` — current Alibaba modes, subtitle
   commit rules, translation context, and recovery behavior.
 - `2026-08-23-overlay-behavior-design.md` — overlay state, history, controls,

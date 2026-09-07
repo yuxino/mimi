@@ -22,6 +22,7 @@ pub enum QwenMTProtocolError {
 pub enum QwenMTClientError {
     MissingAPIKey,
     InvalidHTTPResponse,
+    ResponseTooLarge,
     RequestTimedOut,
     RequestFailed { status_code: u16, message: String },
 }
@@ -33,6 +34,7 @@ impl std::fmt::Display for QwenMTClientError {
                 write!(f, "Add an Alibaba Cloud Model Studio API key in Settings.")
             }
             Self::InvalidHTTPResponse => write!(f, "Qwen-MT returned an invalid HTTP response."),
+            Self::ResponseTooLarge => write!(f, "Qwen-MT returned a response that is too large."),
             Self::RequestTimedOut => write!(f, "Qwen-MT took too long to respond."),
             Self::RequestFailed {
                 status_code,
@@ -55,7 +57,7 @@ impl QwenMTClientError {
         match self {
             Self::RequestFailed { status_code, .. } => *status_code == 401 || *status_code == 403,
             Self::MissingAPIKey => true,
-            Self::InvalidHTTPResponse | Self::RequestTimedOut => false,
+            Self::InvalidHTTPResponse | Self::ResponseTooLarge | Self::RequestTimedOut => false,
         }
     }
 
@@ -64,6 +66,7 @@ impl QwenMTClientError {
         match self {
             Self::MissingAPIKey => "QwenMTClientError.missingAPIKey".to_string(),
             Self::InvalidHTTPResponse => "QwenMTClientError.invalidHTTPResponse".to_string(),
+            Self::ResponseTooLarge => "QwenMTClientError.responseTooLarge".to_string(),
             Self::RequestTimedOut => "QwenMTClientError.requestTimedOut".to_string(),
             Self::RequestFailed { status_code, .. } => {
                 format!("QwenMTClientError.requestFailed(status={status_code})")
@@ -83,7 +86,7 @@ impl QwenMTRetryPolicy {
             QwenMTClientError::RequestFailed { status_code, .. } => {
                 *status_code == 408 || *status_code == 429 || *status_code >= 500
             }
-            QwenMTClientError::MissingAPIKey => false,
+            QwenMTClientError::MissingAPIKey | QwenMTClientError::ResponseTooLarge => false,
         };
         if !is_transient {
             return None;
@@ -453,6 +456,17 @@ fn source_guidance(source: SourceLanguage, target: TargetLanguage) -> &'static s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oversized_responses_are_content_free_and_not_retried() {
+        let error = QwenMTClientError::ResponseTooLarge;
+        assert!(!error.is_authentication_failure());
+        assert_eq!(
+            error.diagnostic_label(),
+            "QwenMTClientError.responseTooLarge"
+        );
+        assert_eq!(QwenMTRetryPolicy::delay(&error, 1), None);
+    }
 
     fn request(text: &str, source_language: SourceLanguage) -> Value {
         QwenMTRequestEncoder::request(

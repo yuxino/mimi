@@ -15,11 +15,11 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-<a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
-
-[Watch full video](https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4)
-
-Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.
+<p align="center">
+  <a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4"><img src="docs/demos/poster.jpg" width="640" alt="Mimi"></a>
+</p>
+<p align="center">Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.</p>
+<p align="center"><a href="https://github.com/yuxino/mimi/releases/download/demo-2026-09-06-788172a6/mimi-demo-1080p.mp4">Watch full video</a></p>
 <!-- /project-demo-v1 -->
 
 ## Features
@@ -74,7 +74,7 @@ npm run tauri:dev        # develop on Windows with isolated dev settings
 ./scripts/check.sh       # full check (fmt/clippy/tests/frontend build)
 ```
 
-Build Windows installers on Windows with `npm run tauri -- build -- --locked`; use `./scripts/package-app.sh` on macOS. CI tests or smoke-launches macOS, Windows x64, and Windows ARM64 builds.
+Build Windows installers on Windows with `npm run tauri -- build --config src-tauri/tauri.ci.conf.json -- --locked`; use `./scripts/package-app.sh` on macOS. CI tests or smoke-launches macOS, Windows x64, and Windows ARM64 builds.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
