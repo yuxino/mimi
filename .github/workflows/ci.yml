@@ -373,6 +373,9 @@ jobs:
           $publicKey = (Get-Content "$env:GITHUB_WORKSPACE/src-tauri/tauri.conf.json" | ConvertFrom-Json).plugins.updater.pubkey
           foreach ($installer in @("mimi_${version}_x64_en-US.msi", "mimi_${version}_x64-setup.exe")) {
             cargo run --release --locked --manifest-path src-tauri/Cargo.toml --example verify_updater_signature -- $publicKey "$stagingDir/$installer.sig" "$stagingDir/$installer"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Updater signature verification failed for $installer (exit $LASTEXITCODE)."
+            }
           }
 
       - name: Upload verified Windows release assets
