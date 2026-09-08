@@ -14,6 +14,28 @@ Thank you for improving mimi. Small, focused pull requests are the easiest to re
 2. Bug reports should include the operating system (macOS / Windows) and version, reproduction steps, expected behavior, and actual behavior.
 3. Open an issue before a large feature and explain the use case and UX goal.
 
+## 从源码运行 / Run from source
+
+需要 Rust 1.88+，以及 Node.js 20.19.x、22.13+ 或 24+。macOS 还需 Xcode Command Line Tools 和 `mimi Local Development` 签名身份，或显式设置 `MIMI_CODESIGN_IDENTITY`。
+
+Requires Rust 1.88+ and Node.js 20.19.x, 22.13+, or 24+. macOS also needs the Xcode Command Line Tools and a `mimi Local Development` signing identity or an explicit `MIMI_CODESIGN_IDENTITY`.
+
+```bash
+git clone https://github.com/yuxino/mimi.git
+cd mimi
+npm ci
+npm run tauri:dev        # Windows
+./scripts/dev-app.sh     # macOS
+```
+
+Windows 安装包需在 Windows 上构建 / Build Windows installers on Windows:
+
+```bash
+npm run tauri -- build --config src-tauri/tauri.ci.conf.json -- --locked
+```
+
+macOS 打包使用 / Package on macOS with `./scripts/package-app.sh`.
+
 ## 本地验证 / Local verification
 
 ```bash
