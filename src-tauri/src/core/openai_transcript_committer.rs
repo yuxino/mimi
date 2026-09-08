@@ -82,11 +82,10 @@ impl TimedTextBuffer {
         self.boundaries = self
             .boundaries
             .iter()
-            .filter_map(|boundary| {
-                (boundary.character_count > count).then_some(TimedBoundary {
-                    character_count: boundary.character_count - count,
-                    elapsed_ms: boundary.elapsed_ms,
-                })
+            .filter(|boundary| boundary.character_count > count)
+            .map(|boundary| TimedBoundary {
+                character_count: boundary.character_count - count,
+                elapsed_ms: boundary.elapsed_ms,
             })
             .collect();
         prefix
@@ -400,6 +399,85 @@ mod tests {
             LiveTranslateServerEvent::SubtitleFinalPair { source, translation, .. }
                 if source == "A. B." && translation == "合并译文。"
         )));
+    }
+
+    #[test]
+    fn timed_source_deltas_commit_once_and_keep_the_unicode_tail_aligned() {
+        let mut committer = OpenAITranscriptPairCommitter::new(320, Some("en".into()));
+        let _ = committer.append_source_delta("Hello", Some(500));
+        let _ = committer.append_source_delta(" world.", Some(1_000));
+        let _ = committer.append_source_delta(" 次の文", Some(2_000));
+
+        assert_eq!(
+            committer.append_translation_delta("你好世界。", Some(1_000)),
+            vec![
+                LiveTranslateServerEvent::TranslationDraft("你好世界。".into()),
+                LiveTranslateServerEvent::SubtitleFinalPair {
+                    source: "Hello world.".into(),
+                    language: Some("en".into()),
+                    translation: "你好世界。".into(),
+                },
+                LiveTranslateServerEvent::SourceDraft {
+                    text: " 次の文".into(),
+                    language: Some("en".into()),
+                },
+            ]
+        );
+
+        let _ = committer.append_source_delta("。", Some(2_000));
+        assert_eq!(
+            committer.append_translation_delta("下一句。", Some(2_000)),
+            vec![
+                LiveTranslateServerEvent::TranslationDraft("下一句。".into()),
+                LiveTranslateServerEvent::SubtitleFinalPair {
+                    source: "次の文。".into(),
+                    language: Some("en".into()),
+                    translation: "下一句。".into(),
+                },
+            ]
+        );
+        assert!(committer.finish().is_empty());
+    }
+
+    #[test]
+    fn timed_translation_deltas_commit_once_and_keep_the_unicode_tail_aligned() {
+        let mut committer = OpenAITranscriptPairCommitter::new(320, Some("en".into()));
+        let _ = committer.append_translation_delta("你好", Some(500));
+        let _ = committer.append_translation_delta("世界。", Some(1_000));
+        let _ = committer.append_translation_delta(" 后文", Some(2_000));
+
+        assert_eq!(
+            committer.append_source_delta("Hello world.", Some(1_000)),
+            vec![
+                LiveTranslateServerEvent::SourceDraft {
+                    text: "Hello world.".into(),
+                    language: Some("en".into()),
+                },
+                LiveTranslateServerEvent::SubtitleFinalPair {
+                    source: "Hello world.".into(),
+                    language: Some("en".into()),
+                    translation: "你好世界。".into(),
+                },
+                LiveTranslateServerEvent::TranslationDraft(" 后文".into()),
+            ]
+        );
+
+        let _ = committer.append_translation_delta("。", Some(2_000));
+        assert_eq!(
+            committer.append_source_delta("Next.", Some(2_000)),
+            vec![
+                LiveTranslateServerEvent::SourceDraft {
+                    text: "Next.".into(),
+                    language: Some("en".into()),
+                },
+                LiveTranslateServerEvent::SubtitleFinalPair {
+                    source: "Next.".into(),
+                    language: Some("en".into()),
+                    translation: "后文。".into(),
+                },
+            ]
+        );
+        assert!(committer.finish().is_empty());
     }
 
     #[test]

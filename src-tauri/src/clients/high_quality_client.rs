@@ -522,18 +522,15 @@ impl HighQualityTranslationClient {
         if !self.preview_is_current(preview_id) {
             return;
         }
-        self.emit(LiveTranslateServerEvent::SourceDraft {
-            text: text.clone(),
-            language: language.clone(),
-        });
+        self.emit_preview(
+            preview_id,
+            LiveTranslateServerEvent::SourceDraft {
+                text: text.clone(),
+                language: language.clone(),
+            },
+        );
 
-        let preview_epoch = Arc::clone(&self.preview_epoch);
-        let events = self.events.clone();
-        let partial_handler: PartialHandler = Arc::new(move |partial| {
-            if preview_epoch.load(Ordering::SeqCst) == preview_id {
-                let _ = events.send(LiveTranslateServerEvent::TranslationDraft(partial));
-            }
-        });
+        let partial_handler = self.preview_partial_handler(preview_id);
         let deadline = tokio::time::Instant::now() + MAX_PREVIEW_REQUEST_AGE;
         let result = self
             .translate_with_retry(&text, language.as_deref(), deadline, partial_handler)
@@ -542,7 +539,10 @@ impl HighQualityTranslationClient {
         if self.preview_is_current(preview_id) {
             match result {
                 Ok(translation) => {
-                    self.emit(LiveTranslateServerEvent::TranslationDraft(translation));
+                    self.emit_preview(
+                        preview_id,
+                        LiveTranslateServerEvent::TranslationDraft(translation),
+                    );
                     pipeline_log!("mt preview completed");
                 }
                 Err(error) => {
@@ -551,6 +551,22 @@ impl HighQualityTranslationClient {
             }
         }
         self.clear_preview_task(preview_id).await;
+    }
+
+    fn emit_preview(&self, preview_id: u64, event: LiveTranslateServerEvent) {
+        let _ = self
+            .events
+            .send_if(event, || self.preview_is_current(preview_id));
+    }
+
+    fn preview_partial_handler(&self, preview_id: u64) -> PartialHandler {
+        let client = self.clone();
+        Arc::new(move |partial| {
+            client.emit_preview(
+                preview_id,
+                LiveTranslateServerEvent::TranslationDraft(partial),
+            );
+        })
     }
 
     fn preview_is_current(&self, preview_id: u64) -> bool {
@@ -1239,6 +1255,81 @@ mod tests {
         assert!(inner.preview_task.is_none());
         assert!(!inner.committer.has_pending_text());
         assert_ne!(client.preview_epoch.load(Ordering::SeqCst), preview_id);
+    }
+
+    #[tokio::test]
+    async fn server_final_discards_late_source_partial_and_completed_previews() {
+        let (client, mut events) = test_client(TargetLanguage::SimplifiedChinese, 20);
+        let preview_id = client.advance_preview_epoch();
+        let partial = client.preview_partial_handler(preview_id);
+        assert!(client.prepare_server_final("confirmed").await.is_some());
+        let final_pair = LiveTranslateServerEvent::SubtitleFinalPair {
+            source: "confirmed".into(),
+            language: Some("en".into()),
+            translation: "已确认".into(),
+        };
+        client.emit(final_pair.clone());
+
+        client.emit_preview(
+            preview_id,
+            LiveTranslateServerEvent::SourceDraft {
+                text: "obsolete source".into(),
+                language: Some("en".into()),
+            },
+        );
+        partial("obsolete partial".into());
+        client.emit_preview(
+            preview_id,
+            LiveTranslateServerEvent::TranslationDraft("obsolete completion".into()),
+        );
+
+        assert_eq!(events.try_recv(), Ok(final_pair));
+        assert_eq!(
+            events.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        );
+    }
+
+    #[tokio::test]
+    async fn reset_preview_cannot_overwrite_or_clear_a_new_preview() {
+        let (client, mut events) = test_client(TargetLanguage::SimplifiedChinese, 20);
+        let old_id = client.advance_preview_epoch();
+        let old_partial = client.preview_partial_handler(old_id);
+        client.reset_draft_state().await;
+        let current_id = client.advance_preview_epoch();
+        let current_partial = client.preview_partial_handler(current_id);
+        let current_source = LiveTranslateServerEvent::SourceDraft {
+            text: "new source".into(),
+            language: Some("en".into()),
+        };
+        client.emit_preview(current_id, current_source.clone());
+        current_partial("新的预览".into());
+
+        client.emit_preview(
+            old_id,
+            LiveTranslateServerEvent::SourceDraft {
+                text: "obsolete source".into(),
+                language: Some("en".into()),
+            },
+        );
+        old_partial("obsolete partial".into());
+        old_partial(String::new());
+        client.emit_preview(
+            old_id,
+            LiveTranslateServerEvent::TranslationDraft(String::new()),
+        );
+
+        assert_eq!(events.try_recv(), Ok(current_source));
+        assert_eq!(
+            events.try_recv(),
+            Ok(LiveTranslateServerEvent::TranslationDraft(
+                "新的预览".into()
+            ))
+        );
+        assert_eq!(
+            events.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        );
     }
 
     #[tokio::test]

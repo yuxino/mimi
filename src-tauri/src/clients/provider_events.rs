@@ -101,12 +101,26 @@ fn provider_event_channel_with_capacity(
 
 impl ProviderEventSender {
     pub fn send(&self, event: LiveTranslateServerEvent) -> Result<(), ProviderEventSendError> {
+        self.send_if(event, || true)
+    }
+
+    /// Checks validity in the same critical section as sequence allocation and
+    /// publication. The predicate must be short, synchronous, and must not
+    /// re-enter this sender. An obsolete event is discarded without error.
+    pub fn send_if(
+        &self,
+        event: LiveTranslateServerEvent,
+        is_current: impl FnOnce() -> bool,
+    ) -> Result<(), ProviderEventSendError> {
         // Sequence allocation and lane publication are one tiny synchronous
         // critical section. Provider timers and socket tasks can publish from
         // different Tokio workers; without serialization, sequence 2 could
         // become visible before sequence 1 and let an old draft regress the
         // UI after a newer event.
         let _dispatch = self.inner.dispatch.lock().unwrap();
+        if !is_current() {
+            return Ok(());
+        }
         if self.inner.failed.load(Ordering::SeqCst) {
             return Err(ProviderEventSendError::Backpressure);
         }
@@ -320,6 +334,91 @@ fn overflow_event() -> LiveTranslateServerEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalidated_draft_cannot_overtake_a_final_during_publication() {
+        let (sender, mut receiver) = provider_event_channel();
+        let epoch = AtomicU64::new(1);
+        let final_pair = LiveTranslateServerEvent::SubtitleFinalPair {
+            source: "confirmed".into(),
+            language: Some("en".into()),
+            translation: "已确认".into(),
+        };
+        let (checked_tx, checked_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        let timeout = std::time::Duration::from_secs(5);
+
+        std::thread::scope(|scope| {
+            let sender = &sender;
+            let epoch = &epoch;
+            let final_pair = &final_pair;
+            scope.spawn(move || {
+                checked_rx.recv_timeout(timeout).unwrap();
+                epoch.store(2, Ordering::SeqCst);
+                // Force a final into the old check-then-send gap if publication
+                // is unlocked. With an atomic check/send it must wait instead.
+                let can_publish = sender.inner.dispatch.try_lock().is_ok();
+                if can_publish {
+                    sender.send(final_pair.clone()).unwrap();
+                    resume_tx.send(()).unwrap();
+                } else {
+                    resume_tx.send(()).unwrap();
+                    sender.send(final_pair.clone()).unwrap();
+                }
+            });
+
+            sender
+                .send_if(
+                    LiveTranslateServerEvent::TranslationDraft("obsolete preview".into()),
+                    || {
+                        let was_current = epoch.load(Ordering::SeqCst) == 1;
+                        checked_tx.send(()).unwrap();
+                        resume_rx.recv_timeout(timeout).unwrap();
+                        was_current
+                    },
+                )
+                .unwrap();
+        });
+
+        assert_eq!(receiver.try_recv(), Ok(final_pair));
+        assert_eq!(receiver.try_recv(), Err(mpsc::error::TryRecvError::Empty));
+    }
+
+    #[test]
+    fn stale_drafts_are_discarded_without_suppressing_current_drafts() {
+        for draft in [
+            LiveTranslateServerEvent::SourceDraft {
+                text: "current source".into(),
+                language: Some("en".into()),
+            },
+            LiveTranslateServerEvent::TranslationDraft("当前译文".into()),
+        ] {
+            let (sender, mut receiver) = provider_event_channel();
+            let epoch = AtomicU64::new(1);
+            sender
+                .send_if(draft.clone(), || epoch.load(Ordering::SeqCst) == 1)
+                .unwrap();
+            assert_eq!(receiver.try_recv(), Ok(draft.clone()));
+
+            epoch.store(2, Ordering::SeqCst);
+            sender
+                .send(LiveTranslateServerEvent::TranslationStarted)
+                .unwrap();
+            sender
+                .send_if(draft.clone(), || epoch.load(Ordering::SeqCst) == 1)
+                .unwrap();
+            assert_eq!(
+                receiver.try_recv(),
+                Ok(LiveTranslateServerEvent::TranslationStarted)
+            );
+            assert_eq!(receiver.try_recv(), Err(mpsc::error::TryRecvError::Empty));
+
+            sender
+                .send_if(draft.clone(), || epoch.load(Ordering::SeqCst) == 2)
+                .unwrap();
+            assert_eq!(receiver.try_recv(), Ok(draft));
+        }
+    }
 
     #[tokio::test]
     async fn drafts_are_latest_only() {
