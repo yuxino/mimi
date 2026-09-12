@@ -1,0 +1,10 @@
+{
+  "format": "yuxino-installer-lock-v2",
+  "source": "yuxino/desktop-installer",
+  "version": "2.1.1",
+  "product": "mimi",
+  "repository": "https://github.com/yuxino/mimi",
+  "size": 978546,
+  "unpackedSize": 3327544,
+  "sha256": "1d006ff44c73d89709479f2d0e1c4e18fe68dceb45573062c53a6dfdb74abb08"
+}

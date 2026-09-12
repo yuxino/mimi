@@ -9,7 +9,7 @@ export interface UpdateCandidate {
   readonly version: string;
   readonly notes?: string;
   download(onEvent: (event: UpdateDownloadEvent) => void): Promise<void>;
-  install(options?: { restartAfterInstall?: boolean }): Promise<void>;
+  install(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -42,10 +42,11 @@ export async function createTauriSoftwareUpdater(): Promise<SoftwareUpdater> {
     import("@tauri-apps/plugin-updater"),
   ]);
   const currentVersion = await getVersion();
+  const platform = isWindowsUserAgent() ? "windows" : "other";
 
   return {
     currentVersion,
-    platform: isWindowsUserAgent() ? "windows" : "other",
+    platform,
     async check() {
       const update = await check({ timeout: 15_000 });
       if (!update) return null;
@@ -54,7 +55,10 @@ export async function createTauriSoftwareUpdater(): Promise<SoftwareUpdater> {
         version: update.version,
         notes: update.body,
         download: (onEvent) => update.download(onEvent),
-        install: (options) => update.install(options),
+        // The Windows installer owns relaunching the updated executable. On
+        // macOS, keep the separate, explicit Restart action in Settings.
+        install: () =>
+          update.install({ restartAfterInstall: platform === "windows" }),
         close: () => update.close(),
       };
     },

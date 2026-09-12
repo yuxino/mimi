@@ -101,7 +101,7 @@ export function SoftwareUpdate() {
       if (interaction.action === "install") {
         setState({ kind: "installing", update, platform: updater.platform });
         try {
-          await candidate.install({ restartAfterInstall: false });
+          await candidate.install();
           setState(
             updater.platform === "windows"
               ? { kind: "windowsInstallerStarted", update }
@@ -227,7 +227,7 @@ function actionLabel(
       return I18N.settings.downloadUpdate;
     case "downloaded":
       return platform === "windows"
-        ? I18N.settings.installAndCloseWindows
+        ? I18N.settings.installAndRestartWindows
         : I18N.settings.installUpdate;
     case "restartReady":
       return I18N.settings.restartAndFinishUpdate;

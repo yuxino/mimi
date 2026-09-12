@@ -51,8 +51,12 @@ On macOS, installation replaces the current bundle and returns control to the
 UI; Mimi then displays **Restart and finish update** and calls the official
 process plugin only after the user clicks it. On Windows, Tauri must exit the
 running application before invoking the installer. The UI therefore labels the
-action **Install and close Mimi**, passes `restartAfterInstall: false`, and does
-not promise an automatic relaunch. Linux follows the macOS restart-ready path
+action **Install and restart Mimi** and passes `restartAfterInstall: true`.
+The native updater adapter owns this option, so both initial installation and
+an installation retry request the same behavior. With the configured passive
+NSIS installer, the official updater passes `/UPDATE /P /R`: Windows displays
+installation progress and reopens Mimi after a successful update. The updater
+does not restart Windows itself. Linux follows the macOS restart-ready path
 if a Linux artifact is added in the future, but the current public matrix
 remains macOS Apple Silicon and Windows x64.
 

@@ -36,6 +36,11 @@ https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3
 
 Bring your own provider API credentials; usage charges may apply. Credentials are stored in the OS credential store.
 
+To update, open **Settings → General → Software Update**. Mimi downloads the
+update with progress, then lets you install it. Windows reopens Mimi after
+installation; macOS offers a separate **Restart and Finish Update** action.
+Versions older than v1.3.8 need one manual installation to enable in-app updates.
+
 ### Platform support
 
 - **Apple silicon macOS 13+**: Releases provide an ad-hoc-signed DMG without Apple notarization. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Updates may trigger recording or Keychain permission prompts again.
