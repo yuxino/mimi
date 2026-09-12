@@ -445,24 +445,15 @@ jobs:
             fi
           fi
 
-          generate_notes_args=(-f tag_name="$GITHUB_REF_NAME")
-          if [[ -n "$latest_tag" ]]; then
-            generate_notes_args+=(-f previous_tag_name="$latest_tag")
-          fi
-          gh api --method POST "repos/$GH_REPO/releases/generate-notes" \
-            "${generate_notes_args[@]}" --jq '.body' > generated-notes.md
-          bootstrap=0
-          if [[ -z "$latest_tag" ]] || ! gh release download "$latest_tag" --pattern latest.json --dir "$RUNNER_TEMP/previous-updater" >/dev/null 2>&1; then
-            bootstrap=1
-          fi
-          MIMI_BOOTSTRAP="$bootstrap" node -e '
+          node -e '
             const fs = require("node:fs");
-            const generated = fs.readFileSync("generated-notes.md", "utf8").trim();
-            const bootstrap = process.env.MIMI_BOOTSTRAP === "1"
-              ? "## In-app updater bootstrap\n\nThis is the first published Mimi release that can install future signed updates in the app. Users upgrading from the previous public release, v1.3.6, must download and install this release manually once. After that, use Settings → Software Update for later releases.\n\n"
-              : "";
-            const platform = "## Installation notes\n\nThe macOS package is ad-hoc signed and not notarized; Gatekeeper, Screen & System Audio Recording, or Keychain approval may be required again. Windows packages are not Authenticode-signed, so SmartScreen may warn. The updater signature verifies update integrity but does not replace platform code signing.\n\n";
-            fs.writeFileSync("release-notes.md", `${bootstrap}${platform}${generated}\n`);
+            const path = `docs/releases/${process.env.GITHUB_REF_NAME}.md`;
+            const notes = fs.readFileSync(path, "utf8").trim();
+            if (!/^## English$/m.test(notes) || !/^## 中文$/m.test(notes) ||
+                notes.indexOf("## English") > notes.indexOf("## 中文")) {
+              throw new Error(`${path} must contain reviewed English-first bilingual release notes`);
+            }
+            fs.writeFileSync("release-notes.md", `${notes}\n`);
           '
 
           pub_date="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
