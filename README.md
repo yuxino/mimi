@@ -14,10 +14,10 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3
+https://github.com/user-attachments/assets/24efa9f4-5793-4c03-919b-18405fec2f59
 
-<p align="center">Watch an English video with discreet subtitles, and switch Immersive Mode with a shortcut.</p>
-<p align="center"><a href="docs/demos/README.md">Video details and credits</a></p>
+<p align="center">A complete 4K / 60 fps tour with English female narration, captions, and original film audio.</p>
+<p align="center"><a href="https://mimi.yuxino.cn/en/#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">Video details and credits</a></p>
 <!-- /project-demo-v1 -->
 
 ## Features

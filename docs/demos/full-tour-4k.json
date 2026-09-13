@@ -1,0 +1,81 @@
+{
+  "version": "1.3.12",
+  "source_commit": "37d28e3d33e943982b8ffbcfb1394b25f78f673f",
+  "date": "2026-09-14",
+  "native_end_to_end": false,
+  "duration_seconds": 125,
+  "dimensions": [
+    3840,
+    2160
+  ],
+  "fps": 60,
+  "frames": 7500,
+  "languages": [
+    "zh",
+    "en"
+  ],
+  "recording": "Actual production frontend operated in an isolated documentation host. Native system audio, windows and secure storage use a demonstration adapter. Continuous interface captures edited and framed with Remotion. No new cloud-service request or personal credentials accessed.",
+  "subtitles": "Previously recorded real cloud-service events from the public Mimi demo, replayed unaltered at original received_at timestamps.",
+  "film": {
+    "title": "Sintel",
+    "copyright": "Blender Foundation",
+    "url": "https://www.sintel.org",
+    "license": "CC BY 3.0",
+    "license_url": "https://creativecommons.org/licenses/by/3.0/",
+    "source_start_seconds": 127,
+    "excerpt_seconds": 19.5,
+    "changes": "Excerpt re-encoded and displayed with Mimi subtitle overlays. Original film audio mixed directly into the live scene; no narration or music over the dialogue."
+  },
+  "voice": {
+    "zh": "Microsoft zh-CN-XiaoyiNeural",
+    "en": "Microsoft en-US-AnaNeural"
+  },
+  "music": "Original synthesized score, ducked beneath narration and silent during the film scene.",
+  "chapters": [
+    {
+      "id": "intro",
+      "start": 0,
+      "duration": 12
+    },
+    {
+      "id": "service",
+      "start": 12,
+      "duration": 15
+    },
+    {
+      "id": "language",
+      "start": 27,
+      "duration": 13
+    },
+    {
+      "id": "preview",
+      "start": 40,
+      "duration": 10
+    },
+    {
+      "id": "live",
+      "start": 50,
+      "duration": 24
+    },
+    {
+      "id": "controls",
+      "start": 74,
+      "duration": 15
+    },
+    {
+      "id": "appearance",
+      "start": 89,
+      "duration": 13
+    },
+    {
+      "id": "general",
+      "start": 102,
+      "duration": 13
+    },
+    {
+      "id": "outro",
+      "start": 115,
+      "duration": 10
+    }
+  ]
+}

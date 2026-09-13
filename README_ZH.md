@@ -14,10 +14,10 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-https://github.com/user-attachments/assets/3f2be409-6f43-407e-9bca-a8e4d3592dc3
+https://github.com/user-attachments/assets/b6af8840-248f-436a-9015-5d2a5b20a432
 
-<p align="center">播放英文视频，按快捷键切换沉浸模式，让字幕融入画面。</p>
-<p align="center"><a href="docs/demos/README.md">视频说明与来源</a></p>
+<p align="center">完整功能演示，4K / 60 帧，中文女声旁白、字幕与电影原声。</p>
+<p align="center"><a href="https://mimi.yuxino.cn/en/#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">演示说明与来源</a></p>
 <!-- /project-demo-v1 -->
 
 ## 功能
