@@ -16,4 +16,4 @@ Film: *Sintel*, © Blender Foundation, [sintel.org](https://www.sintel.org), [CC
 
 Voice: Microsoft Xiaoyi Neural (Chinese), Aria Neural (English), at natural pitch; no real person's voice was cloned. Artwork uses the current Mimi pink-haired headphone character. Native footage was recorded at 3024 × 1964 with variable frame timing, then cropped for the film frame. The final composition and motion graphics are 60 fps; the source movie is 24 fps. Hardware output remained muted while native system audio was captured internally.
 
-[English tour](https://mimi.yuxino.cn/en/#demo) · [中文版](https://mimi.yuxino.cn/#demo)
+[English tour](https://mimi.yuxino.cn/en/?lang=en#demo) · [中文版](https://mimi.yuxino.cn/?lang=zh#demo)

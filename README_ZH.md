@@ -17,7 +17,7 @@
 https://github.com/user-attachments/assets/342c049c-1bed-44da-b4d2-ba55dad1a49c
 
 <p align="center">全新原生录制，4K / 60 帧，中文女声旁白、字幕与电影原声。</p>
-<p align="center"><a href="https://mimi.yuxino.cn/en/#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">演示说明与来源</a></p>
+<p align="center"><a href="https://mimi.yuxino.cn/en/?lang=en#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/?lang=zh#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">演示说明与来源</a></p>
 <!-- /project-demo-v1 -->
 
 ## 功能
