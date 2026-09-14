@@ -14,7 +14,7 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-https://github.com/user-attachments/assets/24efa9f4-5793-4c03-919b-18405fec2f59
+https://github.com/user-attachments/assets/1cfde3d3-a732-4192-a496-e1d59d4f88d5
 
 <p align="center">A complete 4K / 60 fps tour with English female narration, captions, and original film audio.</p>
 <p align="center"><a href="https://mimi.yuxino.cn/en/#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">Video details and credits</a></p>
