@@ -14,15 +14,7 @@
 <!-- project-demo-v1 -->
 ## Demo
 
-<details>
-<summary>
-  <picture><img src="docs/demos/full-tour-en-poster.webp" width="960" alt="Mimi full feature tour cover in English"></picture>
-  <br><strong>Expand to watch here · 4K / 60 fps · English</strong>
-</summary>
-
 https://github.com/user-attachments/assets/5acd46bb-e6b5-4bb5-b280-d70d4e0cdbb4
-
-</details>
 
 <p align="center">A fresh native recording in 4K / 60 fps, with English female narration, captions, and original film audio.</p>
 <p align="center"><a href="https://mimi.yuxino.cn/en/?lang=en#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/?lang=zh#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">Video details and credits</a></p>
