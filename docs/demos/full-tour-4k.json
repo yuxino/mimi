@@ -30,7 +30,7 @@
     "zh": "Microsoft zh-CN-XiaoyiNeural",
     "en": "Microsoft en-US-AnaNeural"
   },
-  "music": "Original synthesized score, ducked beneath narration and silent during the film scene.",
+  "music": "Original synthesized score, ducked beneath narration and silent during the film scene. No breath-like chapter transition effects.",
   "chapters": [
     {
       "id": "intro",
@@ -77,5 +77,9 @@
       "start": 115,
       "duration": 10
     }
+  ],
+  "revisions": [
+    "The first frame is a complete 4K cover; the original intro motion resumes at 2.5 seconds without shifting chapters.",
+    "Removed synthetic breath-like transition sounds."
   ]
 }
