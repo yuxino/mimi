@@ -9,14 +9,14 @@
   </p>
 </div>
 
-`mimi` means “ear” in Japanese. It turns the system audio playing on your device into live subtitles and provider-dependent translation into Simplified Chinese, English, or Japanese.
+Mimi shows live subtitles in a floating window for films, live streams, lessons, and games playing on your computer. Your chosen cloud service transcribes the system audio or translates it into Simplified Chinese, English, or Japanese; available languages and modes depend on the service. The name `mimi` means “ear” in Japanese.
 
 <!-- project-demo-v1 -->
 ## Demo
 
 https://github.com/user-attachments/assets/5acd46bb-e6b5-4bb5-b280-d70d4e0cdbb4
 
-<p align="center">A fresh native recording in 4K / 60 fps, with English female narration, captions, and original film audio.</p>
+<p align="center">A 4K / 60 fps tour of service setup, subtitle controls, and Immersive Mode in the macOS app, with English narration, captions, and original film audio.</p>
 <p align="center"><a href="https://mimi.yuxino.cn/en/?lang=en#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/?lang=zh#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">Video details and credits</a></p>
 <!-- /project-demo-v1 -->
 
@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/5acd46bb-e6b5-4bb5-b280-d70d4e0cdbb4
 
 - **Live subtitles and translation** — captures system output audio; source languages, targets, and quality modes vary by provider.
 - **Service configurations** — save and switch between services without repeatedly entering credentials.
-- **Flexible overlay** — move, resize, collapse, pause, enable click-through, or use Immersive Mode.
+- **Subtitle overlay** — move, resize, collapse, pause, enable click-through, or use Immersive Mode.
 - **In-app updates** — check and install updates in Settings.
 - **Privacy** — no mimi account, microphone, or screen capture; no saved audio or subtitles; audio goes only to the active provider.
 

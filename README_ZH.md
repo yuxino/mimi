@@ -9,14 +9,14 @@
   </p>
 </div>
 
-`mimi` 在日语中意为“耳朵”。它把设备正在播放的系统音频变成实时字幕，并按服务商能力翻译成简体中文、英语或日语。
+Mimi 为电脑上播放的电影、直播、网课和游戏显示实时悬浮字幕。你选择的云服务会识别系统音频，或将其翻译成简体中文、英语、日语；可用语言和模式随服务商而异。`mimi` 在日语中意为“耳朵”。
 
 <!-- project-demo-v1 -->
 ## 演示
 
 https://github.com/user-attachments/assets/342c049c-1bed-44da-b4d2-ba55dad1a49c
 
-<p align="center">全新原生录制，4K / 60 帧，中文女声旁白、字幕与电影原声。</p>
+<p align="center">在 macOS 应用中演示服务配置、字幕控制和沉浸模式。4K / 60 帧，含中文旁白、字幕与电影原声。</p>
 <p align="center"><a href="https://mimi.yuxino.cn/en/?lang=en#demo">Watch in English</a> · <a href="https://mimi.yuxino.cn/?lang=zh#demo">观看中文版</a> · <a href="docs/demos/full-tour-4k.md">演示说明与来源</a></p>
 <!-- /project-demo-v1 -->
 
