@@ -49,4 +49,8 @@ Windows 安装完成后会重新打开 Mimi；macOS 可点击 **重新启动并�
 
 构建与贡献请参阅 [贡献指南](CONTRIBUTING.md)，安全问题请参阅 [安全政策](SECURITY.md)。
 
+## 社区友链
+
+[LINUX DO](https://linux.do/)
+
 [MIT](LICENSE) © 2026 yuxino

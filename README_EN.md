@@ -50,4 +50,8 @@ Versions older than v1.3.8 need one manual installation to enable in-app updates
 
 See the [contributing guide](CONTRIBUTING.md) for building and contributing, and the [security policy](SECURITY.md) for reporting vulnerabilities.
 
+## Community links
+
+[LINUX DO](https://linux.do/)
+
 [MIT](LICENSE) © 2026 yuxino
