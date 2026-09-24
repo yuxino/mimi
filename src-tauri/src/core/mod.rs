@@ -11,4 +11,5 @@ pub mod pcm16;
 pub mod protocols;
 pub mod provider;
 pub mod session;
+pub mod session_archive;
 pub mod subtitle_reducer;

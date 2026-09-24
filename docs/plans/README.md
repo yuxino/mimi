@@ -32,6 +32,9 @@ Git history, not on the active documentation path.
 
 ## Runtime behavior
 
+- `2026-09-24-session-export-design.md` — default-off session retention,
+  bounded in-memory audio and transcript buffers, and explicit native export.
+
 - `2026-09-07-audio-http-lifecycle-design.md` — cancellation-safe audio drain,
   bounded Qwen responses, and HTTP dependency consolidation.
 - `2026-08-23-alibaba-pipeline-design.md` — current Alibaba modes, subtitle

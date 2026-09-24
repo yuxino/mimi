@@ -30,6 +30,7 @@ import {
 } from "../../lib/types";
 import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
 import { ServiceProfiles } from "./ServiceProfiles";
+import { SessionExport } from "./SessionExport";
 import { SoftwareUpdate } from "./SoftwareUpdate";
 import { useSettingsTheme, type SettingsTheme } from "./useSettingsTheme";
 import {
@@ -552,6 +553,7 @@ export function SettingsView() {
 
                   <SoftwareUpdate />
                   </SettingsSection>
+                <SessionExport />
               </div>
             </div>
           </div>

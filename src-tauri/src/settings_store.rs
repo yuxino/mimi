@@ -73,6 +73,8 @@ pub struct Preferences {
     /// UI language override. `None` and `Some("system")` both follow the
     /// operating-system language.
     pub ui_language: Option<String>,
+    pub retain_session_history: bool,
+    pub record_session_audio: bool,
 }
 
 impl Default for Preferences {
@@ -88,6 +90,8 @@ impl Default for Preferences {
             overlay_frame: None,
             frame_layout_version: 0,
             ui_language: None,
+            retain_session_history: false,
+            record_session_audio: false,
         }
     }
 }
@@ -1153,6 +1157,21 @@ fn sync_directory(_path: &Path) {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn legacy_preferences_keep_both_export_options_off() {
+        let preferences: super::Preferences = serde_json::from_str("{}").unwrap();
+        assert!(!preferences.retain_session_history);
+        assert!(!preferences.record_session_audio);
+        let enabled = super::Preferences {
+            retain_session_history: true,
+            record_session_audio: true,
+            ..Default::default()
+        };
+        let restored: super::Preferences =
+            serde_json::from_str(&serde_json::to_string(&enabled).unwrap()).unwrap();
+        assert!(restored.retain_session_history && restored.record_session_audio);
+    }
+
     use super::*;
     use std::cell::Cell;
     use std::sync::Arc;

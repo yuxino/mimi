@@ -25,6 +25,8 @@ const SETTINGS: SettingsSnapshot = {
   subtitleBlendsWithBackground: false,
   isOverlayLocked: false,
   uiLanguage: null,
+  retainSessionHistory: false,
+  recordSessionAudio: false,
 };
 
 describe("mergeSettingsSnapshot", () => {

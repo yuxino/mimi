@@ -1576,3 +1576,23 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.session-export__privacy {
+  margin: 0 0 18px;
+}
+
+.session-export__details {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.session-export__details > p {
+  margin: 0;
+}
+
+.session-export__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

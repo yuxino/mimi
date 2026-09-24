@@ -35,6 +35,8 @@ const BASE_SETTINGS: SettingsSnapshot = {
   subtitleBlendsWithBackground: false,
   isOverlayLocked: false,
   uiLanguage: null,
+  retainSessionHistory: false,
+  recordSessionAudio: false,
 };
 
 describe("provider capabilities", () => {

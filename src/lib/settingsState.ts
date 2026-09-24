@@ -111,6 +111,9 @@ export function mergeSettingsSnapshot(
       current.subtitleBlendsWithBackground,
     isOverlayLocked: draft.isOverlayLocked ?? current.isOverlayLocked,
     uiLanguage: draft.uiLanguage ?? current.uiLanguage,
+    retainSessionHistory:
+      draft.retainSessionHistory ?? current.retainSessionHistory,
+    recordSessionAudio: draft.recordSessionAudio ?? current.recordSessionAudio,
   };
 }
 
