@@ -67,6 +67,8 @@ export interface SettingsSnapshot {
   isOverlayLocked: boolean;
   /** UI language override; `null` or `system` follows the system language. */
   uiLanguage: UiLanguage | null;
+  retainSessionHistory: boolean;
+  recordSessionAudio: boolean;
 }
 
 export type UiLanguage = "system" | "zh" | "en" | "ja";
@@ -81,6 +83,8 @@ export interface SettingsDraft {
   subtitleBlendsWithBackground?: boolean;
   isOverlayLocked?: boolean;
   uiLanguage?: UiLanguage;
+  retainSessionHistory?: boolean;
+  recordSessionAudio?: boolean;
 }
 
 export type ServiceProvider =
@@ -406,3 +410,14 @@ export function overlayPhaseColor(
   const info = OVERLAY_ACTIVITY_PHASES[phase];
   return hexToRgba(info.color, info.baseOpacity * opacity);
 }
+
+/** Content-free metadata for the opt-in in-memory session archive. */
+export interface SessionArchiveState {
+  transcriptCount: number;
+  transcriptLimited: boolean;
+  audioBytes: number;
+  audioLimited: boolean;
+  sampleRate: number;
+}
+
+export type SessionExportKind = "transcript" | "audio";

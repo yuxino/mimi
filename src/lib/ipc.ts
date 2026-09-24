@@ -10,6 +10,8 @@ import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ProviderCredentialsInput,
   SessionStateEvent,
+  SessionArchiveState,
+  SessionExportKind,
   ServiceProvider,
   SettingsDraft,
   SettingsSnapshot,
@@ -213,4 +215,16 @@ export function listenSettingsNavigation(
  * listener. This matters only when the native window had to be recreated. */
 export function announceSettingsNavigationReady(): Promise<void> {
   return emit("settings-navigation-ready");
+}
+
+export function sessionArchiveState(): Promise<SessionArchiveState> {
+  return invoke("session_archive_state");
+}
+
+export function sessionExport(kind: SessionExportKind): Promise<boolean> {
+  return invoke("session_export", { kind });
+}
+
+export function sessionArchiveClear(): Promise<void> {
+  return invoke("session_archive_clear");
 }

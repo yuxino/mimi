@@ -8,7 +8,8 @@ default, adds an OpenAI Realtime end-to-end provider, and gives users a clear,
 professional place to manage more than one service profile.
 
 This change must preserve mimi's privacy boundaries: capture system audio only,
-never persist audio or subtitle text, keep API keys in the operating-system
+never automatically persist audio or subtitle text (explicit opt-in exports are
+defined in `2026-09-24-session-export-design.md`), keep API keys in the operating-system
 credential store, and keep diagnostics content-free.
 
 ## Product decisions

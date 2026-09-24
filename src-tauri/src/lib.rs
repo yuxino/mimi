@@ -5,6 +5,7 @@ mod audio;
 mod clients;
 mod commands;
 mod core;
+mod session_export;
 mod session_manager;
 mod settings_store;
 mod windows;
@@ -50,6 +51,7 @@ pub fn run() {
     let builder = builder.plugin(windows_startup::single_instance_plugin());
     let builder = builder
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -271,6 +273,9 @@ pub fn run() {
             commands::profile_delete,
             commands::profile_save_credentials,
             commands::profile_delete_api_key,
+            crate::session_export::session_archive_state,
+            crate::session_export::session_archive_clear,
+            crate::session_export::session_export,
             commands::session_start,
             commands::session_stop,
             commands::session_toggle_paused,

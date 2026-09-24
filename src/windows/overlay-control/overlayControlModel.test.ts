@@ -26,6 +26,8 @@ const BASE_SETTINGS: SettingsSnapshot = {
   subtitleBlendsWithBackground: false,
   isOverlayLocked: false,
   uiLanguage: null,
+  retainSessionHistory: false,
+  recordSessionAudio: false,
 };
 
 describe("overlay control panel model", () => {

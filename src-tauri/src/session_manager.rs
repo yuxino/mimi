@@ -443,6 +443,8 @@ pub struct SessionManager {
     settings: Arc<SettingsStore>,
     controller: Arc<Mutex<TranslationSessionController>>,
     audio: Arc<Mutex<SystemAudioCapture>>,
+    recording: Arc<Mutex<crate::core::session_archive::AudioRecording>>,
+    archive_revision: Arc<AtomicU64>,
     client: Arc<Mutex<Option<TranslationClient>>>,
     client_generation: Arc<AtomicU64>,
     audio_pipeline: Arc<Mutex<Option<Arc<AudioSendPipeline>>>>,
@@ -498,6 +500,8 @@ impl SessionManager {
             settings,
             controller: Arc::new(Mutex::new(TranslationSessionController::default())),
             audio: Arc::new(Mutex::new(audio_capture)),
+            recording: Default::default(),
+            archive_revision: Default::default(),
             client: Arc::new(Mutex::new(None)),
             client_generation: Arc::new(AtomicU64::new(NO_GENERATION)),
             audio_pipeline: Arc::new(Mutex::new(None)),
@@ -634,6 +638,16 @@ impl SessionManager {
         self.stopping_tail_generation
             .store(NO_GENERATION, Ordering::SeqCst);
         self.is_paused.store(false, Ordering::SeqCst);
+        let preferences = self.settings.preferences();
+        self.archive_revision.fetch_add(1, Ordering::SeqCst);
+        self.controller.lock().unwrap().archive_mut().begin(
+            preferences.retain_session_history,
+            crate::core::subtitle_reducer::now_epoch_ms(),
+        );
+        self.recording
+            .lock()
+            .unwrap()
+            .begin(preferences.record_session_audio && !self.is_ui_test());
         if clear_subtitles {
             self.controller.lock().unwrap().clear_subtitles();
         }
@@ -838,6 +852,7 @@ impl SessionManager {
                 move |data| {
                     let manager = Arc::clone(&send_manager);
                     Box::pin(async move {
+                        manager.record_audio(generation, audio_format.sample_rate_hz, &data);
                         let client = manager.client_for_generation(generation);
                         match client {
                             Some(client) => client.send_audio(&data).await.map_err(|_| ()),
@@ -1268,7 +1283,65 @@ impl SessionManager {
         }
     }
 
+    fn record_audio(&self, generation: u64, sample_rate: u32, data: &[u8]) {
+        let mut recording = self.recording.lock().unwrap();
+        if (self.is_generation_current(generation)
+            || self.stopping_tail_generation.load(Ordering::SeqCst) == generation)
+            && !self.is_paused()
+        {
+            recording.append(sample_rate, data);
+        }
+    }
+
+    pub fn archive_revision(&self) -> u64 {
+        self.archive_revision.load(Ordering::SeqCst)
+    }
+
+    pub fn apply_archive_opt_out(&self, history: Option<bool>, audio: Option<bool>) {
+        if history == Some(false) || audio == Some(false) {
+            self.archive_revision.fetch_add(1, Ordering::SeqCst);
+        }
+        if history == Some(false) {
+            self.controller.lock().unwrap().archive_mut().disable();
+        }
+        if audio == Some(false) {
+            self.recording.lock().unwrap().begin(false);
+        }
+    }
+
+    pub fn archive_state(&self) -> crate::core::session_archive::ArchiveState {
+        let controller = self.controller.lock().unwrap();
+        let recording = self.recording.lock().unwrap();
+        crate::core::session_archive::ArchiveState {
+            transcript_count: controller.archive().count(),
+            transcript_limited: controller.archive().limited,
+            audio_bytes: recording.len(),
+            audio_limited: recording.limited,
+            sample_rate: recording.sample_rate,
+        }
+    }
+
+    pub fn export_transcript(&self) -> Option<Vec<u8>> {
+        self.controller
+            .lock()
+            .unwrap()
+            .archive()
+            .export()
+            .map(String::into_bytes)
+    }
+
+    pub fn export_audio(&self) -> Option<Vec<u8>> {
+        self.recording.lock().unwrap().export()
+    }
+
+    pub fn clear_archive(&self) {
+        self.archive_revision.fetch_add(1, Ordering::SeqCst);
+        self.controller.lock().unwrap().archive_mut().clear();
+        self.recording.lock().unwrap().clear();
+    }
+
     pub fn clear_subtitles(self: &Arc<Self>) {
+        self.archive_revision.fetch_add(1, Ordering::SeqCst);
         self.controller.lock().unwrap().clear_subtitles();
         self.publish_state();
     }
@@ -2167,6 +2240,30 @@ impl SessionManager {
         self.controller.lock().unwrap().begin_connecting();
         self.publish_state();
         self.controller.lock().unwrap().did_connect();
+        // Exercise the real archive and native save dialog in credential-free
+        // UI QA. These are explicitly synthetic samples, never captured audio.
+        let preferences = self.settings.preferences();
+        if preferences.retain_session_history {
+            self.controller
+                .lock()
+                .unwrap()
+                .handle(LiveTranslateServerEvent::SubtitleFinalPair {
+                    source: "Mimi export test: this is synthetic sample text.".into(),
+                    language: Some("en".into()),
+                    translation: "Mimi 导出测试：这是合成的示例文字。".into(),
+                });
+        }
+        if preferences.record_session_audio {
+            let samples: Vec<u8> = (0..16_000)
+                .flat_map(|index| {
+                    let phase = index as f32 * std::f32::consts::TAU * 440.0 / 16_000.0;
+                    ((phase.sin() * 1_000.0) as i16).to_le_bytes()
+                })
+                .collect();
+            let mut recording = self.recording.lock().unwrap();
+            recording.begin(true);
+            recording.append(16_000, &samples);
+        }
         self.publish_state();
         pipeline_log!("ui-test synthetic session listening");
     }

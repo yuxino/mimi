@@ -12,6 +12,9 @@ description = "Allows the settings window to manage the live-subtitle session, p
 commands.allow = [
   "settings_save",
   "app_is_ui_test",
+  "session_archive_state",
+  "session_archive_clear",
+  "session_export",
   "app_open_releases",
   "profile_create",
   "profile_update",

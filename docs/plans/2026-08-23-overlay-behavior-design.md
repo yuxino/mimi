@@ -4,7 +4,8 @@
 
 The overlay is a Tauri window rendered by React and backed by the native session
 state. Streaming drafts are replaceable; confirmed pairs form bounded, durable
-on-screen history. No audio or subtitle content is persisted.
+on-screen history. Content is not automatically persisted. The separate opt-in
+session export follows `2026-09-24-session-export-design.md`.
 
 The timeline uses one scrolling flow for confirmed history plus the active tail.
 Long text wraps, the newest content remains visible, and draft presentation is

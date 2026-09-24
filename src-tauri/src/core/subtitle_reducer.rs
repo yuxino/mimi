@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 
 pub struct SubtitleReducer {
     pub snapshot: SubtitleSnapshot,
+    pub archive: super::session_archive::TranscriptArchive,
     max_history_count: usize,
     max_pending_source_count: usize,
     pending_final_sources: VecDeque<String>,
@@ -16,6 +17,7 @@ impl SubtitleReducer {
     pub fn new(max_history_count: usize) -> Self {
         Self {
             snapshot: SubtitleSnapshot::empty(),
+            archive: Default::default(),
             max_history_count,
             max_pending_source_count: max_history_count.max(1),
             pending_final_sources: VecDeque::new(),
@@ -79,6 +81,7 @@ impl SubtitleReducer {
                 self.append_history_if_possible(source, translation);
             }
             SubtitleEvent::Clear => {
+                self.archive.clear();
                 self.snapshot = SubtitleSnapshot::empty();
                 self.pending_final_sources.clear();
                 self.separate_stream_alignment_lost = false;
@@ -110,6 +113,7 @@ impl SubtitleReducer {
         if self.snapshot.history.last() == Some(&pair) {
             return;
         }
+        self.archive.append(&pair);
         self.snapshot.history.push(pair);
         if self.snapshot.history.len() > self.max_history_count {
             let overflow = self.snapshot.history.len() - self.max_history_count;
@@ -148,6 +152,46 @@ pub(crate) fn now_epoch_ms() -> u64 {
 mod tests {
     use super::*;
     use crate::core::models::{SubtitleLine, SubtitlePair};
+
+    #[test]
+    fn opted_in_archive_outlives_overlay_history_and_excludes_drafts() {
+        let mut reducer = SubtitleReducer::new(2);
+        reducer.archive.begin(true, 0);
+        reducer.apply(SubtitleEvent::SourceDraft("unconfirmed source".into()));
+        reducer.apply(SubtitleEvent::TranslationDraft(
+            "unconfirmed translation".into(),
+        ));
+        assert_eq!(reducer.archive.count(), 0);
+        for i in 0..25 {
+            reducer.apply(SubtitleEvent::FinalPair {
+                source: format!("synthetic source {i}"),
+                translation: format!("synthetic translation {i}"),
+            });
+        }
+        assert_eq!(reducer.snapshot.history.len(), 2);
+        assert_eq!(reducer.archive.count(), 25);
+        reducer.reset_transient();
+        assert_eq!(reducer.archive.count(), 25);
+        reducer.apply(SubtitleEvent::Clear);
+        assert_eq!(reducer.archive.count(), 0);
+    }
+
+    #[test]
+    fn final_duplicates_and_empty_pairs_do_not_enter_archive() {
+        let mut reducer = SubtitleReducer::default();
+        reducer.archive.begin(true, 0);
+        for _ in 0..2 {
+            reducer.apply(SubtitleEvent::FinalPair {
+                source: "synthetic".into(),
+                translation: "test".into(),
+            });
+        }
+        reducer.apply(SubtitleEvent::FinalPair {
+            source: "".into(),
+            translation: "test".into(),
+        });
+        assert_eq!(reducer.archive.count(), 1);
+    }
 
     #[test]
     fn subtitle_reducer_starts_empty() {

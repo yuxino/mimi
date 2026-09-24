@@ -93,6 +93,8 @@ const INITIAL_SETTINGS: SettingsSnapshot = {
   subtitleBlendsWithBackground: false,
   isOverlayLocked: false,
   uiLanguage: null,
+  retainSessionHistory: false,
+  recordSessionAudio: false,
 };
 
 interface StoreState {

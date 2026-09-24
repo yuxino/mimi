@@ -32,6 +32,9 @@ Git history, not on the active documentation path.
 
 ## Runtime behavior
 
+- `2026-09-24-session-export-design.md` — default-off session retention,
+  bounded in-memory audio and transcript buffers, and explicit native export.
+
 - `2026-09-07-audio-http-lifecycle-design.md` — cancellation-safe audio drain,
   bounded Qwen responses, and HTTP dependency consolidation.
 - `2026-08-23-alibaba-pipeline-design.md` — current Alibaba modes, subtitle
@@ -43,6 +46,8 @@ Git history, not on the active documentation path.
 
 ## Product surfaces
 
+- `2026-09-24-settings-appearance-design.md` — system, light, and dark
+  settings appearances and the local preference boundary.
 - `2026-08-23-simplified-settings-and-tray-design.md` — current settings and
   tray information architecture.
 - `2026-09-02-signed-in-app-updater-design.md` — signed, user-initiated

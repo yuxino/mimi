@@ -32,6 +32,13 @@ pub struct TranslationSessionController {
 }
 
 impl TranslationSessionController {
+    pub fn archive(&self) -> &super::session_archive::TranscriptArchive {
+        &self.subtitle_reducer.archive
+    }
+    pub fn archive_mut(&mut self) -> &mut super::session_archive::TranscriptArchive {
+        &mut self.subtitle_reducer.archive
+    }
+
     pub fn begin_connecting(&mut self) {
         self.subtitle_reducer.reset_transient();
         self.state.subtitles = self.subtitle_reducer.snapshot.clone();

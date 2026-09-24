@@ -76,6 +76,8 @@ pub struct SettingsSnapshotPayload {
     pub is_overlay_locked: bool,
     #[serde(rename = "uiLanguage")]
     pub ui_language: Option<String>,
+    pub retain_session_history: bool,
+    pub record_session_audio: bool,
 }
 
 #[cfg(test)]
@@ -146,6 +148,8 @@ mod tests {
             subtitle_blends_with_background: false,
             is_overlay_locked: false,
             ui_language: None,
+            retain_session_history: false,
+            record_session_audio: false,
         };
         let json = serde_json::to_value(&payload).unwrap();
         assert_eq!(json["activeProfileId"], "alibaba-default");
@@ -162,6 +166,25 @@ mod tests {
     fn active_session_rejects_every_profile_mutation() {
         assert!(ensure_profile_mutation_allowed(true).is_err());
         assert!(ensure_profile_mutation_allowed(false).is_ok());
+    }
+
+    #[test]
+    fn archive_preferences_require_an_inactive_session_for_both_directions() {
+        for enabled in [true, false] {
+            for draft in [
+                SettingsDraft {
+                    retain_session_history: Some(enabled),
+                    ..Default::default()
+                },
+                SettingsDraft {
+                    record_session_audio: Some(enabled),
+                    ..Default::default()
+                },
+            ] {
+                assert!(ensure_settings_draft_allowed(&draft, true).is_err());
+                assert!(ensure_settings_draft_allowed(&draft, false).is_ok());
+            }
+        }
     }
 
     #[test]
@@ -233,6 +256,8 @@ impl SettingsSnapshotPayload {
                     subtitle_blends_with_background: prefs.subtitle_blends_with_background,
                     is_overlay_locked: prefs.overlay_locked,
                     ui_language: prefs.ui_language,
+                    retain_session_history: prefs.retain_session_history,
+                    record_session_audio: prefs.record_session_audio,
                 }
             }
         }
@@ -255,6 +280,8 @@ impl SettingsSnapshotPayload {
             subtitle_blends_with_background: prefs.subtitle_blends_with_background,
             is_overlay_locked: prefs.overlay_locked,
             ui_language: prefs.ui_language,
+            retain_session_history: prefs.retain_session_history,
+            record_session_audio: prefs.record_session_audio,
         })
     }
 }
@@ -270,6 +297,8 @@ pub struct SettingsDraft {
     pub subtitle_blends_with_background: Option<bool>,
     pub is_overlay_locked: Option<bool>,
     pub ui_language: Option<String>,
+    pub retain_session_history: Option<bool>,
+    pub record_session_audio: Option<bool>,
 }
 
 /// Reads public settings and per-profile credential presence. API-key values
@@ -304,9 +333,15 @@ pub fn app_open_releases(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn settings_save(
     app: AppHandle,
+    window: tauri::WebviewWindow,
     state: State<'_, AppState>,
     draft: SettingsDraft,
 ) -> Result<SettingsSnapshotPayload, String> {
+    if (draft.retain_session_history.is_some() || draft.record_session_audio.is_some())
+        && window.label() != "settings"
+    {
+        return Err("Export preferences can only be changed in settings.".into());
+    }
     apply_settings_draft(&app, &state, draft).await
 }
 
@@ -317,7 +352,9 @@ async fn apply_settings_draft(
 ) -> Result<SettingsSnapshotPayload, String> {
     let changes_listening_settings = draft.source_language.is_some()
         || draft.target_language.is_some()
-        || draft.translation_mode.is_some();
+        || draft.translation_mode.is_some()
+        || draft.retain_session_history.is_some()
+        || draft.record_session_audio.is_some();
     let _lifecycle = state
         .session
         .settings_mutation_guard(changes_listening_settings)
@@ -343,7 +380,9 @@ fn apply_settings_draft_guarded(
         || draft.subtitle_alignment.is_some()
         || draft.subtitle_blends_with_background.is_some()
         || draft.is_overlay_locked.is_some()
-        || draft.ui_language.is_some();
+        || draft.ui_language.is_some()
+        || draft.retain_session_history.is_some()
+        || draft.record_session_audio.is_some();
     if !needs_save {
         return SettingsSnapshotPayload::try_from_store(&state.settings);
     }
@@ -359,6 +398,12 @@ fn apply_settings_draft_guarded(
             }
             if let Some(translation_mode) = draft.translation_mode {
                 prefs.translation_mode = translation_mode;
+            }
+            if let Some(enabled) = draft.retain_session_history {
+                prefs.retain_session_history = enabled;
+            }
+            if let Some(enabled) = draft.record_session_audio {
+                prefs.record_session_audio = enabled;
             }
             if let Some(font_size) = draft.font_size {
                 prefs.font_size = font_size;
@@ -376,6 +421,9 @@ fn apply_settings_draft_guarded(
                 prefs.ui_language = Some(language.clone());
             }
         })?;
+    state
+        .session
+        .apply_archive_opt_out(draft.retain_session_history, draft.record_session_audio);
     // Background blending has no meaningful collapsed presentation. Enforce
     // this natively so the invariant also holds while the WebView is hidden
     // or reloading; do not rely on a React effect to repair geometry later.
@@ -433,7 +481,9 @@ fn ensure_settings_draft_allowed(draft: &SettingsDraft, is_active: bool) -> Resu
     if is_active
         && (draft.source_language.is_some()
             || draft.target_language.is_some()
-            || draft.translation_mode.is_some())
+            || draft.translation_mode.is_some()
+            || draft.retain_session_history.is_some()
+            || draft.record_session_audio.is_some())
     {
         Err(
             "Listening settings cannot be changed through settings while a session is active."
@@ -555,6 +605,9 @@ pub async fn session_toggle_paused(state: State<'_, AppState>) -> Result<(), Str
 
 #[tauri::command]
 pub async fn session_clear_subtitles(state: State<'_, AppState>) -> Result<(), String> {
+    // Clear from the tray/overlay must invalidate export snapshots atomically
+    // with their acquisition and final write, just like settings-page clear.
+    let _lifecycle = state.session.settings_mutation_guard(false).await?;
     state.session.clear_subtitles();
     Ok(())
 }
