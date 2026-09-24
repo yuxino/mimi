@@ -31,6 +31,7 @@ import {
 import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
 import { ServiceProfiles } from "./ServiceProfiles";
 import { SoftwareUpdate } from "./SoftwareUpdate";
+import { useSettingsTheme, type SettingsTheme } from "./useSettingsTheme";
 import {
   SettingsSessionActionCoordinator,
   settingsSessionControlState,
@@ -54,6 +55,7 @@ const CATEGORY_SECTION_IDS: Record<SettingsCategory, string> = {
 
 /** Compact settings surface shared by the macOS and Windows shells. */
 export function SettingsView() {
+  const { theme, resolvedTheme, changeTheme } = useSettingsTheme();
   // Subscribe only to state rendered in this window. Subtitle text updates do
   // not re-render settings while a stream is active.
   const sessionStatusKind = useStore(selectSessionStatusKind);
@@ -219,7 +221,7 @@ export function SettingsView() {
   }, [selectCategory]);
 
   return (
-    <main className="settings-console">
+    <main className={`settings-console settings-console--${resolvedTheme}`}>
       <div className="settings-console__scroll">
         <div className="settings-console__frame">
           <header className="settings-page-header">
@@ -504,6 +506,19 @@ export function SettingsView() {
                   id="application-settings"
                   title={I18N.settings.applicationTitle}
                 >
+                  <SettingsRow label={I18N.settings.appearance}>
+                    <SettingsSelect
+                      value={theme}
+                      label={I18N.settings.appearance}
+                      onChange={(value) => changeTheme(value as SettingsTheme)}
+                      options={[
+                        { value: "system", label: I18N.settings.themeSystem },
+                        { value: "light", label: I18N.settings.themeLight },
+                        { value: "dark", label: I18N.settings.themeDark },
+                      ]}
+                    />
+                  </SettingsRow>
+                  <div className="settings-divider" />
                   <SettingsRow
                     label={I18N.settings.appLanguage}
                     description={I18N.settings.languageHelp}

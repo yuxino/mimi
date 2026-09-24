@@ -263,6 +263,11 @@ const OVERLAY_JA = {
 };
 
 const SETTINGS_ZH = {
+  appearance: "外观",
+  themeSystem: "跟随系统",
+  themeLight: "浅色",
+  themeDark: "深色",
+
   windowTitle: "设置",
   currentProfile: "当前配置",
   noActiveProfile: "尚未选择服务",
@@ -422,6 +427,11 @@ type SettingsCopy = {
 };
 
 const SETTINGS_EN = {
+  appearance: "Appearance",
+  themeSystem: "System",
+  themeLight: "Light",
+  themeDark: "Dark",
+
   windowTitle: "Settings",
   currentProfile: "Current configuration",
   noActiveProfile: "No service selected",
@@ -579,6 +589,11 @@ const SETTINGS_EN = {
 } satisfies SettingsCopy;
 
 const SETTINGS_JA = {
+  appearance: "外観",
+  themeSystem: "システム",
+  themeLight: "ライト",
+  themeDark: "ダーク",
+
   windowTitle: "設定",
   currentProfile: "現在の設定",
   noActiveProfile: "サービスが選択されていません",
