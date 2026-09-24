@@ -2240,6 +2240,30 @@ impl SessionManager {
         self.controller.lock().unwrap().begin_connecting();
         self.publish_state();
         self.controller.lock().unwrap().did_connect();
+        // Exercise the real archive and native save dialog in credential-free
+        // UI QA. These are explicitly synthetic samples, never captured audio.
+        let preferences = self.settings.preferences();
+        if preferences.retain_session_history {
+            self.controller
+                .lock()
+                .unwrap()
+                .handle(LiveTranslateServerEvent::SubtitleFinalPair {
+                    source: "Mimi export test: this is synthetic sample text.".into(),
+                    language: Some("en".into()),
+                    translation: "Mimi 导出测试：这是合成的示例文字。".into(),
+                });
+        }
+        if preferences.record_session_audio {
+            let samples: Vec<u8> = (0..16_000)
+                .flat_map(|index| {
+                    let phase = index as f32 * std::f32::consts::TAU * 440.0 / 16_000.0;
+                    ((phase.sin() * 1_000.0) as i16).to_le_bytes()
+                })
+                .collect();
+            let mut recording = self.recording.lock().unwrap();
+            recording.begin(true);
+            recording.append(16_000, &samples);
+        }
         self.publish_state();
         pipeline_log!("ui-test synthetic session listening");
     }

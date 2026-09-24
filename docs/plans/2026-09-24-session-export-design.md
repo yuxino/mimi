@@ -22,7 +22,9 @@ added to native capture callbacks, and recording does not add a second capture
 source. The bounded sender's existing backpressure policy remains intact.
 Recording is limited to live translation capture; pauses and reconnect gaps are
 omitted. A format change or invalid PCM stops retention instead of corrupting a
-WAV. UI-only mode never captures or records system audio.
+WAV. UI-only mode never captures or records system audio. When an export option is
+explicitly enabled, its synthetic session supplies a fixed sample text pair or
+one second of a generated tone for native export QA.
 
 Turning either option off clears its corresponding buffer immediately. Clear
 session content removes both buffers without deleting any files exported earlier.
