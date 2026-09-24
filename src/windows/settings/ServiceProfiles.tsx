@@ -226,6 +226,7 @@ export function ServiceProfiles({
     <SettingsSection
       id="service-profiles"
       title={I18N.settings.serviceProfilesTitle}
+      hideHeading
     >
       {sessionIsActive && (
         <InlineFeedback tone="info" icon="lock">

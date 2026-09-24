@@ -1,7 +1,7 @@
 # Optional session history and system-audio export
 
 Issue #34 requests timestamped transcript and audio export. The accepted product
-boundary is explicit opt-in: two independent General settings, both false for new
+boundary is explicit opt-in: two independent Session export settings, both false for new
 and existing installations. The non-secret booleans are remembered; content is
 never automatically written to disk. Settings can change only while inactive.
 Only the settings window may change these options or request an export.

@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Cloud,
   Eraser,
+  Download,
   Key,
   Languages,
   LockKeyhole,
@@ -60,7 +61,8 @@ export type IconName =
   | "plus"
   | "shield-check"
   | "trash"
-  | "waves";
+  | "waves"
+  | "download";
 
 const ICONS: Record<IconName, LucideIcon> = {
   "align-left": AlignLeft,
@@ -89,6 +91,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   "shield-check": ShieldCheck,
   trash: Trash2,
   waves: Waves,
+  download: Download,
 };
 
 interface IconProps {

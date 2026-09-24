@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/5acd46bb-e6b5-4bb5-b280-d70d4e0cdbb4
 - **Service configurations** — save and switch between services without repeatedly entering credentials.
 - **Subtitle overlay** — move, resize, collapse, pause, enable click-through, or use Immersive Mode.
 - **In-app updates** — check and install updates in Settings.
-- **Session export** — opt in under Settings → General to retain timestamped transcripts or record system audio, then stop and export TXT / WAV. Both switches are off by default.
+- **Session export** — opt in under Settings → Session export to retain timestamped transcripts or record system audio, then stop and export TXT / WAV. Both switches are off by default.
 - **Settings appearance** — light, dark, or follow the system.
 - **Privacy** — no mimi account, microphone, or screen capture; audio goes only to the active provider. Session content stays in memory until you explicitly export it. Turning an option off clears its buffer; starting a new session or quitting clears both. Export before doing so.
 
