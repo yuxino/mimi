@@ -32,12 +32,15 @@ window reads like a focused utility instead of one long administration form:
 2. **Translation service** shows the active configuration and credential
    readiness. API key replacement is write-only. Adding, renaming, and deleting
    configurations is available through an initially collapsed management area.
-3. **General** contains interface language.
+3. **General** contains appearance, interface language, and software updates.
+4. **Session export** contains opt-in retention, recording, and export actions.
 
-The active category is expressed with a high-contrast monochrome treatment. A
+Layout refinements follow `2026-09-24-settings-layout-design.md`.
+
+The active category uses a neutral selected surface and stronger text. A
 missing or unavailable credential opens the Translation service category by
-default; otherwise Subtitles is the default. A compact session strip remains
-visible above every category. It exposes only Start/Stop, current status, the
+default; otherwise Subtitles is the default. Compact session controls remain
+visible at the bottom of the sidebar. It exposes only Start/Stop, current status, the
 platform shortcut, and the close-to-tray behavior; pause and detailed live
 controls remain in the tray. Missing credentials disable Start and link to the
 service category. Repeated provider descriptions, mode badges, and the visible

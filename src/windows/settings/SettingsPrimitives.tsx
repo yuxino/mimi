@@ -5,14 +5,18 @@ export function SettingsSection({
   id,
   title,
   children,
+  hideHeading = false,
 }: {
   id: string;
   title: string;
   children: ReactNode;
+  hideHeading?: boolean;
 }) {
   return (
     <section id={id} className="settings-card" aria-labelledby={`${id}-title`}>
-      <header className="settings-card__header">
+      <header
+        className={hideHeading ? "settings-sr-only" : "settings-card__header"}
+      >
         <span className="settings-card__heading">
           <h2 id={`${id}-title`}>{title}</h2>
         </span>

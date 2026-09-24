@@ -32,7 +32,8 @@ import { sourceLanguageButtonTitle } from "../overlay/overlayModel";
 import { ServiceProfiles } from "./ServiceProfiles";
 import { SessionExport } from "./SessionExport";
 import { SoftwareUpdate } from "./SoftwareUpdate";
-import { useSettingsTheme, type SettingsTheme } from "./useSettingsTheme";
+import { useSettingsTheme } from "./useSettingsTheme";
+import { AppearancePicker } from "./AppearancePicker";
 import {
   SettingsSessionActionCoordinator,
   settingsSessionControlState,
@@ -46,12 +47,13 @@ import {
 } from "./SettingsPrimitives";
 import "./settings.css";
 
-type SettingsCategory = "subtitles" | "service" | "general";
+type SettingsCategory = "subtitles" | "service" | "general" | "export";
 
 const CATEGORY_SECTION_IDS: Record<SettingsCategory, string> = {
   subtitles: "subtitle-settings",
   service: "service-profiles",
   general: "application-settings",
+  export: "session-export",
 };
 
 /** Compact settings surface shared by the macOS and Windows shells. */
@@ -87,6 +89,7 @@ export function SettingsView() {
     () => new SettingsSessionActionCoordinator(),
   );
   const locationSelectedCategory = useRef(locationCategory !== null);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
   const initialCredentialState = useRef(activeProfile?.credentialState);
 
   // Native settings arrive after the first render. Resolve the initial
@@ -125,7 +128,7 @@ export function SettingsView() {
   const categories: readonly {
     id: SettingsCategory;
     label: string;
-    icon: "captions-bubble" | "languages" | "gear";
+    icon: "captions-bubble" | "languages" | "gear" | "download";
   }[] = [
     {
       id: "subtitles",
@@ -142,18 +145,28 @@ export function SettingsView() {
       label: I18N.settings.applicationTitle,
       icon: "gear",
     },
+    { id: "export", label: I18N.settings.sessionExportTitle, icon: "download" },
   ];
+
+  const pageDescriptions: Record<SettingsCategory, string> = {
+    subtitles: I18N.settings.subtitlePageDescription,
+    service: I18N.settings.servicePageDescription,
+    general: I18N.settings.generalPageDescription,
+    export: I18N.settings.exportPageDescription,
+  };
 
   const selectCategory = useCallback((category: SettingsCategory) => {
     locationSelectedCategory.current = true;
     setActiveCategory(category);
+    contentScrollRef.current?.scrollTo({ top: 0 });
     window.history.replaceState(null, "", `#${CATEGORY_SECTION_IDS[category]}`);
   }, []);
 
   const changeSession = useCallback(
     (checked: boolean) => {
-      const pendingAction: Exclude<SettingsSessionPendingAction, null> =
-        checked ? "start" : "stop";
+      const pendingAction: Exclude<SettingsSessionPendingAction, null> = checked
+        ? "start"
+        : "stop";
       if (!sessionActionCoordinator.begin(pendingAction)) {
         return;
       }
@@ -223,112 +236,114 @@ export function SettingsView() {
 
   return (
     <main className={`settings-console settings-console--${resolvedTheme}`}>
-      <div className="settings-console__scroll">
+      <aside className="settings-sidebar">
+        <div className="settings-brand">
+          <span className="settings-brand__name">mimi</span>
+          <span className="settings-brand__label">
+            {I18N.settings.windowTitle}
+          </span>
+        </div>
+        <nav
+          key={activeCategory}
+          className="settings-category-nav"
+          aria-label={I18N.settings.windowTitle}
+        >
+          {categories.map((category) => {
+            const selected = activeCategory === category.id;
+            return (
+              <button
+                key={category.id}
+                id={`settings-category-${category.id}`}
+                type="button"
+                className={`settings-category-nav__item${selected ? " is-selected" : ""}`}
+                aria-current={selected ? "page" : undefined}
+                aria-controls={`${CATEGORY_SECTION_IDS[category.id]}-panel`}
+                onClick={() => selectCategory(category.id)}
+              >
+                <Icon name={category.icon} />
+                <span>{category.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <section
+          className="settings-session-card"
+          aria-labelledby="settings-session-title"
+        >
+          <div className="settings-session-card__main">
+            <h2 id="settings-session-title">{I18N.settings.liveSubtitles}</h2>
+            <Switch
+              checked={sessionControl.checked}
+              disabled={sessionControl.disabled}
+              aria-label={I18N.settings.liveSubtitles}
+              aria-describedby="settings-session-status settings-session-shortcut"
+              onChange={changeSession}
+            />
+          </div>
+          <span
+            id="settings-session-status"
+            className="settings-session-status"
+            data-status={sessionControl.visibleStatus}
+            aria-live="polite"
+          >
+            <span aria-hidden="true" />
+            {settingsSessionStatusText(
+              sessionControl.visibleStatus,
+              sessionErrorMessage,
+            )}
+          </span>
+          <p
+            id="settings-session-shortcut"
+            className="settings-session-shortcut"
+            aria-label={I18N.settings.startStopShortcut}
+          >
+            <kbd>{startStopShortcut()}</kbd>
+          </p>
+          {sessionControl.canConfigure && (
+            <button
+              type="button"
+              className="settings-button settings-button--quiet settings-button--compact"
+              onClick={() => selectCategory("service")}
+            >
+              {I18N.settings.configureService}
+            </button>
+          )}
+          {sessionActionError && (
+            <p className="settings-feedback" data-tone="error" role="alert">
+              {I18N.settings.sessionActionFailed}
+            </p>
+          )}
+          <details className="settings-session-help">
+            <summary>
+              {I18N.settings.sessionUsageHelp}
+              <Icon name="chevron-down" />
+            </summary>
+            <p>{I18N.settings.liveSubtitlesDescription}</p>
+            <p>{I18N.settings.closeToTrayHelp}</p>
+          </details>
+        </section>
+      </aside>
+      <div className="settings-console__scroll" ref={contentScrollRef}>
         <div className="settings-console__frame">
           <header className="settings-page-header">
-            <h1>{I18N.settings.windowTitle}</h1>
+            <h1>
+              {
+                categories.find((category) => category.id === activeCategory)
+                  ?.label
+              }
+            </h1>
+            <p>{pageDescriptions[activeCategory]}</p>
           </header>
-
-          <section
-            className="settings-session-card"
-            aria-labelledby="settings-session-title"
-          >
-            <div className="settings-session-card__main">
-              <div className="settings-session-card__identity">
-                <span className="settings-session-card__icon" aria-hidden="true">
-                  <Icon name="captions-bubble" />
-                </span>
-                <div>
-                  <h2 id="settings-session-title">
-                    {I18N.settings.liveSubtitles}
-                  </h2>
-                  <p>{I18N.settings.liveSubtitlesDescription}</p>
-                </div>
-              </div>
-
-              <div className="settings-session-card__control">
-                <span
-                  id="settings-session-status"
-                  className="settings-session-status"
-                  data-status={sessionControl.visibleStatus}
-                  aria-live="polite"
-                >
-                  <span aria-hidden="true" />
-                  {settingsSessionStatusText(
-                    sessionControl.visibleStatus,
-                    sessionErrorMessage,
-                  )}
-                </span>
-                <Switch
-                  checked={sessionControl.checked}
-                  disabled={sessionControl.disabled}
-                  aria-label={I18N.settings.liveSubtitles}
-                  aria-describedby="settings-session-status settings-session-shortcut"
-                  onChange={changeSession}
-                />
-              </div>
-            </div>
-
-            <div className="settings-session-card__details">
-              <p id="settings-session-shortcut">
-                <span>{I18N.settings.startStopShortcut}</span>
-                <kbd>{startStopShortcut()}</kbd>
-              </p>
-              {sessionControl.canConfigure && (
-                <button
-                  type="button"
-                  className="settings-button settings-button--primary settings-button--compact"
-                  onClick={() => selectCategory("service")}
-                >
-                  {I18N.settings.configureService}
-                </button>
-              )}
-            </div>
-
-            <p className="settings-session-card__tray-help">
-              {I18N.settings.closeToTrayHelp}
-            </p>
-            {sessionActionError && (
-              <p className="settings-feedback" data-tone="error" role="alert">
-                {I18N.settings.sessionActionFailed}
-              </p>
-            )}
-          </section>
-
-          <div className="settings-workspace">
-            <nav
-              key={activeCategory}
-              className="settings-category-nav"
-              aria-label={I18N.settings.windowTitle}
-            >
-              {categories.map((category) => {
-                const selected = activeCategory === category.id;
-                return (
-                  <button
-                    key={category.id}
-                    id={`settings-category-${category.id}`}
-                    type="button"
-                    className={`settings-category-nav__item${selected ? " is-selected" : ""}`}
-                    aria-current={selected ? "page" : undefined}
-                    aria-controls={`${CATEGORY_SECTION_IDS[category.id]}-panel`}
-                    onClick={() => selectCategory(category.id)}
-                  >
-                    <Icon name={category.icon} />
-                    <span>{category.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <div className="settings-layout">
-              {activeCategory === "subtitles" && (
-                <div
-                  id="subtitle-settings-panel"
-                  className="settings-category-panel"
-                >
+          <div className="settings-layout">
+            {activeCategory === "subtitles" && (
+              <div
+                id="subtitle-settings-panel"
+                className="settings-category-panel"
+              >
                 <SettingsSection
                   id="subtitle-settings"
                   title={I18N.settings.subtitleTitle}
+                  hideHeading
                 >
                   <div className="settings-field-group">
                     <span
@@ -482,79 +497,75 @@ export function SettingsView() {
                       }}
                     />
                   </SettingsRow>
-                  </SettingsSection>
-                </div>
-              )}
-
-              {activeCategory === "service" && (
-                <div
-                  id="service-profiles-panel"
-                  className="settings-category-panel"
-                >
-                  <ServiceProfiles
-                    settings={settings}
-                    sessionIsActive={sessionIsActive}
-                  />
-                </div>
-              )}
-
-              <div
-                id="application-settings-panel"
-                className="settings-category-panel"
-                hidden={activeCategory !== "general"}
-              >
-                <SettingsSection
-                  id="application-settings"
-                  title={I18N.settings.applicationTitle}
-                >
-                  <SettingsRow label={I18N.settings.appearance}>
-                    <SettingsSelect
-                      value={theme}
-                      label={I18N.settings.appearance}
-                      onChange={(value) => changeTheme(value as SettingsTheme)}
-                      options={[
-                        { value: "system", label: I18N.settings.themeSystem },
-                        { value: "light", label: I18N.settings.themeLight },
-                        { value: "dark", label: I18N.settings.themeDark },
-                      ]}
-                    />
-                  </SettingsRow>
-                  <div className="settings-divider" />
-                  <SettingsRow
-                    label={I18N.settings.appLanguage}
-                    description={I18N.settings.languageHelp}
-                    align="start"
-                  >
-                    <SettingsSelect
-                      value={settings.uiLanguage ?? "system"}
-                      label={I18N.settings.appLanguage}
-                      onChange={(value) => {
-                        const language = value as UiLanguage;
-                        void saveSettings({ uiLanguage: language })
-                          .then(() => {
-                            setStoredUiLanguage(language);
-                            window.location.reload();
-                          })
-                          .catch(() => {});
-                      }}
-                      options={[
-                        {
-                          value: "system",
-                          label: I18N.settings.systemLanguage,
-                        },
-                        { value: "zh", label: I18N.settings.chinese },
-                        { value: "en", label: I18N.settings.english },
-                        { value: "ja", label: I18N.settings.japanese },
-                      ]}
-                    />
-                  </SettingsRow>
-
-                  <div className="settings-divider" />
-
-                  <SoftwareUpdate />
-                  </SettingsSection>
-                <SessionExport />
+                </SettingsSection>
               </div>
+            )}
+
+            {activeCategory === "service" && (
+              <div
+                id="service-profiles-panel"
+                className="settings-category-panel"
+              >
+                <ServiceProfiles
+                  settings={settings}
+                  sessionIsActive={sessionIsActive}
+                />
+              </div>
+            )}
+
+            <div
+              id="application-settings-panel"
+              className={`settings-category-panel${activeCategory !== "general" ? " is-inactive" : ""}`}
+            >
+              <SettingsSection
+                id="application-settings"
+                title={I18N.settings.appearance}
+              >
+                <AppearancePicker value={theme} onChange={changeTheme} />
+              </SettingsSection>
+              <SettingsSection
+                id="application-preferences"
+                title={I18N.settings.preferencesTitle}
+              >
+                <SettingsRow
+                  label={I18N.settings.appLanguage}
+                  description={I18N.settings.languageHelp}
+                  align="start"
+                >
+                  <SettingsSelect
+                    value={settings.uiLanguage ?? "system"}
+                    label={I18N.settings.appLanguage}
+                    onChange={(value) => {
+                      const language = value as UiLanguage;
+                      void saveSettings({ uiLanguage: language })
+                        .then(() => {
+                          setStoredUiLanguage(language);
+                          window.location.reload();
+                        })
+                        .catch(() => {});
+                    }}
+                    options={[
+                      {
+                        value: "system",
+                        label: I18N.settings.systemLanguage,
+                      },
+                      { value: "zh", label: I18N.settings.chinese },
+                      { value: "en", label: I18N.settings.english },
+                      { value: "ja", label: I18N.settings.japanese },
+                    ]}
+                  />
+                </SettingsRow>
+
+                <div className="settings-divider" />
+
+                <SoftwareUpdate />
+              </SettingsSection>
+            </div>
+            <div
+              id="session-export-panel"
+              className={`settings-category-panel${activeCategory !== "export" ? " is-inactive" : ""}`}
+            >
+              <SessionExport />
             </div>
           </div>
         </div>
@@ -644,6 +655,8 @@ function settingsCategoryFromHash(hash: string): SettingsCategory | null {
       return "service";
     case CATEGORY_SECTION_IDS.general:
       return "general";
+    case CATEGORY_SECTION_IDS.export:
+      return "export";
     default:
       return null;
   }
@@ -671,9 +684,7 @@ function SourceLanguageButton({
       title={sourceLanguageButtonHelp(language, chineseIsOriginalOnly)}
       onClick={onSelect}
     >
-      <span>
-        {sourceLanguageButtonTitle(language, chineseIsOriginalOnly)}
-      </span>
+      <span>{sourceLanguageButtonTitle(language, chineseIsOriginalOnly)}</span>
       {selected && <Icon name="checkmark-circle" />}
     </button>
   );

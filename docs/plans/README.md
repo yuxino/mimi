@@ -46,6 +46,9 @@ Git history, not on the active documentation path.
 
 ## Product surfaces
 
+- `2026-09-24-settings-layout-design.md` — sidebar navigation, compact session
+  controls, dedicated export page, and appearance previews.
+
 - `2026-09-24-settings-appearance-design.md` — system, light, and dark
   settings appearances and the local preference boundary.
 - `2026-08-23-simplified-settings-and-tray-design.md` — current settings and
