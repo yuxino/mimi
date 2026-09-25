@@ -55,6 +55,10 @@ an already published release. If a tag already exists, verify it resolves to
 the exact source revision, finish staging, then rerun its failed workflow.
 Never move a published tag.
 
+The tag-only macOS job needs `contents: write` because GitHub hides unpublished
+drafts from read-only tokens. Ordinary CI remains read-only; the final publish
+job still controls publication.
+
 GitHub macOS CI safely extracts the app, checks
 its complete pinned identity and signed source/version, and compares its CDHash
 with the app inside the DMG. It then creates and verifies the updater signature

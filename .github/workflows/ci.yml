@@ -222,6 +222,10 @@ jobs:
   release-macos:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-latest
+    # GitHub requires push access to read an unpublished release draft.
+    # Limit this permission to the release-only job; ordinary CI stays read-only.
+    permissions:
+      contents: write
     needs: [rust, msrv, frontend, release-preflight]
     env:
       GH_REPO: ${{ github.repository }}
