@@ -58,7 +58,11 @@ Never move a published tag.
 GitHub macOS CI safely extracts the app, checks
 its complete pinned identity and signed source/version, and compares its CDHash
 with the app inside the DMG. It then creates and verifies the updater signature
-with the existing key. Windows still builds in CI. Only the final publish
+with the existing key. On the disposable runner, only the embedded public
+certificate matching the pinned fingerprint is trusted for code signing; that
+trust is removed after verification. No private code-signing key is imported,
+and user machines are not asked to change certificate trust. Windows still
+builds in CI. Only the final publish
 job may publish the draft after both platforms pass. Read back the published
 assets, digests and `latest.json`; a local build alone does not establish a
 working public update.

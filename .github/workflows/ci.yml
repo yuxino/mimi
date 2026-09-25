@@ -265,6 +265,17 @@ jobs:
           python3 scripts/extract-macos-updater.py \
             "$staging_dir/mimi.app.tar.gz" "$RUNNER_TEMP/mimi-verified-updater"
           app_path="$RUNNER_TEMP/mimi-verified-updater/mimi.app"
+          # The disposable runner has no local self-signed trust entry. Trust
+          # only the exact pinned public certificate, and only for code signing.
+          certificate_prefix="$RUNNER_TEMP/mimi-release-cert-"
+          codesign --display --extract-certificates="$certificate_prefix" "$app_path"
+          fingerprint="$(shasum -a 1 "${certificate_prefix}0" | cut -d ' ' -f 1 | tr '[:lower:]' '[:upper:]')"
+          [[ "$fingerprint" == "$(tr -d '[:space:]' < scripts/macos-release-identity.txt)" ]] || {
+            echo "The embedded signing certificate differs from the pinned identity." >&2
+            exit 1
+          }
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain "${certificate_prefix}0"
           ./scripts/verify-macos-release.sh \
             "$app_path" "$staging_dir/mimi_${GITHUB_REF_NAME#v}_aarch64.dmg"
           ./scripts/verify-macos-release-source.sh "$app_path" "$GITHUB_SHA" "${GITHUB_REF_NAME#v}"
@@ -291,6 +302,15 @@ jobs:
           path: ${{ runner.temp }}/mimi-release-assets/*
           if-no-files-found: error
           retention-days: 7
+
+      - name: Remove runner-only certificate trust
+        if: always()
+        shell: bash
+        run: |
+          certificate="$RUNNER_TEMP/mimi-release-cert-0"
+          if [[ -f "$certificate" ]]; then
+            sudo security remove-trusted-cert -d "$certificate" || true
+          fi
 
   release-windows:
     if: ${{ github.ref_type == 'tag' }}
