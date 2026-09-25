@@ -315,11 +315,11 @@ jobs:
           if [[ -f "$certificate" ]]; then
             # security can wait indefinitely for authorization services on a
             # hosted runner. Bound cleanup; the disposable VM is then discarded.
-            python3 - "$certificate" <<'PYTHON'
+            sudo -n python3 - "$certificate" <<'PYTHON'
           import subprocess, sys
           try:
               subprocess.run(
-                  ["sudo", "-n", "security", "remove-trusted-cert", "-d", sys.argv[1]],
+                  ["/usr/bin/security", "remove-trusted-cert", "-d", sys.argv[1]],
                   check=False, timeout=15,
               )
           except subprocess.TimeoutExpired:
