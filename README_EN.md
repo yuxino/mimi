@@ -50,6 +50,22 @@ Versions older than v1.3.8 need one manual installation to enable in-app updates
 - **Apple silicon macOS 13+**: Releases provide an ad-hoc-signed DMG without Apple notarization. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Updates may trigger recording or Keychain permission prompts again.
 - **Windows x64**: Unsigned preview EXE / MSI installers are available; SmartScreen may warn.
 
+### macOS permissions after an update
+
+Current macOS releases use an ad-hoc signature that changes between builds. An update, or switching between a locally built app and a GitHub release, may therefore require authorization again. Deleting a local signing certificate does not change the installed app's identity or fix this. Keep the release app at `/Applications/mimi.app`; use the separate `mimi-dev.app` for development.
+
+**Recording is enabled, but Mimi still reports permission denied:** first quit and reopen Mimi and follow the normal permission prompt. If capture is still denied:
+
+1. Quit Mimi. In **System Settings → Privacy & Security → Screen & System Audio Recording** (the label varies by macOS version), select and remove only the old **mimi** entry.
+2. Use **+** to add `/Applications/mimi.app`, enable its permission, and complete any system authentication yourself. Leave `mimi-dev` and other apps alone.
+3. Reopen that same app, start a session, and play audio containing speech to check that subtitles actually appear. An enabled switch alone does not confirm recovery.
+
+This removes an old recording authorization, not a certificate or API key. If one attempt does not help, stop repeating the reset and [report the error](https://github.com/yuxino/mimi/issues), including your macOS and Mimi versions and installation source. Do not include API keys or subtitle content.
+
+**Keychain asks for your password or access to a saved API key:** confirm that the request comes from the Mimi copy you intended to open. If the dialog offers **Always Allow**, it can retain access for that build, but cannot guarantee access after another ad-hoc-signed update. Do not delete saved credentials, certificates, or the login keychain, allow all apps to access a key, or run a system-wide permission reset. A `codesign` request for a development signing private key is a separate build-time prompt.
+
+These steps can restore access for the current installation; they cannot prevent every prompt in future updates. Stable Developer ID signing is needed to address the changing release identity and has not yet been deployed.
+
 ## Development
 
 See the [contributing guide](CONTRIBUTING.md) for building and contributing, and the [security policy](SECURITY.md) for reporting vulnerabilities.
