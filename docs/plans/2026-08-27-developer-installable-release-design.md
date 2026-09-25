@@ -1,5 +1,10 @@
 # Developer-installable GitHub releases
 
+> Release-signing policy superseded on 2026-09-26 by
+> [stable release signing](2026-09-26-stable-release-signing-design.md).
+> Ad-hoc GitHub releases described below are historical, not current policy.
+
+
 ## Status
 
 Accepted.

@@ -9,32 +9,34 @@ prompts. The visible app name and version are not enough to establish identity.
 | --- | --- | --- | --- |
 | Pre-push development and UI checks | `/Applications/mimi-dev.app` | `app.yuxino.mimi.dev` | `mimi Local Development` |
 | Local release-shaped bundle | `src-tauri/target/release/bundle/macos/mimi.app` | `app.yuxino.mimi` | `mimi Local Development` |
-| Published GitHub release | `/Applications/mimi.app` | `app.yuxino.mimi` | Ad-hoc (build-specific) |
+| New release pipeline | `/Applications/mimi.app` | `app.yuxino.mimi` | Certificate pinned in `scripts/macos-release-identity.txt` |
+| Historical releases through v1.4.1 | `/Applications/mimi.app` | `app.yuxino.mimi` | Ad-hoc (build-specific) |
 
-The two release-shaped bundles have the same bundle identifier but different
-designated requirements. They are not identity-compatible updates. Replacing
-one with the other can make macOS ask for Screen & System Audio Recording and
-Keychain authorization again. A later GitHub ad-hoc build may do the same.
+The current release pipeline uses the same fixed self-signed certificate as
+local packaging by default. Older ad-hoc installations have a different
+designated requirement: the first fixed-signed update is an intentional
+migration and can require one new recording grant. Compare requirements,
+not version labels. Keychain continuity is a separate concern below.
 
 Rules:
 
 - Use `./scripts/dev-app.sh` for normal local testing. Do not run `tauri dev`, a
   bare `target/*/mimi` executable, or a copy at a disposable path.
-- `./scripts/package-app.sh` creates a local, release-shaped package; it does
-  not turn the local certificate into the GitHub release identity. It disables
-  updater-artifact signing for this local build, so local packaging does not
-  require the public release updater private key. Tag CI retains signed
-  updater artifacts for published releases.
+- `./scripts/package-app.sh` creates a local QA package without updater
+  artifacts. `./scripts/prepare-macos-release.sh` creates public artifacts on
+  the signing Mac with the pinned certificate. CI adds the existing updater
+  signature after verifying the app. The
+  code-signing private key stays in that Mac's Keychain; CI verifies the
+  prepared draft assets. See [release signing](macos-release-signing.md).
 - Before replacing a formal app, run
   `./scripts/verify-macos-install-identity.sh NEW_APP /Applications/mimi.app`.
   A mismatch fails closed. `MIMI_ALLOW_IDENTITY_CHANGE=1` is reserved for a
   deliberate, one-time certificate migration whose extra prompts are expected.
-- Never use ad-hoc signing for permission-sensitive local QA. GitHub Releases
-  are the explicit developer-installable exception and may require users to
-  approve permissions again. Never use `tccutil reset`, delete Keychain entries,
-  or rotate a certificate as a routine fix.
-- Branch and pull-request CI compiles macOS with `--no-bundle`; tag CI is the
-  only path that creates and publishes the developer-installable `.dmg`.
+- Never use ad-hoc signing for local QA or new public releases. Missing or
+  changed identities fail closed. Never use `tccutil reset`, delete Keychain
+  entries, or rotate a certificate as a routine fix.
+- Branch and pull-request CI compiles macOS with `--no-bundle`; tag CI verifies
+  the prepared macOS assets and publishes only after both platforms pass.
 - Keep only one live mimi copy while testing. Confirm its executable path, not
   just the process name, before diagnosing shortcuts, windows, or permissions.
 
@@ -56,18 +58,17 @@ These prompts have different causes and fixes:
   API-key access. Grant persistent access only when the dialog names that exact
   private key and tool; do not automate a login-keychain password or widen the
   whole keychain ACL in build scripts.
-- **Gatekeeper / Open Anyway:** the GitHub package is ad-hoc signed and not
-  notarized. This is separate from capture and Keychain authorization.
+- **Gatekeeper / Open Anyway:** the fixed self-signed GitHub package is not Apple-notarized. This is separate from capture and Keychain authorization.
 
 The local development certificate is self-signed and has no Apple Team ID. It
-provides a stable requirement for local TCC testing, while GitHub's ad-hoc
-signature is build-specific. The file-based Keychain also applies a partition
+provides a stable requirement for local and newly prepared release TCC
+identities; historical ad-hoc signatures were build-specific. The file-based Keychain also applies a partition
 check that can fall back to the build's CDHash. Therefore:
 
 - eliminating the duplicate migration-item read reduces a normal startup to
   one API-key authorization after an identity migration;
 - do not promise that a rebuilt self-signed local binary will never ask for
-  Keychain access again, and expect GitHub updates to require approval again;
+  Keychain access again;
 - do not solve this by deleting/recreating a credential, using an allow-all
   ACL, scripting the login password, or assigning a made-up Team ID. Those
   approaches either lose data or weaken code identity;
@@ -89,7 +90,7 @@ audio.
 
 ### Recording is enabled in Settings but capture is still denied
 
-After an intentional switch from a local certificate to a published GitHub
+After an intentional switch between an old ad-hoc build and a fixed-signed
 build, an enabled entry in System Settings alone does not prove that the
 current binary can capture. Establish the exact executable path, verify its
 signature, and compare it with the intended package before changing grants.

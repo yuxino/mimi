@@ -34,6 +34,12 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: macOS release safety tests
+        if: runner.os == 'macOS'
+        run: |
+          ./scripts/macos-signing-test.sh
+          python3 scripts/extract-macos-updater-test.py
+
       - name: Format
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
@@ -130,7 +136,7 @@ jobs:
         run: npm run build
 
   # Compile macOS without producing an extra branch artifact. Tag builds below
-  # produce the developer-installable macOS and Windows packages.
+  # verify maintainer-signed macOS assets and build Windows packages.
   bundle:
     if: ${{ github.ref_type != 'tag' }}
     strategy:
@@ -210,25 +216,22 @@ jobs:
             exit 1
           fi
 
-  # GitHub macOS releases remain ad-hoc code-signed developer packages. The
-  # separate updater signature is mandatory and protects update integrity; it
-  # does not replace Apple code signing, notarization, or stable TCC identity.
+  # The maintainer stages stable-signed macOS assets in a draft BEFORE pushing
+  # the tag. The signing private key stays on that Mac, as it does for Kiri.
+  # Hosted runners verify the pinned certificate; they never create ad-hoc apps.
   release-macos:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-latest
-    env:
-      MACOSX_DEPLOYMENT_TARGET: "13.0"
-      APPLE_SIGNING_IDENTITY: "-"
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     needs: [rust, msrv, frontend, release-preflight]
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
-          cache: npm
 
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
 
@@ -237,59 +240,51 @@ jobs:
           workspaces: src-tauri
 
       - run: npm ci
+      - run: npm run build
 
-      - name: Verify updater signing secrets are configured
-        shell: bash
-        run: |
-          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" || -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]]; then
-            echo "Updater signing secrets are not configured." >&2
-            exit 1
-          fi
-
-      - name: Remove stale macOS package outputs
-        shell: bash
-        run: |
-          rm -rf "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos"
-          rm -rf "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg"
-
-      - name: Build developer-installable macOS package
-        run: npm run tauri -- build -- --locked
-
-      - name: Verify and stage the macOS release assets
+      - name: Download maintainer-signed macOS assets from the draft
         shell: bash
         run: |
           set -euo pipefail
-          app_paths=()
-          while IFS= read -r -d '' candidate; do
-            app_paths+=("$candidate")
-          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 -name '*.app' -type d -print0)
-          dmg_paths=()
-          while IFS= read -r -d '' candidate; do
-            dmg_paths+=("$candidate")
-          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -type f -print0)
-          updater_paths=()
-          while IFS= read -r -d '' candidate; do
-            updater_paths+=("$candidate")
-          done < <(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos" -maxdepth 1 \( -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) -type f -print0)
-          if [[ "${#app_paths[@]}" != "1" || "${#dmg_paths[@]}" != "1" || "${#updater_paths[@]}" != "2" ]]; then
-            echo "Expected one macOS app, one DMG, one updater archive, and one updater signature." >&2
+          [[ "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')" == true ]] || {
+            echo "Stage the maintainer-signed macOS assets in a draft before pushing the tag." >&2
             exit 1
-          fi
-          app_path="${app_paths[0]}"
-          dmg_path="${dmg_paths[0]}"
-          ./scripts/verify-macos-release.sh "$app_path" "$dmg_path"
+          }
           staging_dir="$RUNNER_TEMP/mimi-release-assets"
           mkdir -p "$staging_dir"
-          cp "$dmg_path" "$staging_dir/"
-          cp "${updater_paths[@]}" "$staging_dir/"
-          [[ -s "$staging_dir/mimi.app.tar.gz" && -s "$staging_dir/mimi.app.tar.gz.sig" ]]
+          gh release download "$GITHUB_REF_NAME" --dir "$staging_dir" \
+            --pattern "mimi_${GITHUB_REF_NAME#v}_aarch64.dmg" \
+            --pattern 'mimi.app.tar.gz'
+          [[ -s "$staging_dir/mimi.app.tar.gz" ]]
+
+      - name: Verify stable identity, DMG, and signed source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_dir="$RUNNER_TEMP/mimi-release-assets"
+          python3 scripts/extract-macos-updater.py \
+            "$staging_dir/mimi.app.tar.gz" "$RUNNER_TEMP/mimi-verified-updater"
+          app_path="$RUNNER_TEMP/mimi-verified-updater/mimi.app"
+          ./scripts/verify-macos-release.sh \
+            "$app_path" "$staging_dir/mimi_${GITHUB_REF_NAME#v}_aarch64.dmg"
+          ./scripts/verify-macos-release-source.sh "$app_path" "$GITHUB_SHA" "${GITHUB_REF_NAME#v}"
+
+      - name: Sign verified macOS updater with the existing update key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${TAURI_SIGNING_PRIVATE_KEY:?Updater signing key is missing}"
+          staging_dir="$RUNNER_TEMP/mimi-release-assets"
+          npm run tauri -- signer sign "$staging_dir/mimi.app.tar.gz"
           public_key="$(node -p 'require("./src-tauri/tauri.conf.json").plugins.updater.pubkey')"
           cargo run --release --locked --manifest-path src-tauri/Cargo.toml \
             --example verify_updater_signature -- \
-            "$public_key" "$staging_dir/mimi.app.tar.gz.sig" \
-            "$staging_dir/mimi.app.tar.gz"
+            "$public_key" "$staging_dir/mimi.app.tar.gz.sig" "$staging_dir/mimi.app.tar.gz"
 
-      - name: Upload verified macOS release asset
+      - name: Upload verified macOS release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mimi-release-macos

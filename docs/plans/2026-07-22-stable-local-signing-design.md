@@ -1,5 +1,10 @@
 # mimi 本机稳定签名设计
 
+> Release-signing policy superseded on 2026-09-26 by
+> [stable release signing](2026-09-26-stable-release-signing-design.md).
+> Ad-hoc GitHub releases described below are historical, not current policy.
+
+
 ## 目标与方案
 
 mimi 需要 ScreenCaptureKit 的屏幕与系统音频录制权限。临时签名会随二进制内容变化而改变代码身份，导致 macOS TCC 无法把新的开发构建与已授权版本稳定关联。解决方案是在用户登录钥匙串中保存一个仅用于本机开发的自签名代码签名身份 `mimi Local Development`，私钥不导出、不提交，也不上传到任何服务。

@@ -17,6 +17,8 @@ export npm_config_cache="${npm_config_cache:-$PROJECT_DIR/.npm-cache}"
 if [[ "$(uname -s)" == "Darwin" ]]; then
   echo "==> development install recovery safety"
   "$SCRIPT_DIR/dev-app-recovery-test.sh"
+  "$SCRIPT_DIR/macos-signing-test.sh"
+  python3 "$SCRIPT_DIR/extract-macos-updater-test.py"
 fi
 
 echo "==> cargo fmt --check"

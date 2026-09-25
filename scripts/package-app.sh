@@ -10,13 +10,13 @@ set -euo pipefail
 # .app or .dmg. This is essential: re-signing only the loose .app afterwards
 # leaves the copy already embedded in the DMG with its original identity.
 # Local builds require the stable "mimi Local Development" identity for
-# permission-sensitive QA. Public GitHub releases are separate developer-
-# installable packages and may use ad-hoc signing, so replacing either package
-# can reset macOS privacy or Keychain authorization.
+# permission-sensitive QA. Public releases are prepared on the signing Mac with
+# prepare-macos-release.sh using the pinned stable certificate. Older ad-hoc
+# releases need an intentional one-time identity migration.
 
 if [[ $# -ne 0 ]]; then
   echo "Usage: ./scripts/package-app.sh (local QA packages only; no CLI overrides)." >&2
-  echo "Public signed updater artifacts are produced by the tag release workflow." >&2
+  echo "Use prepare-macos-release.sh for public signed updater artifacts." >&2
   exit 2
 fi
 
@@ -45,8 +45,8 @@ EOF
 fi
 
 # Local QA packages are signed with the development identity, not the public
-# updater identity. Do not require or use the release updater private key for
-# these bundles; tag CI creates the signed updater artifacts independently.
+# updater signature. Do not require or use the release updater private key for
+# QA; prepare-macos-release.sh creates updater artifacts on the signing Mac.
 npm run tauri -- build --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
 
 BUNDLE_DIR="$PROJECT_DIR/src-tauri/target/release/bundle"
@@ -62,17 +62,15 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   "$SCRIPT_DIR/verify-macos-app.sh" "$APP"
   if [[ -e /Applications/mimi.app ]]; then
     cat <<EOF
-An existing /Applications/mimi.app was left untouched. This local package uses
-the stable development identity and is not expected to match an ad-hoc GitHub
-Release installation. Before any deliberate replacement, run:
+An existing /Applications/mimi.app was left untouched. This package uses
+a stable identity. Older ad-hoc GitHub releases have a different identity. Before any deliberate replacement, run:
 
   ./scripts/verify-macos-install-identity.sh "$APP" /Applications/mimi.app
 EOF
   fi
   cat <<EOF
 Local package identity checked. For normal pre-push testing use
-./scripts/dev-app.sh. A local package is not an identity-compatible update for
-an ad-hoc GitHub Release build; package creation never replaces the installed
-app.
+./scripts/dev-app.sh. Older ad-hoc installations require an explicit
+one-time identity migration; package creation never replaces the installed app.
 EOF
 fi

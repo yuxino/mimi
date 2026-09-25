@@ -2,14 +2,14 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [--developer-release] /absolute/path/to/mimi.app" >&2
+  echo "Usage: $0 [--release] /absolute/path/to/mimi.app" >&2
   exit 2
 }
 
-DEVELOPER_RELEASE=0
+RELEASE=0
 case "${1:-}" in
-  --developer-release)
-    DEVELOPER_RELEASE=1
+  --release)
+    RELEASE=1
     shift
     ;;
 esac
@@ -63,12 +63,28 @@ grep -Fq "Identifier=app.yuxino.mimi" <<<"$SIGNATURE_DETAILS" || {
   echo "The signing identifier is not app.yuxino.mimi." >&2
   exit 1
 }
-if [[ "$DEVELOPER_RELEASE" != "1" ]] && { \
+if { \
   grep -Fq "Signature=adhoc" <<<"$SIGNATURE_DETAILS" \
     || [[ -z "$REQUIREMENT" || "$REQUIREMENT" == cdhash\ * ]]; \
 }; then
   echo "Ad-hoc or build-specific signatures are forbidden for mimi app bundles." >&2
   exit 1
+fi
+
+if [[ "$RELEASE" == "1" ]]; then
+  fingerprint="$(tr -d '[:space:]' < "$(dirname "$0")/macos-release-identity.txt")"
+  [[ "$fingerprint" =~ ^[0-9A-F]{40}$ ]] || {
+    echo "Invalid pinned macOS release certificate fingerprint." >&2
+    exit 1
+  }
+  expected="identifier \"app.yuxino.mimi\" and certificate root = H\"$fingerprint\""
+  codesign --verify --strict -R "=$expected" "$APP"
+  # Pin the entire requirement too: a build-specific extra condition would
+  # pass the certificate check but still break TCC continuity.
+  [[ "$(printf '%s' "$REQUIREMENT" | tr '[:upper:]' '[:lower:]')" == "$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')" ]] || {
+    echo "The release designated requirement differs from the stable policy." >&2
+    exit 1
+  }
 fi
 
 echo "Verified macOS app: $APP"

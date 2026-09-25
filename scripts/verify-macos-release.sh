@@ -15,9 +15,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   exit 1
 }
 
-"$SCRIPT_DIR/verify-macos-app.sh" --developer-release "$APP"
+"$SCRIPT_DIR/verify-macos-app.sh" --release "$APP"
 
-MOUNT_DIR="$(mktemp -d "${TMPDIR%/}/mimi-release-dmg.XXXXXX")"
+MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mimi-release-dmg.XXXXXX")"
 cleanup_mount() {
   hdiutil detach "$MOUNT_DIR" -quiet >/dev/null 2>&1 || true
   rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
@@ -38,7 +38,7 @@ EMBEDDED_APP="${EMBEDDED_APPS[0]}"
   echo "The DMG contains an unexpected app bundle." >&2
   exit 1
 }
-"$SCRIPT_DIR/verify-macos-app.sh" --developer-release "$EMBEDDED_APP"
+"$SCRIPT_DIR/verify-macos-app.sh" --release "$EMBEDDED_APP"
 
 designated_requirement() {
   codesign --display --requirements - "$1" 2>&1 \
@@ -75,4 +75,4 @@ EMBEDDED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionStrin
 cleanup_mount
 trap - EXIT
 
-echo "Verified developer-installable macOS GitHub release: $DMG"
+echo "Verified stable-signed macOS release: $DMG"

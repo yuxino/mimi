@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Prints the unique code-signing identity for local mimi builds, or "-" when
+# Prints the unique code-signing identity for local mimi builds, or fails when
 # no stable identity exists. Selection order:
 #   1. MIMI_CODESIGN_IDENTITY (explicit override)
 #   2. the SHA-1 fingerprint of the one self-signed
 #      "mimi Local Development" identity in the login keychain
-#   3. ad-hoc "-"
+#   3. fail closed (no ad-hoc fallback)
 #
 # Ad-hoc signatures change on every build (the cdhash is derived from the
 # binary), which makes macOS forget Screen & System Audio Recording grants.
@@ -19,6 +19,10 @@
 set -euo pipefail
 
 if [[ -n "${MIMI_CODESIGN_IDENTITY:-}" ]]; then
+  if [[ "$MIMI_CODESIGN_IDENTITY" == "-" ]]; then
+    echo "error: ad-hoc signing is forbidden for Mimi." >&2
+    exit 1
+  fi
   echo "$MIMI_CODESIGN_IDENTITY"
   exit 0
 fi
@@ -36,7 +40,8 @@ MATCHING_COUNT="$(
 
 case "$MATCHING_COUNT" in
   0)
-    echo "-"
+    echo "error: no stable mimi Local Development signing identity is available." >&2
+    exit 1
     ;;
   1)
     printf '%s\n' "$MATCHING_IDENTITIES" | /usr/bin/tr '[:lower:]' '[:upper:]'

@@ -47,12 +47,12 @@ Versions older than v1.3.8 need one manual installation to enable in-app updates
 
 ### Platform support
 
-- **Apple silicon macOS 13+**: Releases provide an ad-hoc-signed DMG without Apple notarization. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. Updates may trigger recording or Keychain permission prompts again.
+- **Apple silicon macOS 13+**: DMG installers are not Apple-notarized. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. See the permission notes below when upgrading from an older build.
 - **Windows x64**: Unsigned preview EXE / MSI installers are available; SmartScreen may warn.
 
 ### macOS permissions after an update
 
-Current macOS releases use an ad-hoc signature that changes between builds. An update, or switching between a locally built app and a GitHub release, may therefore require authorization again. Deleting a local signing certificate does not change the installed app's identity or fix this. Keep the release app at `/Applications/mimi.app`; use the separate `mimi-dev.app` for development.
+The release pipeline now requires one fixed self-signed certificate across macOS builds. Earlier releases through v1.4.1 used ad-hoc signatures that changed with each build; installing the first release with the fixed identity may require one new recording grant. This source change does not alter an already installed app. Fixed signing prevents build-specific identity changes; it does not promise that macOS will never request consent again. Deleting a local signing certificate does not change the installed app's identity or fix this. Keep the release app at `/Applications/mimi.app`; use the separate `mimi-dev.app` for development.
 
 **Recording is enabled, but Mimi still reports permission denied:** first quit and reopen Mimi and follow the normal permission prompt. If capture is still denied:
 
@@ -62,9 +62,9 @@ Current macOS releases use an ad-hoc signature that changes between builds. An u
 
 This removes an old recording authorization, not a certificate or API key. If one attempt does not help, stop repeating the reset and [report the error](https://github.com/yuxino/mimi/issues), including your macOS and Mimi versions and installation source. Do not include API keys or subtitle content.
 
-**Keychain asks for your password or access to a saved API key:** confirm that the request comes from the Mimi copy you intended to open. If the dialog offers **Always Allow**, it can retain access for that build, but cannot guarantee access after another ad-hoc-signed update. Do not delete saved credentials, certificates, or the login keychain, allow all apps to access a key, or run a system-wide permission reset. A `codesign` request for a development signing private key is a separate build-time prompt.
+**Keychain asks for your password or access to a saved API key:** confirm that the request comes from the Mimi copy you intended to open. If the dialog offers **Always Allow**, it can retain access for that build, but cannot guarantee access after a self-signed binary changes. Do not delete saved credentials, certificates, or the login keychain, allow all apps to access a key, or run a system-wide permission reset. A `codesign` request for a development signing private key is a separate build-time prompt.
 
-These steps can restore access for the current installation; they cannot prevent every prompt in future updates. Stable Developer ID signing is needed to address the changing release identity and has not yet been deployed.
+My wallet is still a little empty, and I’m saving up for Apple Developer membership (๑•̀ㅂ•́)و✧ Thank you for understanding! Stable self-signing does not need a paid membership; Apple notarization is a separate step. The manual recovery above is for a stale recording grant, not something you should have to repeat after every update.
 
 ## Development
 
