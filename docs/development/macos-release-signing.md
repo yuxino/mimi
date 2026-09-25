@@ -64,7 +64,9 @@ its complete pinned identity and signed source/version, and compares its CDHash
 with the app inside the DMG. It then creates and verifies the updater signature
 with the existing key. On the disposable runner, only the embedded public
 certificate matching the pinned fingerprint is trusted for code signing; that
-trust is removed after verification. No private code-signing key is imported,
+trust cleanup is attempted after verification with a 15-second timeout. If
+macOS authorization services do not respond, the disposable VM is discarded
+when the job ends. No private code-signing key is imported,
 and user machines are not asked to change certificate trust. Windows still
 builds in CI. Only the final publish
 job may publish the draft after both platforms pass. Read back the published

@@ -313,7 +313,18 @@ jobs:
         run: |
           certificate="$RUNNER_TEMP/mimi-release-cert-0"
           if [[ -f "$certificate" ]]; then
-            sudo security remove-trusted-cert -d "$certificate" || true
+            # security can wait indefinitely for authorization services on a
+            # hosted runner. Bound cleanup; the disposable VM is then discarded.
+            python3 - "$certificate" <<'PYTHON'
+          import subprocess, sys
+          try:
+              subprocess.run(
+                  ["sudo", "-n", "security", "remove-trusted-cert", "-d", sys.argv[1]],
+                  check=False, timeout=15,
+              )
+          except subprocess.TimeoutExpired:
+              print("Runner trust cleanup timed out; the disposable VM will be discarded.")
+          PYTHON
           fi
 
   release-windows:
@@ -405,7 +416,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # This is the only job with release authority. It runs only after both
+  # This is the only job that publishes a release. It runs only after both
   # platform packages pass their structural and digest checks.
   publish-release:
     if: ${{ github.ref_type == 'tag' }}
