@@ -47,7 +47,7 @@ Windows 安装完成后会重新打开 Mimi；macOS 可点击 **重新启动并�
 ### 平台支持
 
 - **Apple 芯片 macOS 13+**：提供未经 Apple 公证的 DMG；若首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。从旧版本升级时，请留意下方的权限说明。
-- **Windows x64**：提供未签名的预览版 EXE / MSI，SmartScreen 可能显示提示。
+- **Windows x64**：提供未签名的预览版 EXE / MSI，SmartScreen 可能显示提示。免安装使用可下载 `mimi_<version>_x64-portable.zip`，解压后运行 `mimi.exe`。电脑需已安装 WebView2（Windows 11 通常自带）。ZIP 不会把设置、服务凭证或已导出文件搬到自身目录；它们仍保存在原来的用户目录、系统凭据管理器或用户选择的位置。更新绿色版时，先退出 Mimi，再从 Releases 下载新版 ZIP 替换；绿色版不会运行应用内安装器更新。
 
 ### macOS 更新后重复授权
 

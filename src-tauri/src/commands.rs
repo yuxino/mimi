@@ -316,6 +316,23 @@ pub fn app_is_ui_test() -> bool {
     std::env::var("MIMI_UI_TEST").as_deref() == Ok("1")
 }
 
+/// The Windows ZIP carries this marker beside the executable. It identifies
+/// an extract-and-run copy before Settings can offer an NSIS update.
+#[tauri::command]
+pub fn app_is_portable() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join("mimi.portable")))
+            .is_some_and(|marker| marker.is_file())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
+}
+
 /// Opens a single hard-coded release destination. The frontend cannot supply
 /// or widen the URL, and no generic opener permission is exposed to WebViews.
 #[tauri::command]

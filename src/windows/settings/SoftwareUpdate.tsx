@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { I18N } from "../../lib/i18n";
-import { appIsUiTest, appOpenReleases, isTauri } from "../../lib/ipc";
+import { appIsPortable, appIsUiTest, appOpenReleases, isTauri } from "../../lib/ipc";
 import { InlineFeedback, SettingsRow } from "./SettingsPrimitives";
 import {
   applyDownloadEvent,
@@ -15,6 +15,7 @@ import {
 import {
   createFixtureSoftwareUpdater,
   createTauriSoftwareUpdater,
+  isWindowsUserAgent,
   type SoftwareUpdater,
   type UpdateCandidate,
 } from "./softwareUpdater";
@@ -24,6 +25,9 @@ import {
 export function SoftwareUpdate() {
   const [currentVersion, setCurrentVersion] = useState<string>();
   const [updater, setUpdater] = useState<SoftwareUpdater>();
+  const [portable, setPortable] = useState(false);
+  const [openingReleases, setOpeningReleases] = useState(false);
+  const [portableOpenError, setPortableOpenError] = useState(false);
   const [state, setState] = useState<UpdateCheckState>({ kind: "idle" });
   const candidateRef = useRef<UpdateCandidate | undefined>(undefined);
   const operationRef = useRef(false);
@@ -32,10 +36,15 @@ export function SoftwareUpdate() {
     let disposed = false;
 
     void createUpdaterForEnvironment()
-      .then((nextUpdater) => {
+      .then((environment) => {
         if (disposed) return;
-        setUpdater(nextUpdater);
-        setCurrentVersion(nextUpdater.currentVersion);
+        if (environment.kind === "portable") {
+          setPortable(true);
+          setCurrentVersion(environment.currentVersion);
+        } else {
+          setUpdater(environment.updater);
+          setCurrentVersion(environment.updater.currentVersion);
+        }
       })
       .catch(() => {
         if (!disposed) {
@@ -138,6 +147,43 @@ export function SoftwareUpdate() {
 
   const busy = interaction.busy || !updater;
 
+  if (portable) {
+    return (
+      <div className="software-update">
+        <SettingsRow
+          label={I18N.settings.softwareUpdate}
+          description={
+            currentVersion
+              ? I18N.settings.currentVersion(currentVersion)
+              : I18N.settings.updateDescription
+          }
+          align="start"
+        >
+          <button
+            type="button"
+            className="settings-button settings-button--quiet software-update-button"
+            disabled={openingReleases}
+            onClick={() => {
+              setOpeningReleases(true);
+              setPortableOpenError(false);
+              void appOpenReleases()
+                .catch(() => setPortableOpenError(true))
+                .finally(() => setOpeningReleases(false));
+            }}
+          >
+            {openingReleases
+              ? I18N.settings.openingUpdateRecovery
+              : I18N.settings.openReleaseRecovery}
+          </button>
+        </SettingsRow>
+        <span className="software-update-live-status" role="status">
+          {I18N.settings.portableUpdateDescription}
+        </span>
+        {portableOpenError && <span role="alert">{I18N.settings.openUpdateFailed}</span>}
+      </div>
+    );
+  }
+
   return (
     <div className="software-update">
       <SettingsRow
@@ -180,20 +226,43 @@ export function SoftwareUpdate() {
   );
 }
 
-async function createUpdaterForEnvironment(): Promise<SoftwareUpdater> {
+type UpdateEnvironment =
+  | { kind: "portable"; currentVersion: string }
+  | { kind: "installed"; updater: SoftwareUpdater };
+
+export async function createUpdaterForEnvironment(): Promise<UpdateEnvironment> {
   if (!isTauri) {
-    return createFixtureSoftwareUpdater({
-      currentVersion: "preview",
-      updateVersion: null,
-    });
+    return {
+      kind: "installed",
+      updater: createFixtureSoftwareUpdater({
+        currentVersion: "preview",
+        updateVersion: null,
+      }),
+    };
   }
 
   if (await appIsUiTest()) {
     const { getVersion } = await import("@tauri-apps/api/app");
-    return createFixtureSoftwareUpdater({ currentVersion: await getVersion() });
+    return {
+      kind: "installed",
+      updater: createFixtureSoftwareUpdater({ currentVersion: await getVersion() }),
+    };
   }
 
-  return createTauriSoftwareUpdater();
+  if (isWindowsUserAgent()) {
+    let portable = true;
+    try {
+      portable = await appIsPortable();
+    } catch {
+      // A failed mode check must not offer an installer to a portable copy.
+    }
+    if (portable) {
+      const { getVersion } = await import("@tauri-apps/api/app");
+      return { kind: "portable", currentVersion: await getVersion() };
+    }
+  }
+
+  return { kind: "installed", updater: await createTauriSoftwareUpdater() };
 }
 
 function candidateMetadata(candidate: UpdateCandidate): AvailableUpdate {

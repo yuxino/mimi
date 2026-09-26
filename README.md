@@ -48,7 +48,7 @@ Versions older than v1.3.8 need one manual installation to enable in-app updates
 ### Platform support
 
 - **Apple silicon macOS 13+**: DMG installers are not Apple-notarized. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. See the permission notes below when upgrading from an older build.
-- **Windows x64**: Unsigned preview EXE / MSI installers are available; SmartScreen may warn.
+- **Windows x64**: Unsigned preview EXE / MSI installers are available; SmartScreen may warn. For an extract-and-run copy, download `mimi_<version>_x64-portable.zip`, extract it, and launch `mimi.exe`. WebView2 must already be installed (it is normally present on Windows 11). The ZIP does not move settings, service credentials, or exported files into its folder; those remain in their existing user-selected or OS-managed locations. Update this copy by quitting Mimi and replacing it with a new ZIP from Releases. The portable build does not run the in-app installer updater.
 
 ### macOS permissions after an update
 

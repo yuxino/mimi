@@ -265,6 +265,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::settings_get,
             commands::app_is_ui_test,
+            commands::app_is_portable,
             commands::app_open_releases,
             commands::settings_save,
             commands::profile_create,

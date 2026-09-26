@@ -68,6 +68,10 @@ export function appIsUiTest(): Promise<boolean> {
   return invoke<boolean>("app_is_ui_test");
 }
 
+export function appIsPortable(): Promise<boolean> {
+  return invoke<boolean>("app_is_portable");
+}
+
 export function appOpenReleases(): Promise<void> {
   return invoke("app_open_releases");
 }

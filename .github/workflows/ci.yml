@@ -176,6 +176,13 @@ jobs:
         shell: pwsh
         run: ./scripts/windows-ci-smoke.ps1 -ExecutablePath ./src-tauri/target/release/mimi.exe -ExpectedArchitecture x64
 
+      - name: Package and verify portable Windows build
+        if: ${{ matrix.os == 'windows-2025' }}
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          ./scripts/package-windows-portable.ps1 -ExecutablePath ./src-tauri/target/release/mimi.exe -Version $version -OutputDirectory ./src-tauri/target/release/bundle/portable
+
       - name: Upload bundles
         if: ${{ matrix.os == 'windows-2025' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -184,6 +191,7 @@ jobs:
           path: |
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/portable/*.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -407,6 +415,7 @@ jobs:
               throw "Updater signature verification failed for $installer (exit $LASTEXITCODE)."
             }
           }
+          ./scripts/package-windows-portable.ps1 -ExecutablePath "$env:GITHUB_WORKSPACE/src-tauri/target/release/mimi.exe" -Version $version -OutputDirectory $stagingDir
 
       - name: Upload verified Windows release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -449,6 +458,7 @@ jobs:
             "mimi_${version}_x64-setup.exe.sig"
             "mimi_${version}_x64_en-US.msi"
             "mimi_${version}_x64_en-US.msi.sig"
+            "mimi_${version}_x64-portable.zip"
           )
           mapfile -t actual_names < <(printf '%s\n' "${assets[@]##*/}" | sort)
           mapfile -t expected_names < <(printf '%s\n' "${expected_names[@]}" | sort)
@@ -502,6 +512,7 @@ jobs:
               "mimi_${version}_x64-setup.exe.sig" \
               "mimi_${version}_x64_en-US.msi" \
               "mimi_${version}_x64_en-US.msi.sig" \
+              "mimi_${version}_x64-portable.zip" \
               latest.json > SHA256SUMS.txt
           )
 
