@@ -34,20 +34,20 @@ https://github.com/user-attachments/assets/342c049c-1bed-44da-b4d2-ba55dad1a49c
 
 ## 开始使用
 
-1. 从 [Latest Release](https://github.com/yuxino/mimi/releases/latest) 下载 macOS Apple Silicon DMG 或 Windows x64 EXE / MSI；也可以从源码构建。
+1. 从 [Latest Release](https://github.com/yuxino/mimi/releases/latest) 下载 macOS Apple Silicon DMG，或 Windows x64 EXE、MSI、绿色版 ZIP；也可以从源码构建。
 2. 打开「翻译服务」，选择服务商并保存凭证。
 3. 播放内容，从菜单栏/系统托盘的 mimi 图标点击 **开始**；macOS 首次使用时按提示允许「屏幕与系统音频录制」。
 
 需要自备服务商 API 凭证，调用可能产生费用。凭证保存在系统钥匙串中。
 
-更新时，打开 **设置 → 通用 → 版本更新**。Mimi 会显示下载进度，下载完成后可直接安装。
+安装版更新时，打开 **设置 → 通用 → 版本更新**。Mimi 会显示下载进度，下载完成后可直接安装。
 Windows 安装完成后会重新打开 Mimi；macOS 可点击 **重新启动并完成更新**。
 早于 v1.3.8 的旧版本需要先手动安装一次，之后即可在应用内更新。
 
 ### 平台支持
 
 - **Apple 芯片 macOS 13+**：提供未经 Apple 公证的 DMG；若首次打开被拦截，请在「系统设置 → 隐私与安全性」中选择「仍要打开」。从旧版本升级时，请留意下方的权限说明。
-- **Windows x64**：提供未签名的预览版 EXE / MSI，SmartScreen 可能显示提示。发布页列出 `mimi_<version>_x64-portable.zip` 时，可下载解压并直接运行 `mimi.exe`。电脑需已安装 WebView2（Windows 11 通常自带）。ZIP 不会把设置、服务凭证或已导出文件搬到自身目录；它们仍保存在原来的用户目录、系统凭据管理器或用户选择的位置。更新绿色版时，先退出 Mimi，再从 Releases 下载新版 ZIP 替换；绿色版不会运行应用内安装器更新。
+- **Windows x64**：提供未签名的预览版 EXE / MSI；从 v1.4.3 起还提供绿色版 ZIP。SmartScreen 可能显示提示。下载 `mimi_<version>_x64-portable.zip` 解压后，直接运行 `mimi.exe`。电脑需已安装 WebView2（Windows 11 通常自带）。ZIP 不会把设置、服务凭证或已导出文件搬到自身目录；它们仍保存在原来的用户目录、系统凭据管理器或用户选择的位置。更新绿色版时，先退出 Mimi，再从 Releases 下载新版 ZIP 替换；绿色版不会运行应用内安装器更新。
 
 ### macOS 更新后重复授权
 

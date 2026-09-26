@@ -34,13 +34,13 @@ Transcript retention is limited to 10,000 confirmed pairs / 2 MiB of text and au
 
 ## Get started
 
-1. Download the macOS Apple silicon DMG or Windows x64 EXE / MSI from the [latest release](https://github.com/yuxino/mimi/releases/latest), or build from source.
+1. Download the macOS Apple silicon DMG, or a Windows x64 EXE, MSI, or portable ZIP from the [latest release](https://github.com/yuxino/mimi/releases/latest), or build from source.
 2. Open **Translation Service**, choose a provider, and save its credentials.
 3. Play something and select **Start** from the mimi menu bar/system tray icon; on first use, macOS then prompts for **Screen & System Audio Recording**.
 
 Bring your own provider API credentials; usage charges may apply. Credentials are stored in the OS credential store.
 
-To update, open **Settings → General → Software Update**. Mimi downloads the
+For installed copies, open **Settings → General → Software Update**. Mimi downloads the
 update with progress, then lets you install it. Windows reopens Mimi after
 installation; macOS offers a separate **Restart and Finish Update** action.
 Versions older than v1.3.8 need one manual installation to enable in-app updates.
@@ -48,7 +48,7 @@ Versions older than v1.3.8 need one manual installation to enable in-app updates
 ### Platform support
 
 - **Apple silicon macOS 13+**: DMG installers are not Apple-notarized. If first launch is blocked, choose **Open Anyway** in **System Settings → Privacy & Security**. See the permission notes below when upgrading from an older build.
-- **Windows x64**: Unsigned preview EXE / MSI installers are available; SmartScreen may warn. When a release lists `mimi_<version>_x64-portable.zip`, you can extract it and launch `mimi.exe` without installation. WebView2 must already be installed (it is normally present on Windows 11). The ZIP does not move settings, service credentials, or exported files into its folder; those remain in their existing user-selected or OS-managed locations. Update this copy by quitting Mimi and replacing it with a new ZIP from Releases. The portable build does not run the in-app installer updater.
+- **Windows x64**: Unsigned preview EXE / MSI installers and, since v1.4.3, a portable ZIP are available; SmartScreen may warn. Extract `mimi_<version>_x64-portable.zip` and launch `mimi.exe` without installation. WebView2 must already be installed (it is normally present on Windows 11). The ZIP does not move settings, service credentials, or exported files into its folder; those remain in their existing user-selected or OS-managed locations. Update this copy by quitting Mimi and replacing it with a new ZIP from Releases. The portable build does not run the in-app installer updater.
 
 ### macOS permissions after an update
 
