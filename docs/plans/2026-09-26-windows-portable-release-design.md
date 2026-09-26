@@ -24,7 +24,8 @@ storage path is introduced.
 ## Verification boundary
 
 Automated checks cover the portable update route, release archive contents,
-hash parity, and asset/checksum inclusion. A Windows extract, launch, UI,
-system-audio session, and manual replacement of a prior ZIP must be checked on
-a Windows device or release CI before claiming native acceptance. No release
-is created by this source change alone.
+hash parity, asset/checksum inclusion, and a native Windows UI-test launch from
+the extracted ZIP without provider networks or system-audio capture. A real
+Windows system-audio session and manual replacement of a prior ZIP remain
+separate device acceptance checks. No release is created by this source change
+alone.

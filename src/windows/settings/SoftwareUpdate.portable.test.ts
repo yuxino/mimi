@@ -31,6 +31,7 @@ beforeEach(() => {
 describe("portable update distribution", () => {
   it("routes a marked Windows ZIP to manual Releases updates", async () => {
     mocks.appIsPortable.mockResolvedValue(true);
+    mocks.appIsUiTest.mockResolvedValue(true);
     expect(await createUpdaterForEnvironment()).toEqual({
       kind: "portable",
       currentVersion: "1.4.2",

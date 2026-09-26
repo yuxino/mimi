@@ -183,6 +183,16 @@ jobs:
           $version = (Get-Content package.json | ConvertFrom-Json).version
           ./scripts/package-windows-portable.ps1 -ExecutablePath ./src-tauri/target/release/mimi.exe -Version $version -OutputDirectory ./src-tauri/target/release/bundle/portable
 
+      - name: Smoke launch extracted portable x64 app
+        if: ${{ matrix.os == 'windows-2025' }}
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $archive = "./src-tauri/target/release/bundle/portable/mimi_${version}_x64-portable.zip"
+          $extracted = Join-Path $env:RUNNER_TEMP 'mimi-portable-smoke'
+          Expand-Archive -LiteralPath $archive -DestinationPath $extracted -Force
+          ./scripts/windows-ci-smoke.ps1 -ExecutablePath (Join-Path $extracted 'mimi.exe') -ExpectedArchitecture x64
+
       - name: Upload bundles
         if: ${{ matrix.os == 'windows-2025' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

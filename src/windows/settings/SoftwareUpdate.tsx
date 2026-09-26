@@ -241,14 +241,6 @@ export async function createUpdaterForEnvironment(): Promise<UpdateEnvironment> 
     };
   }
 
-  if (await appIsUiTest()) {
-    const { getVersion } = await import("@tauri-apps/api/app");
-    return {
-      kind: "installed",
-      updater: createFixtureSoftwareUpdater({ currentVersion: await getVersion() }),
-    };
-  }
-
   if (isWindowsUserAgent()) {
     let portable = true;
     try {
@@ -260,6 +252,14 @@ export async function createUpdaterForEnvironment(): Promise<UpdateEnvironment> 
       const { getVersion } = await import("@tauri-apps/api/app");
       return { kind: "portable", currentVersion: await getVersion() };
     }
+  }
+
+  if (await appIsUiTest()) {
+    const { getVersion } = await import("@tauri-apps/api/app");
+    return {
+      kind: "installed",
+      updater: createFixtureSoftwareUpdater({ currentVersion: await getVersion() }),
+    };
   }
 
   return { kind: "installed", updater: await createTauriSoftwareUpdater() };
