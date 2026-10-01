@@ -17,18 +17,32 @@ cat > "$TEST_ROOT/mimi.app/Contents/Info.plist" <<'PLIST'
 PLIST
 cat > "$TEST_ROOT/bin/codesign" <<'STUB'
 #!/usr/bin/env bash
+APP="${!#}"
+REQUIREMENT="$TEST_REQUIREMENT"
+CDHASH="${TEST_NEW_CDHASH:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+TEAM="${TEST_NEW_TEAM:-not set}"
+DEVELOPER_ID="${TEST_NEW_DEVELOPER_ID:-1}"
+if [[ "$APP" == */installed.app ]]; then
+  REQUIREMENT="${TEST_INSTALLED_REQUIREMENT:-$TEST_REQUIREMENT}"
+  CDHASH="${TEST_INSTALLED_CDHASH:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+  TEAM="${TEST_INSTALLED_TEAM:-not set}"
+  DEVELOPER_ID="${TEST_INSTALLED_DEVELOPER_ID:-1}"
+fi
 case "$*" in
   *--verify*)
     while [[ $# -gt 0 ]]; do
       if [[ "$1" == -R ]]; then
         [[ "${2:-}" == =* ]] || exit 1
+        if [[ "${2:-}" == *'anchor apple generic'* ]]; then
+          exit "$DEVELOPER_ID"
+        fi
       fi
       shift
     done
     exit "${TEST_VERIFY_EXIT:-0}" ;;
 
-  *--requirements*) printf 'designated => %s\n' "$TEST_REQUIREMENT" ;;
-  *) printf 'Identifier=app.yuxino.mimi\nSignature=%s\n' "${TEST_SIGNATURE:-signed}" ;;
+  *--requirements*) printf 'designated => %s\n' "$REQUIREMENT" ;;
+  *) printf 'Identifier=app.yuxino.mimi\nSignature=%s\nCDHash=%s\nTeamIdentifier=%s\n' "${TEST_SIGNATURE:-signed}" "$CDHASH" "$TEAM" ;;
 esac
 STUB
 cat > "$TEST_ROOT/bin/security" <<'STUB'
@@ -67,4 +81,25 @@ expect_failure "$SCRIPT_DIR/verify-macos-release-source.sh" "$TEST_ROOT/mimi.app
 expect_failure "$SCRIPT_DIR/verify-macos-release-source.sh" "$TEST_ROOT/mimi.app" 1111111111111111111111111111111111111111 2.0.0 arm64
 expect_failure "$SCRIPT_DIR/verify-macos-release-source.sh" "$TEST_ROOT/mimi.app" 1111111111111111111111111111111111111111 1.0.0 x86_64
 TEST_ARCH=x86_64 "$SCRIPT_DIR/verify-macos-release-source.sh" "$TEST_ROOT/mimi.app" 1111111111111111111111111111111111111111 1.0.0 x86_64 >/dev/null
+
+# Same DR is not enough for a rebuilt self-signed app: the file-based Keychain
+# partition may still authorize only the old binary's CDHash.
+mkdir -p "$TEST_ROOT/installed.app/Contents"
+cp "$TEST_ROOT/mimi.app/Contents/Info.plist" "$TEST_ROOT/installed.app/Contents/Info.plist"
+INSTALL_CHECK="$SCRIPT_DIR/verify-macos-install-identity.sh"
+"$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/missing.app" >/dev/null
+"$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app" >/dev/null
+CHANGED_HASH=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+expect_failure env MIMI_ALLOW_IDENTITY_CHANGE=1 TEST_NEW_CDHASH="$CHANGED_HASH" "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+# A made-up TeamIdentifier cannot substitute for an Apple-verified certificate.
+expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ TEST_NEW_DEVELOPER_ID=0 TEST_INSTALLED_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app" >/dev/null
+expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=KLMNOPQRST TEST_NEW_DEVELOPER_ID=0 TEST_INSTALLED_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ TEST_NEW_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+expect_failure env TEST_NEW_CDHASH=invalid "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+OLD_REQUIREMENT='identifier "app.yuxino.mimi" and certificate root = H"0000000000000000000000000000000000000000"'
+expect_failure env TEST_INSTALLED_REQUIREMENT="$OLD_REQUIREMENT" "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+env MIMI_ALLOW_IDENTITY_CHANGE=1 TEST_INSTALLED_REQUIREMENT="$OLD_REQUIREMENT" "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app" >"$TEST_ROOT/migration-output" 2>&1
+grep -Fq 'explicitly allowing' "$TEST_ROOT/migration-output"
 echo 'macOS signing safety tests passed.'

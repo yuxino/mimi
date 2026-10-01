@@ -30,8 +30,14 @@ Rules:
   prepared draft assets. See [release signing](macos-release-signing.md).
 - Before replacing a formal app, run
   `./scripts/verify-macos-install-identity.sh NEW_APP /Applications/mimi.app`.
-  A mismatch fails closed. `MIMI_ALLOW_IDENTITY_CHANGE=1` is reserved for a
-  deliberate, one-time certificate migration whose extra prompts are expected.
+  A DR mismatch fails closed. With the same DR, a changed CDHash also fails
+  unless both apps have the same Apple-verified Developer ID Application team.
+  The check does not repair saved credentials or replace native acceptance.
+  `MIMI_ALLOW_IDENTITY_CHANGE=1` is reserved for a deliberate certificate
+  migration with a different DR; it does not bypass the rebuilt self-signed
+  case or promise a single prompt across all saved items and recording grants.
+  The public updater does not run this local shell preflight, so release
+  signing/upgrade acceptance must still be verified separately.
 - Never use ad-hoc signing for local QA or new public releases. Missing or
   changed identities fail closed. Never use `tccutil reset`, delete Keychain
   entries, or rotate a certificate as a routine fix.
