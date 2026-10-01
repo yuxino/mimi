@@ -1,0 +1,313 @@
+{
+  "baseline": "8e4432efd2a1dd924fccedd2bbd2ed84cf876ebc",
+  "scope": "Actual Mac headless Chromium; synthetic browser-only session/store; not native app or provider. 760/520 widths, DPR2, Chinese/English/Japanese. Before scrolled to immersive row, after shows top card.",
+  "checks": [
+    {
+      "name": "zh/760: no automatic start or settings change",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: both switches share main top card",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: inactive immersive disabled with hint",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: no horizontal overflow",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: deliberate mock start enables immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: immersive changes only after click",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: stopped session can still exit immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: exit restores off state",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: missing credential disables start",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/760: configure action opens service page",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: no automatic start or settings change",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: both switches share main top card",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: inactive immersive disabled with hint",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: no horizontal overflow",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: deliberate mock start enables immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: immersive changes only after click",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: stopped session can still exit immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: exit restores off state",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: missing credential disables start",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "zh/520: configure action opens service page",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: no automatic start or settings change",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: both switches share main top card",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: inactive immersive disabled with hint",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: no horizontal overflow",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: deliberate mock start enables immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: immersive changes only after click",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: stopped session can still exit immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: exit restores off state",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: missing credential disables start",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/760: configure action opens service page",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: no automatic start or settings change",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: both switches share main top card",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: inactive immersive disabled with hint",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: no horizontal overflow",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: deliberate mock start enables immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: immersive changes only after click",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: stopped session can still exit immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: exit restores off state",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: missing credential disables start",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "en/520: configure action opens service page",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: no automatic start or settings change",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: both switches share main top card",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: inactive immersive disabled with hint",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: no horizontal overflow",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: deliberate mock start enables immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: immersive changes only after click",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: stopped session can still exit immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: exit restores off state",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: missing credential disables start",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/760: configure action opens service page",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: no automatic start or settings change",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: both switches share main top card",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: inactive immersive disabled with hint",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: no horizontal overflow",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: deliberate mock start enables immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: immersive changes only after click",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: stopped session can still exit immersive",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: exit restores off state",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: missing credential disables start",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "ja/520: configure action opens service page",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "No browser component exceptions",
+      "result": true,
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "candidate_sha": "6b53182385ce06f03ddcbfa44b0b65f5742cc331"
+}
