@@ -17,7 +17,8 @@ scheme; it does not establish the root cause of the user's previous dialog.
 
 `verify-macos-install-identity.sh` now rejects a changed CDHash under the same
 DR unless both apps have the same Apple-verified Developer ID Application team.
-It checks the certificate chain and Developer ID certificate OIDs, rather than
+It checks the certificate chain, Developer ID certificate OIDs, and the leaf
+certificate's OU matching that Team ID, rather than
 trusting an Authority label or a TeamIdentifier string. Reinstalling the same
 signed binary remains allowed. Missing/malformed hashes fail closed.
 

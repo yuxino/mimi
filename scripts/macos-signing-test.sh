@@ -22,11 +22,13 @@ REQUIREMENT="$TEST_REQUIREMENT"
 CDHASH="${TEST_NEW_CDHASH:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
 TEAM="${TEST_NEW_TEAM:-not set}"
 DEVELOPER_ID="${TEST_NEW_DEVELOPER_ID:-1}"
+CERT_TEAM="${TEST_NEW_CERT_TEAM:-$TEAM}"
 if [[ "$APP" == */installed.app ]]; then
   REQUIREMENT="${TEST_INSTALLED_REQUIREMENT:-$TEST_REQUIREMENT}"
   CDHASH="${TEST_INSTALLED_CDHASH:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
   TEAM="${TEST_INSTALLED_TEAM:-not set}"
   DEVELOPER_ID="${TEST_INSTALLED_DEVELOPER_ID:-1}"
+  CERT_TEAM="${TEST_INSTALLED_CERT_TEAM:-$TEAM}"
 fi
 case "$*" in
   *--verify*)
@@ -34,7 +36,9 @@ case "$*" in
       if [[ "$1" == -R ]]; then
         [[ "${2:-}" == =* ]] || exit 1
         if [[ "${2:-}" == *'anchor apple generic'* ]]; then
-          exit "$DEVELOPER_ID"
+          [[ "$DEVELOPER_ID" == 0 ]] || exit 1
+          [[ "${2:-}" == *"certificate leaf[subject.OU] = \"$CERT_TEAM\""* ]] || exit 1
+          exit 0
         fi
       fi
       shift
@@ -95,6 +99,8 @@ expect_failure env MIMI_ALLOW_IDENTITY_CHANGE=1 TEST_NEW_CDHASH="$CHANGED_HASH" 
 # A made-up TeamIdentifier cannot substitute for an Apple-verified certificate.
 expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
 env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ TEST_NEW_DEVELOPER_ID=0 TEST_INSTALLED_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app" >/dev/null
+expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ TEST_NEW_CERT_TEAM=KLMNOPQRST TEST_NEW_DEVELOPER_ID=0 TEST_INSTALLED_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
+expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ TEST_INSTALLED_CERT_TEAM=KLMNOPQRST TEST_NEW_DEVELOPER_ID=0 TEST_INSTALLED_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
 expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=KLMNOPQRST TEST_NEW_DEVELOPER_ID=0 TEST_INSTALLED_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
 expect_failure env TEST_NEW_CDHASH="$CHANGED_HASH" TEST_NEW_TEAM=ABCDEFGHIJ TEST_INSTALLED_TEAM=ABCDEFGHIJ TEST_NEW_DEVELOPER_ID=0 "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"
 expect_failure env TEST_NEW_CDHASH=invalid "$INSTALL_CHECK" "$TEST_ROOT/mimi.app" "$TEST_ROOT/installed.app"

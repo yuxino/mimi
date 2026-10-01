@@ -52,6 +52,7 @@ has_developer_id() {
   # Verify the Apple certificate chain, not a displayed Authority name or a
   # TeamIdentifier that a self-signed build could set without Apple issuance.
   local requirement='anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists'
+  requirement="$requirement and certificate leaf[subject.OU] = \"$2\""
   codesign --verify --strict -R "=$requirement" "$1" >/dev/null 2>&1
 }
 
@@ -96,7 +97,7 @@ if [[ "$INSTALLED_REQUIREMENT" == "$NEW_REQUIREMENT" ]]; then
   NEW_TEAM="$(signing_field "$NEW_APP" TeamIdentifier)"
   INSTALLED_TEAM="$(signing_field "$INSTALLED_APP" TeamIdentifier)"
   if [[ "$NEW_TEAM" =~ ^[A-Z0-9]{10}$ && "$NEW_TEAM" == "$INSTALLED_TEAM" ]] \
-    && has_developer_id "$NEW_APP" && has_developer_id "$INSTALLED_APP"; then
+    && has_developer_id "$NEW_APP" "$NEW_TEAM" && has_developer_id "$INSTALLED_APP" "$NEW_TEAM"; then
     echo "Stable Developer ID team and designated requirement; native upgrade acceptance is still required."
     exit 0
   fi
