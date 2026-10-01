@@ -1,0 +1,213 @@
+{
+  "baseline": "b9d124c220cb90e43ef98618d13e247d50de03b4",
+  "scope": "actual Mac headless Chromium React/CSS components; synthetic phase/state; not native bundle, credentials, provider, or actual audio",
+  "checks": [
+    {
+      "name": "old b9 compact mismatch reproduced for both sound styles",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "candidate compact style follows all three settings styles",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "connecting keeps existing CSS animation instances",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "listening keeps existing CSS animation instances",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "recognizing keeps existing CSS animation instances",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "translating keeps existing CSS animation instances",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "paused freezes every CSS clock after settling",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "paused resumes same CSS animation instances",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "error freezes every CSS clock after settling",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "error resumes same CSS animation instances",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "idle freezes every CSS clock after settling",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "idle resumes same CSS animation instances",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "explicit pulse off removes running animations",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "untouched switches follow system reduced motion",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "reduced motion produces no running pulse CSS animation",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "pulse and subtitle motion switches remain independent",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category service round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible service round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category general round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible general round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category export round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible export round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category subtitles round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible subtitles round 0",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category service round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible service round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category general round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible general round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category export round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible export round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category subtitles round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible subtitles round 1",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category service round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible service round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category general round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible general round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category export round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible export round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "settings category subtitles round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "only selected panel visible subtitles round 2",
+      "result": true,
+      "passed": true
+    },
+    {
+      "name": "no browser component runtime exceptions",
+      "result": true,
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "candidate_sha": "8e4432efd2a1dd924fccedd2bbd2ed84cf876ebc"
+}
