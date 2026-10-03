@@ -66,3 +66,11 @@ Git history, not on the active documentation path.
 When a decision changes, update or supersede the relevant record. Do not add a
 second implementation checklist after the work is complete, and do not include
 fixed test counts that become stale as the suite grows.
+
+## Research proposals
+
+These are exploratory and do not change the accepted product contract.
+
+- [Local recognition and translation](../research/2026-09-27-local-models.md) —
+  issue #40 feasibility, runtime candidates, integration boundaries and proposed
+  benchmark gates; no model performance results or implementation yet.
