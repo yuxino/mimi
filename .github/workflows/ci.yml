@@ -88,6 +88,10 @@ jobs:
       - name: Test
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml
 
+      - name: Test native Wayland input regions with isolated Weston
+        if: runner.os == 'Linux'
+        run: ./scripts/linux-wayland-input-smoke.sh
+
       - name: Test Linux system and microphone capture with real PulseAudio
         if: runner.os == 'Linux'
         run: dbus-run-session -- ./scripts/linux-audio-smoke.sh
